@@ -26,9 +26,9 @@
 
 - Add below line in your podfile, if not there
 
-  - ```
-    source 'https://github.com/CocoaPods/Specs.git'
-    ```
+```
+source 'https://github.com/CocoaPods/Specs.git'
+```
 
 - Add below in podfile - in respective target block
 
@@ -38,9 +38,9 @@ pod 'GrowthBook'
 
 - Execute below command in terminal
 
-  ```swift
-  pod install
-  ```
+```swift
+pod install
+```
 
 ##### Swift Package Manager - SPM
 
@@ -59,7 +59,7 @@ dependencies: [
 
 Integration is super easy:
 
-1. Create a Growth Book API key
+1. Create a Growth Book with a few methods: with the API key and host URL, only host URL, only JSON
 2. At the start of your app, do SDK Initialization as per below
 
 Now you can start/stop tests, adjust coverage and variation weights, and apply a winning variation to 100% of traffic, all within the Growth Book App without deploying code changes to your site.
@@ -102,7 +102,7 @@ var sdkInstance: GrowthBookSDK = SDKBuilderApp(apiKey: <API_KEY>,
     .setRefreshHandler { isRefreshed in
         
     } // Get Callbacks when SDK refreshed its cache
-    .setNetworkDispatcher(networkDispatcher: <Network Dispatcher>) // Pass Network cliet to be used for API Calls
+    .setNetworkDispatcher(networkDispatcher: <Network Dispatcher>) // Pass Network client to be used for API Calls
     .setEnabled(isEnabled: true) // Enable / Disable experiments
     .setQAMode(isEnabled: true) // Enable / Disable QA Mode
     .setForcedVariations(forcedVariations: <[String: Int]>) // Pass Forced Variations
@@ -120,9 +120,9 @@ var sdkInstance: GrowthBookSDK = SDKBuilderApp(apiKey: <API_KEY>,
   
 - The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
 
-  ```swift
-    func feature(id: String) -> FeatureResult
-  ```
+```swift
+func feature(id: String) -> FeatureResult
+```
   
 - The run method takes an Experiment object and returns an ExperimentResult
 
@@ -146,6 +146,12 @@ func getGBContext() -> Context
 
 ```swift
 func getFeatures() -> Features
+```
+
+- The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
+
+```swift
+func isOn(feature id: String) -> Bool
 ```
 
 
