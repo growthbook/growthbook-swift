@@ -9,12 +9,8 @@
 /* Begin PBXBuildFile section */
 		84095C792817EC7800ADDF19 /* JsonManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C772817EAB700ADDF19 /* JsonManager.swift */; };
 		84095C8C281823BC00ADDF19 /* LoggingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8A281822B900ADDF19 /* LoggingManager.swift */; };
-		84095C8D281823BC00ADDF19 /* LoggingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8A281822B900ADDF19 /* LoggingManager.swift */; };
-		84095C8F2818245100ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
 		84095C902818245700ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
-		84095C92281824DB00ADDF19 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C91281824DB00ADDF19 /* Theme.swift */; };
 		84095C932818254400ADDF19 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C91281824DB00ADDF19 /* Theme.swift */; };
-		8462814B280F2AC400C83CDE /* Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84628147280F2AC400C83CDE /* Logger.swift */; };
 		8484CC0C2817D7230092A39B /* (null) in Embed Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		849114C7280DA73000C0B9A5 /* FeaturesViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84391F0827FD64EB003309DC /* FeaturesViewModelTests.swift */; };
 		849114C8280DA73000C0B9A5 /* ConditionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84391F0C27FD701D003309DC /* ConditionTests.swift */; };
@@ -393,11 +389,7 @@
 				849114C8280DA73000C0B9A5 /* ConditionTests.swift in Sources */,
 				849114C9280DA73000C0B9A5 /* ExperimentRunTests.swift in Sources */,
 				849114CA280DA73100C0B9A5 /* FeatureValueTests.swift in Sources */,
-				84095C92281824DB00ADDF19 /* Theme.swift in Sources */,
-				84095C8D281823BC00ADDF19 /* LoggingManager.swift in Sources */,
 				849114CB280DA73100C0B9A5 /* TestHelper.swift in Sources */,
-				84095C8F2818245100ADDF19 /* Formatter.swift in Sources */,
-				8462814B280F2AC400C83CDE /* Logger.swift in Sources */,
 				849114CC280DA73100C0B9A5 /* UtilsTests.swift in Sources */,
 				849114CD280DA73100C0B9A5 /* GrowthBookSDKBuilderTests.swift in Sources */,
 				849114CE280DA73100C0B9A5 /* MockNetworkClient.swift in Sources */,

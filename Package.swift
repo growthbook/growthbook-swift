@@ -4,7 +4,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "GrowthBook",
+    name: "GrowthBook-IOS",
     platforms: [
         .macOS(.v10_15),
         .iOS(.v12),
@@ -13,7 +13,7 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "GrowthBook",
+            name: "GrowthBook-IOS",
             targets: ["GrowthBook"])
     ],
     dependencies: [
@@ -23,7 +23,7 @@ let package = Package(
         .binaryTarget(
             name: "GrowthBook",
     url: "https://github.com/growthbook/growthbook-swift/releases/download/1.0.0/GrowthBook.xcframework.zip",
-    checksum: "a9a05c2e5b1f197d7000bf4259264a0270a26196dc765bf58c5e0afb75f222cc"
+    checksum: "756609fcbf0f44a697cbe73304fbd3317495ea2080c89c7b240bd99a80ac57a6"
         ),
     ]
 )

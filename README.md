@@ -33,7 +33,7 @@ source 'https://github.com/CocoaPods/Specs.git'
 - Add below in podfile - in respective target block
 
 ```swift
-pod 'GrowthBook'
+pod 'GrowthBook-IOS'
 ```
 
 - Execute below command in terminal
@@ -107,7 +107,6 @@ var sdkInstance: GrowthBookSDK = SDKBuilderApp(apiKey: <API_KEY>,
     .setQAMode(isEnabled: true) // Enable / Disable QA Mode
     .setForcedVariations(forcedVariations: <[String: Int]>) // Pass Forced Variations
     .setLogLevel(<LoggerLevel>) // Set log level for SDK Logger, by default log level is set to `info`
-    .setLogHandler(<SDKLogHandler>) // Set log handler for SDK Logger
     .initializer()
 ```
 
