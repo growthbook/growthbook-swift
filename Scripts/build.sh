@@ -25,6 +25,7 @@ xcodebuild archive \
     -sdk appletvos \
     SKIP_INSTALL=NO
 
+
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/watch_sim.xcarchive" \
