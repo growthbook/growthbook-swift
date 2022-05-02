@@ -1,5 +1,3 @@
-name: Release
-
 on:
   push:
     branches:
@@ -27,6 +25,8 @@ jobs:
         configFilePath: ./.github/gitversion.yml
     - name: Build Framework
       run: ./Scripts/build.sh
+    - name: Create arhive framework
+      run: zip -r GrowthBook.xcframework.zip . -x "./build/GrowthBook.xcframework"
     - name: release
       uses: actions/create-release@v1
       id: create_release
@@ -38,16 +38,12 @@ jobs:
         body: ${{ github.event.head_commit.message }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    - name: Publish to maven central
-      run: |
-        GPG_PRIVATE_KEY="${{secrets.GPG_PRIVATE_KEY}}" GPG_PRIVATE_PASSWORD="${{secrets.GPG_PRIVATE_PASSWORD}}" GB_SONATYPE_USERNAME='${{secrets.GB_SONATYPE_USERNAME}}' GB_SONATYPE_PASSWORD='${{secrets.GB_SONATYPE_PASSWORD}}' ./gradlew -Pversion=${{ steps.gitversion.outputs.SemVer }} publish
     - name: Upload binary
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: GrowthBook/GrowthBook.xcframework.zip
+        asset_path: GrowthBook.xcframework.zip
         asset_name: GrowthBook.xcframework.zip
-        asset_content_type: application/x-zip
-   
+        asset_content_type: application/zip
