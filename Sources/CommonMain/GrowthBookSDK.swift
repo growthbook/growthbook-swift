@@ -38,7 +38,7 @@ public struct SDKBuilder {
         self.refreshHandler = refreshHandler
     }
 
-    @objc public init(json: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
+    @objc public init(json: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
         sdkBuilder = SDKBuilder(json: json, attributes: JSON(attributes), trackingClosure: trackingCallback)
     }
 
