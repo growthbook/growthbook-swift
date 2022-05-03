@@ -173,6 +173,8 @@ public class ConditionEvaluator {
             if isPrimitive(value: conditionValue) && isPrimitive(value: attributeValue) {
                 return conditionValue == attributeValue
             }
+        } else if isPrimitive(value: conditionValue) {
+            return false
         }
 
         // If conditionValue is array, return true if it's "equal" - "equal" should do a deep comparison for arrays.

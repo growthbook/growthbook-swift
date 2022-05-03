@@ -52,4 +52,64 @@ class ConditionTests: XCTestCase {
 
         XCTAssertTrue(evaluator.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON("abc"), conditionValue: JSON("abc")))
     }
+
+    func testConditionFailAttributeDoesNotExist() throws {
+        let attributes = """
+                     {"country":"IN"}
+                 """.trimmingCharacters(in: .whitespaces)
+
+        let condition = """
+                     {"brand":"KZ"}
+                 """.trimmingCharacters(in: .whitespaces)
+
+        XCTAssertEqual(false, ConditionEvaluator().isEvalCondition(attributes: JSON(parseJSON: attributes), conditionObj: JSON(parseJSON: condition)))
+    }
+
+    func testConditionDoesNotExistAttributeExist() throws {
+        let attributes = """
+                    {"userId":"1199"}
+                  """.trimmingCharacters(in: .whitespaces)
+
+        let condition = """
+                     {
+                       "userId": {
+                         "$exists": false
+                       }
+                     }
+                 """.trimmingCharacters(in: .whitespaces)
+
+        XCTAssertEqual(false, ConditionEvaluator().isEvalCondition(attributes: JSON(parseJSON: attributes), conditionObj: JSON(parseJSON: condition)))
+    }
+
+    func testConditionExistAttributeExist() throws {
+        let attributes = """
+                     {"userId":"1199"}
+                 """.trimmingCharacters(in: .whitespaces)
+
+        let condition = """
+                     {
+                       "userId": {
+                         "$exists": true
+                       }
+                     }
+                 """.trimmingCharacters(in: .whitespaces)
+
+        XCTAssertEqual(true, ConditionEvaluator().isEvalCondition(attributes: JSON(parseJSON: attributes), conditionObj: JSON(parseJSON: condition)))
+    }
+
+    func testConditionExistAttributeDoesNotExist() throws {
+        let attributes = """
+                     {"user_id_not_exist":"1199"}
+                 """.trimmingCharacters(in: .whitespaces)
+
+        let condition = """
+                     {
+                       "userId": {
+                         "${'$'}exists": true
+                       }
+                     }
+                 """.trimmingCharacters(in: .whitespaces)
+
+        XCTAssertEqual(false, ConditionEvaluator().isEvalCondition(attributes: JSON(parseJSON: attributes), conditionObj: JSON(parseJSON: condition)))
+    }
 }
