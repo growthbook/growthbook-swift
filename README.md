@@ -1,4 +1,4 @@
-![](https://docs.growthbook.io/images/hero.png)
+![](https://docs.growthbook.io/images/hero-swift-sdk.png)
 
 # Growth Book - SDK
 
