@@ -65,8 +65,7 @@ Integration is super easy:
 Now you can start/stop tests, adjust coverage and variation weights, and apply a winning variation to 100% of traffic, all within the Growth Book App without deploying code changes to your site.
 
 ```swift
-var sdkInstance: GrowthBookSDK = SDKBuilderApp(apiKey: <API_KEY>,
-    hostURL: <GrowthBook_URL>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(hostURL: <GrowthBook_URL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -74,16 +73,7 @@ var sdkInstance: GrowthBookSDK = SDKBuilderApp(apiKey: <API_KEY>,
 ```
 
 ```swift
-var sdkInstance: GrowthBookSDK = SDKBuilderApp(hostURL: <GrowthBook_URL>,
-    attributes: <[String: Any]>,
-    trackingCallback: { experiment, experimentResult in 
-
-    }).initializer()
-```
-
-```swift
-var sdkInstance: GrowthBookSDK = SDKBuilderApp(json: <Data>,
-    hostURL: <GrowthBook_URL>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(features: <Data>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -93,8 +83,7 @@ var sdkInstance: GrowthBookSDK = SDKBuilderApp(json: <Data>,
 There are additional properties which can be setup at the time of initialization
 
 ```swift
-var sdkInstance: GrowthBookSDK = SDKBuilderApp(apiKey: <API_KEY>,
-    hostURL: <GrowthBook_URL>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(hostURL: <GrowthBook_URL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -120,7 +109,7 @@ var sdkInstance: GrowthBookSDK = SDKBuilderApp(apiKey: <API_KEY>,
 - The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
 
 ```swift
-func feature(id: String) -> FeatureResult
+func evalFeature(id: String) -> FeatureResult
 ```
   
 - The run method takes an Experiment object and returns an ExperimentResult
@@ -145,6 +134,11 @@ func getGBContext() -> Context
 
 ```swift
 func getFeatures() -> Features
+```
+
+- Get Feature value
+```swift
+func getFeatureValue(feature id: String, defaultValue: JSON) -> JSON
 ```
 
 - The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
