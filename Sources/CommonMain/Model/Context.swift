@@ -19,14 +19,14 @@ import Foundation
     // Feature definitions - To be pulled from API / Cache
     var features: Features
 
-    init(url: String?,
+    init(hostURL: String?,
          isEnabled: Bool,
          attributes: JSON,
          forcedVariations: JSON?,
          isQaMode: Bool,
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:]) {
-        self.hostURL = url
+        self.hostURL = hostURL
         self.isEnabled = isEnabled
         self.attributes = attributes
         self.forcedVariations = forcedVariations

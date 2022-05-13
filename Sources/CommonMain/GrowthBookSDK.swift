@@ -35,7 +35,7 @@ public struct GrowthBookModel {
         growthBookBuilderModel = GrowthBookModel(hostURL: hostURL, attributes: JSON(attributes), trackingClosure: trackingCallback)
         self.refreshHandler = refreshHandler
     }
-    
+
     @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
         growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback)
     }
@@ -82,15 +82,15 @@ public struct GrowthBookModel {
 
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
-            url: growthBookBuilderModel.hostURL,
+            hostURL: growthBookBuilderModel.hostURL,
             isEnabled: growthBookBuilderModel.isEnabled,
             attributes: growthBookBuilderModel.attributes,
             forcedVariations: growthBookBuilderModel.forcedVariations,
             isQaMode: growthBookBuilderModel.isQaMode,
             trackingClosure: growthBookBuilderModel.trackingClosure
         )
-        if let json = growthBookBuilderModel.features {
-            CachingManager.shared.saveContent(fileName: Constants.featureCache, content: json)
+        if let features = growthBookBuilderModel.features {
+            CachingManager.shared.saveContent(fileName: Constants.featureCache, content: features)
         }
         return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher)
     }
@@ -139,8 +139,8 @@ public struct GrowthBookModel {
         return gbContext.features
     }
 
-    /// Get Feature value
-    public func getFeatureValue(feature id: String, defaultValue: JSON) -> JSON {
+    /// Get the value of the feature with a fallback
+    public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
         return FeatureEvaluator().evaluateFeature(context: gbContext, featureKey: id).value ?? defaultValue
     }
 

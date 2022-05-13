@@ -136,7 +136,7 @@ func getGBContext() -> Context
 func getFeatures() -> Features
 ```
 
-- Get Feature value
+- Get the value of the feature with a fallback
 ```swift
 func getFeatureValue(feature id: String, defaultValue: JSON) -> JSON
 ```
