@@ -167,7 +167,7 @@ public struct GrowthBookModel {
         return evalFeature(id: id).isOn
     }
 
-    /// The run method takes an Experiment object and returns an Result
+    /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
         return ExperimentEvaluator().evaluateExperiment(context: gbContext, experiment: experiment)
     }

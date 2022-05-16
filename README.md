@@ -112,7 +112,7 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(hostURL: <GrowthBook_URL/API_
 func evalFeature(id: String) -> FeatureResult
 ```
   
-- The run method takes an Experiment object and returns an ExperimentResult
+- The run method takes an Experiment object and returns an experiment result
 
 ```swift
 func run(experiment: Experiment) -> ExperimentResult
