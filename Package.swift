@@ -20,10 +20,10 @@ let package = Package(
         // no dependencies
     ],
     targets: [
-        .binaryTarget(
+        .target(
             name: "GrowthBook",
-    url: "https://github.com/growthbook/growthbook-swift/releases/download/1.0.0/GrowthBook.xcframework.zip",
-    checksum: "756609fcbf0f44a697cbe73304fbd3317495ea2080c89c7b240bd99a80ac57a6"
-        ),
+            dependencies: [],
+            path: "Sources/CommonMain"
+        )
     ]
 )
