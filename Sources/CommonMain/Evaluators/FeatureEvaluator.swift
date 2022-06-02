@@ -65,7 +65,7 @@ public class FeatureEvaluator {
                         // If result.inExperiment is false, skip this rule and continue to the next one.
                         continue
                     }
-                    return prepareResult(value: result.value, source: FeatureSource.experiment, experiment: exp, experimentResult: result)
+                    return prepareResult(value: result.value, source: FeatureSource.experiment, experiment: exp, result: result)
                 }
 
             }
@@ -80,11 +80,11 @@ public class FeatureEvaluator {
     /// This is a helper method to create a FeatureResult object.
     ///
     /// Besides the passed-in arguments, there are two derived values - on and off, which are just the value cast to booleans.
-    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, experimentResult: ExperimentResult? = nil) -> FeatureResult {
+    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil) -> FeatureResult {
         var isFalse = false
         if let value = value {
             isFalse = value.stringValue == "false" || value.stringValue.isEmpty || value.stringValue == "0"
         }
-        return FeatureResult(value: value, isOn: !isFalse, source: source.rawValue, experiment: experiment, experimentResult: experimentResult)
+        return FeatureResult(value: value, isOn: !isFalse, source: source.rawValue, experiment: experiment, result: result)
     }
 }

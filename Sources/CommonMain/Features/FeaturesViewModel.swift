@@ -1,6 +1,5 @@
 import Foundation
 
-
 /// Interface for Feature API Completion Events
 public protocol FeaturesFlowDelegate: AnyObject {
     func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool)

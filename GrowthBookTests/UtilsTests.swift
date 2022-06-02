@@ -191,7 +191,6 @@ class UtilsTests: XCTestCase {
     }
 
     func testEdgeCases() throws {
-        XCTAssertTrue(Constants.featurePath == "api/features/")
         XCTAssertFalse(Utils.shared.inNamespace(userId: "4242", namespace: NameSpace("", 0.0, 0.0)))
 
         var items = [JSON]()

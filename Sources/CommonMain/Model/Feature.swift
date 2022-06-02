@@ -78,12 +78,12 @@ enum FeatureSource: String {
     /// When source is "experiment", this will be an ExperimentResult object
     public let experimentResult: ExperimentResult?
 
-    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, experimentResult: ExperimentResult? = nil) {
+    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, result: ExperimentResult? = nil) {
         self.isOn = isOn
         self.isOff = !isOn
         self.value = value
         self.source = source
         self.experiment = experiment
-        self.experimentResult = experimentResult
+        self.experimentResult = result
     }
 }

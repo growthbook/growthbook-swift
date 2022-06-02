@@ -1,6 +1,5 @@
 import Foundation
 
-
 /// DataSource for Feature API
 public class FeaturesDataSource {
     let dispatcher: NetworkProtocol
