@@ -23,10 +23,14 @@ jobs:
       with:
         useConfigFile: true
         configFilePath: ./.github/gitversion.yml
+    - name: Select Xcode
+      run: sudo xcode-select -switch /Applications/Xcode.app
+    - name: Run Unit Test
+      run: ./Scripts/runTest.sh
     - name: Build Framework
       run: ./Scripts/build.sh
     - name: Create arhive framework
-      run: zip -r GrowthBook.xcframework.zip . -x "./build/GrowthBook.xcframework"
+      run: cd "./build" && zip -r GrowthBook.xcframework.zip "./GrowthBook.xcframework"
     - name: release
       uses: actions/create-release@v1
       id: create_release
@@ -44,6 +48,6 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: GrowthBook.xcframework.zip
+        asset_path: ./build/GrowthBook.xcframework.zip
         asset_name: GrowthBook.xcframework.zip
         asset_content_type: application/zip
