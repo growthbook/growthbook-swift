@@ -2,6 +2,8 @@ import Foundation
 
 /// Defines the GrowthBook context.
 @objc public class Context: NSObject {
+    /// Registered API Key for GrowthBook SDK
+    public let apiKey: String?
     /// Host URL for GrowthBook
     public let hostURL: String?
     /// Switch to globally disable all experiments. Default true.
@@ -19,13 +21,15 @@ import Foundation
     // Feature definitions - To be pulled from API / Cache
     var features: Features
 
-    init(hostURL: String?,
+    init(apiKey: String?,
+         hostURL: String?,
          isEnabled: Bool,
          attributes: JSON,
          forcedVariations: JSON?,
          isQaMode: Bool,
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:]) {
+        self.apiKey = apiKey
         self.hostURL = hostURL
         self.isEnabled = isEnabled
         self.attributes = attributes
