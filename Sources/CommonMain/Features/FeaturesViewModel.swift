@@ -39,12 +39,12 @@ public class FeaturesViewModel {
         }
 
         guard let apiUrl = apiUrl else { return }
-        dataSource.fetchFeatures(apiUrl: apiUrl) { [weak self] result in
+        dataSource.fetchFeatures(apiUrl: apiUrl) { [self] result in
             switch result {
             case .success(let data):
-                self?.prepareFeaturesData(data: data)
+                self.prepareFeaturesData(data: data)
             case .failure(let error):
-                self?.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
+                self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
                 logger.error("Failed get features: \(error.localizedDescription)")
             }
         }
