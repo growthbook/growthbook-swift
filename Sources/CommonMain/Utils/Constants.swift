@@ -6,6 +6,8 @@ enum Constants {
     static let idAttributeKey = "id"
     /// Identifier for Caching Feature Data in Internal Storage File
     static let featureCache = "FeatureCache"
+    /// Context Path for Fetching Feature Details - Web Service
+    static let featurePath = "api/features/"
 }
 
 /// Type Alias for Feature in GrowthBook
