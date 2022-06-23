@@ -126,6 +126,14 @@ public struct GrowthBookModel {
     /// Manually Refresh Cache
     @objc public func refreshCache() {
         let featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
+         var apiUrl: String? = nil
+         if let hostUrl = gbContext.hostURL {
+             if let apiKey = gbContext.apiKey {
+                 apiUrl = hostUrl + Constants.featurePath + apiKey
+             } else {
+                 apiUrl = hostUrl
+             }
+         }
         featureVM.fetchFeatures(apiUrl: gbContext.hostURL)
     }
 
