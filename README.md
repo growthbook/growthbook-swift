@@ -65,7 +65,9 @@ Integration is super easy:
 Now you can start/stop tests, adjust coverage and variation weights, and apply a winning variation to 100% of traffic, all within the Growth Book App without deploying code changes to your site.
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(hostURL: <GrowthBook_URL/API_KEY>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(
+    apiKey:  <API_KEY>,
+    hostURL: <GrowthBook_URL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -83,7 +85,9 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(features: <Data>,
 There are additional properties which can be setup at the time of initialization
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(hostURL: <GrowthBook_URL/API_KEY>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(
+    apiKey:  <API_KEY>,
+    hostURL: <GrowthBook_URL>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 

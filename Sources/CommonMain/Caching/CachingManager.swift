@@ -65,7 +65,7 @@ public class CachingManager: CachingLayer {
             true
         ).first else { return "" }
         // Append Folder name
-        let targetFolderPath = directoryPath + "GrowthBook-Cache"
+        let targetFolderPath = directoryPath + "/GrowthBook-Cache"
 
         let fileManager = FileManager.default
         // Check if folder exists

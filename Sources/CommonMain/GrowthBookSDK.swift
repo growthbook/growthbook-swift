@@ -11,6 +11,7 @@ protocol GrowthBookProtocol: AnyObject {
 }
 
 public struct GrowthBookModel {
+    var apiKey: String?
     var hostURL: String?
     var features: Data?
     var attributes: JSON
@@ -31,8 +32,8 @@ public struct GrowthBookModel {
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
 
-    @objc public init(hostURL: String, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
-        growthBookBuilderModel = GrowthBookModel(hostURL: hostURL, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    @objc public init(apiKey: String? = nil, hostURL: String, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
+        growthBookBuilderModel = GrowthBookModel(apiKey: apiKey, hostURL: hostURL, attributes: JSON(attributes), trackingClosure: trackingCallback)
         self.refreshHandler = refreshHandler
     }
 
@@ -40,8 +41,8 @@ public struct GrowthBookModel {
         growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback)
     }
 
-    init(hostURL: String, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
-        growthBookBuilderModel = GrowthBookModel(hostURL: hostURL, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    init(apiKey: String? = nil, hostURL: String, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
+        growthBookBuilderModel = GrowthBookModel(apiKey: apiKey, hostURL: hostURL, attributes: JSON(attributes), trackingClosure: trackingCallback)
         self.refreshHandler = refreshHandler
     }
 
@@ -82,6 +83,7 @@ public struct GrowthBookModel {
 
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
+            apiKey: growthBookBuilderModel.apiKey,
             hostURL: growthBookBuilderModel.hostURL,
             isEnabled: growthBookBuilderModel.isEnabled,
             attributes: growthBookBuilderModel.attributes,
@@ -126,7 +128,15 @@ public struct GrowthBookModel {
     /// Manually Refresh Cache
     @objc public func refreshCache() {
         let featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
-        featureVM.fetchFeatures(apiUrl: gbContext.hostURL)
+        var apiUrl: String? = nil
+        if let hostUrl = gbContext.hostURL {
+            if let apiKey = gbContext.apiKey {
+                apiUrl = hostUrl + Constants.featurePath + apiKey
+            } else {
+                apiUrl = hostUrl
+            }
+        }
+        featureVM.fetchFeatures(apiUrl: apiUrl)
     }
 
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
