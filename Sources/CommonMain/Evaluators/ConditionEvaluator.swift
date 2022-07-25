@@ -173,6 +173,9 @@ public class ConditionEvaluator {
             if isPrimitive(value: conditionValue) && isPrimitive(value: attributeValue) {
                 return conditionValue == attributeValue
             }
+            else if isPrimitive(value: conditionValue), let array = attributeValue.array {
+                return array.contains(where: {$0 == conditionValue})
+            }
         } else if isPrimitive(value: conditionValue) {
             return false
         }

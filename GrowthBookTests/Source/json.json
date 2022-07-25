@@ -1682,6 +1682,23 @@
           }
         ],
         [
+          "uses custom values - boolean",
+          {
+            "features": {
+              "feature": {
+                "defaultValue": true
+              }
+            }
+          },
+          "feature",
+          {
+            "value": true,
+            "on": true,
+            "off": false,
+            "source": "defaultValue"
+          }
+        ],
+        [
           "uses custom values - string",
           {
             "features": {
@@ -1697,7 +1714,7 @@
             "off": false,
             "source": "defaultValue"
           }
-        ],
+        ],        
         [
           "force rules",
           {
@@ -1720,6 +1737,349 @@
             "source": "force"
           }
         ],
+        [
+          "Force attributes first condition",
+          {
+            "attributes": {
+              "country": "IN"
+            },
+            "features": {
+              "feature": {
+                "defaultValue": "Default value",
+                "rules": [
+                  {
+                    "condition": {
+                      "country": "IN"
+                    },
+                    "force": "Default value for brand:IN"
+                  },
+                  {
+                    "condition": {
+                      "brand": "KZ"
+                    },
+                    "force": "Default value for brand:KZ"
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": "Default value for brand:IN",
+            "on": true,
+            "off": false,
+            "source": "force"
+          }
+        ], 
+        [
+          "Force attributes second condition",
+          {
+            "attributes": {
+              "brand": "KZ"
+            },
+            "features": {
+              "feature": {
+                "defaultValue": "Default value",
+                "rules": [
+                  {
+                    "condition": {
+                      "country": "IN"
+                    },
+                    "force": "Default value for country:IN"
+                  },
+                  {
+                    "condition": {
+                      "brand": "KZ"
+                    },
+                    "force": "Default value for country:KZ"
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": "Default value for country:KZ",
+            "on": true,
+            "off": false,
+            "source": "force"
+          }
+        ],      
+        [
+          "Force attributes two conditions",
+          {
+            "attributes": {
+              "country": "IN",
+              "brand": "KZ"
+            },
+            "features": {
+              "feature": {
+                "defaultValue": "Default value",
+                "rules": [
+                  {
+                    "condition": {
+                      "country": "IN"
+                    },
+                    "force": "Default value for India"
+                  },
+                  {
+                    "condition": {
+                      "country": "KZ"
+                    },
+                    "force": "Default value for brand:KZ"
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": "Default value for India",
+            "on": true,
+            "off": false,
+            "source": "force"
+          }
+        ],       
+        [
+          "Include condition",
+          {
+            "features": {
+              "feature": {
+                "defaultValue": true,
+                "rules": [
+                  {
+                    "condition": {
+                      "amsCategories": 417
+                    },
+                    "force": false
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": true,
+            "on": true,
+            "off": false,
+            "source": "defaultValue"
+          }
+        ],         
+        [
+          "Include condition 2",
+          {
+            "attributes": {
+              "amsCategories": [
+                417
+              ]
+            },
+            "features": {
+              "feature": {
+                "defaultValue": true,
+                "rules": [
+                  {
+                    "condition": {
+                      "amsCategories": 417
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": true,
+            "on": true,
+            "off": false,
+            "source": "defaultValue"
+          }
+        ],      
+        [
+          "Not include condition",
+          {
+            "attributes": {
+              "amsCategories": [
+                1
+              ]
+            },
+            "features": {
+              "feature": {
+                "defaultValue": true,
+                "rules": [
+                  {
+                    "condition": {
+                      "amsCategories": {
+                        "$not": {
+                          "$elemMatch": {
+                            "$eq": 1
+                          }
+                        }
+                      }
+                    },
+                    "force": false
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": true,
+            "on": true,
+            "off": false,
+            "source": "defaultValue"
+          }
+        ],   
+        [
+          "Complex with include condition",
+          {
+            "attributes": {
+              "amsCategories": [
+                417,
+                100,
+                200
+              ],
+              "brand": "COM"
+            },
+            "features": {
+              "feature": {
+                "defaultValue": "",
+                "rules": [
+                  {
+                    "condition": {
+                      "brand": "COM",
+                      "amsCategories": 417
+                    },
+                    "force": "com-417"
+                  },
+                  {
+                    "condition": {
+                      "brand": "COM"
+                    },
+                    "force": "com"
+                  },
+                  {
+                    "condition": {
+                      "brand": {
+                        "$in": [
+                          "TZ",
+                          "KZ",
+                          "IN"
+                        ]
+                      }
+                    },
+                    "force": "tz-kz-in"
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": "com-417",
+            "on": true,
+            "off": false,
+            "source": "force"
+          }
+        ], 
+        [
+          "Complex with include condition 2",
+          {
+            "attributes": {
+              "amsCategories": [
+                100,
+                200
+              ],
+              "brand": "COM"
+            },
+            "features": {
+              "feature": {
+                "defaultValue": "",
+                "rules": [
+                  {
+                    "condition": {
+                      "brand": "COM",
+                      "amsCategories": 417
+                    },
+                    "force": "com-417"
+                  },
+                  {
+                    "condition": {
+                      "brand": "COM"
+                    },
+                    "force": "com"
+                  },
+                  {
+                    "condition": {
+                      "brand": {
+                        "$in": [
+                          "TZ",
+                          "KZ",
+                          "IN"
+                        ]
+                      }
+                    },
+                    "force": "tz-kz-in"
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": "com",
+            "on": true,
+            "off": false,
+            "source": "force"
+          }
+        ],
+        [
+          "Complex with include condition 3",
+          {
+            "attributes": {
+              "brand": "KZ"
+            },
+            "features": {
+              "feature": {
+                "defaultValue": "",
+                "rules": [
+                  {
+                    "condition": {
+                      "brand": "COM",
+                      "amsCategories": 417
+                    },
+                    "force": "com-417"
+                  },
+                  {
+                    "condition": {
+                      "brand": "COM"
+                    },
+                    "force": "com"
+                  },
+                  {
+                    "condition": {
+                      "brand": {
+                        "$in": [
+                          "TZ",
+                          "KZ",
+                          "IN"
+                        ]
+                      }
+                    },
+                    "force": "tz-kz-in"
+                  }
+                ]
+              }
+            }
+          },
+          "feature",
+          {
+            "value": "tz-kz-in",
+            "on": true,
+            "off": false,
+            "source": "force"
+          }
+        ],                                                       
         [
           "force rules - coverage included",
           {
