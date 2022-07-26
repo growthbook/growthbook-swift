@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8403DF47288ACCC400B4D146 /* json.json in Resources */ = {isa = PBXBuildFile; fileRef = 84391F2628016C85003309DC /* json.json */; };
 		84095C792817EC7800ADDF19 /* JsonManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C772817EAB700ADDF19 /* JsonManager.swift */; };
 		84095C8C281823BC00ADDF19 /* LoggingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8A281822B900ADDF19 /* LoggingManager.swift */; };
 		84095C902818245700ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
@@ -40,6 +41,16 @@
 		84CDE3422812F454008B3E6F /* Experiment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640927F845EB0072BFDC /* Experiment.swift */; };
 		84CDE3432812F454008B3E6F /* Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640A27F845EB0072BFDC /* Context.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		84D16AAF288E845A001C75C8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 84F51E8A27F419B000994D1C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 84CDE3272812F359008B3E6F;
+			remoteInfo = GrowthBook;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
 		84CDE3D52812FBA8008B3E6F /* Embed Frameworks */ = {
@@ -301,6 +312,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				84D16AB0288E845A001C75C8 /* PBXTargetDependency */,
 			);
 			name = GrowthBookTests;
 			productName = GrowthBookTests;
@@ -368,6 +380,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8403DF47288ACCC400B4D146 /* json.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -426,6 +439,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		84D16AB0288E845A001C75C8 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 84CDE3272812F359008B3E6F /* GrowthBook */;
+			targetProxy = 84D16AAF288E845A001C75C8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		849114C5280DA71E00C0B9A5 /* Debug */ = {
