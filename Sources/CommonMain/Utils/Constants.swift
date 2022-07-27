@@ -1,11 +1,11 @@
 import Foundation
 
 /// Constants Class - GrowthBook
-enum Constants {
+public enum Constants {
     /// ID Attribute Key
-    static let idAttributeKey = "id"
+    public static let idAttributeKey = "id"
     /// Identifier for Caching Feature Data in Internal Storage File
-    static let featureCache = "FeatureCache"
+    public static let featureCache = "FeatureCache"
 }
 
 /// Type Alias for Feature in GrowthBook
