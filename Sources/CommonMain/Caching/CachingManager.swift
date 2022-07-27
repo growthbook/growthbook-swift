@@ -10,6 +10,14 @@ public protocol CachingLayer: AnyObject {
 public class CachingManager: CachingLayer {
     static let shared = CachingManager()
 
+    func getData(fileName: String) -> Data? {
+        return getContent(fileName: fileName)
+    }
+
+    func putData(fileName: String, content: Data) {
+        saveContent(fileName: fileName, content: content)
+    }
+
     /// Save content in cache
     public func saveContent(fileName: String, content: Data) {
         let fileManager = FileManager.default
