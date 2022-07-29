@@ -8,7 +8,7 @@ public protocol CachingLayer: AnyObject {
 
 /// This is actual implementation of Caching Layer in iOS
 public class CachingManager: CachingLayer {
-    static let shared = CachingManager()
+    public static let shared = CachingManager()
 
     func getData(fileName: String) -> Data? {
         return getContent(fileName: fileName)
