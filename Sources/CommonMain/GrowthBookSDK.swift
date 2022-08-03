@@ -103,6 +103,7 @@ public struct GrowthBookModel {
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol
     public var gbContext: Context
+    private var featureVM: FeaturesViewModel!
 
     init(context: Context,
          refreshHandler: CacheRefreshHandler? = nil,
@@ -113,19 +114,18 @@ public struct GrowthBookModel {
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
         super.init()
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
         if let features = features {
             gbContext.features = features
         } else {
             refreshCache()
         }
-
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
     }
 
     /// Manually Refresh Cache
     @objc public func refreshCache() {
-        let featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
         featureVM.fetchFeatures(apiUrl: gbContext.hostURL)
     }
 
