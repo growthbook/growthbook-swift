@@ -30,7 +30,7 @@ jobs:
     - name: Build Framework
       run: ./Scripts/build.sh
     - name: Create arhive framework
-      run: cd "./build" && zip -r GrowthBook.xcframework.zip "./GrowthBook.xcframework"
+      run: cd "./build" && zip -r GrowthBook.xcframework.zip "./LICENSE" "./GrowthBook.xcframework"
     - name: release
       uses: actions/create-release@v1
       id: create_release
