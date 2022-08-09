@@ -10,6 +10,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Echo
-      run: echo "Hello World"
+    - name: Install Pods and Gems
+      run: |
+        bundle install
+        bundle exec pod install
+    - name: Create XCFramework
+      run: |
+       ./Screpts/build.sh
    
