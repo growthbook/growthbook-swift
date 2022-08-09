@@ -1,12 +1,12 @@
 Pod::Spec.new do |spec|
   spec.name                      = 'GrowthBook-IOS'
-  spec.version                   = '1.0.9'
+  spec.version                   = '1.0.13'
   spec.homepage                  = "https://github.com/growthbook/growthbook-swift"
   spec.documentation_url         = "https://docs.growthbook.io"
   spec.license                   = 'https://opensource.org/licenses/MIT'
   spec.author                    = { "KevychSolutions Inc." => "volodymyr.nazarkevych@kevychsolutions.com" }
   spec.summary                   = 'Powerful A/B testing SDK for Swift - iOS'
-  spec.source                    = { :http => "https://github.com/growthbook/growthbook-swift/releases/download/1.0.9/GrowthBook.xcframework.zip" }
+  spec.source                    = { :http => "https://github.com/growthbook/growthbook-swift/releases/download/1.0.13/GrowthBook.xcframework.zip" }
   
   spec.vendored_frameworks      = "GrowthBook.xcframework"
 
