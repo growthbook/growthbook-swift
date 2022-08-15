@@ -1,40 +1,34 @@
 import Foundation
 
-/// Interface for Feature API Completion Events
-public protocol FeaturesFlowDelegate: AnyObject {
-    func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool)
-    func featuresFetchFailed(error: SDKError, isRemote: Bool)
-}
+typealias FeaturesHandler = (Result<Features, SDKError>, _ isRemote: Bool) -> Void
 
 /// View Model for Features
-public class FeaturesViewModel {
-    weak var delegate: FeaturesFlowDelegate?
+class FeaturesViewModel {
     let dataSource: FeaturesDataSource
 
     /// Caching Manager
-    let manager = CachingManager.shared
+    let cachingLayer: CachingLayer
 
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource) {
-        self.delegate = delegate
+    init(dataSource: FeaturesDataSource, cachingLayer: CachingLayer) {
         self.dataSource = dataSource
+        self.cachingLayer = cachingLayer
     }
 
     /// Fetch Features
-    func fetchFeatures(apiUrl: String?) {
+    func fetchFeatures(apiUrl: String?, completion: @escaping FeaturesHandler) {
         // Check for cache data
-        if let json = manager.getData(fileName: Constants.featureCache) {
+        if let json = cachingLayer.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
             if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: json) {
                 if let features = jsonPetitions.features {
-                    // Call Success Delegate with mention of data available but its not remote
-                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
+                    completion(.success(features), true)
                 } else {
-                    delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                    completion(.failure(.failedParsedData), false)
                     logger.error("Failed parsed local data")
                 }
             }
         } else {
-            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
+            completion(.failure(.failedToLoadData), false)
             logger.error("Failed load local data")
         }
 
@@ -42,27 +36,27 @@ public class FeaturesViewModel {
         dataSource.fetchFeatures(apiUrl: apiUrl) { [weak self] result in
             switch result {
             case .success(let data):
-                self?.prepareFeaturesData(data: data)
+                self?.prepareFeaturesData(data: data, completion: completion)
             case .failure(let error):
-                self?.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
+                completion(.failure(.failedToLoadData), true)
                 logger.error("Failed get features: \(error.localizedDescription)")
             }
         }
     }
 
     /// Cache API Response and push success event
-    func prepareFeaturesData(data: Data) {
-        manager.putData(fileName: Constants.featureCache, content: data)
+    private func prepareFeaturesData(data: Data, completion: @escaping FeaturesHandler) {
+        cachingLayer.saveContent(fileName: Constants.featureCache, content: data)
 
         // Call Success Delegate with mention of data available with remote
         let decoder = JSONDecoder()
 
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             guard let features = jsonPetitions.features else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                completion(.failure(.failedParsedData), true)
                 return
             }
-            delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
+            completion(.success(features), true)
         }
     }
 }
