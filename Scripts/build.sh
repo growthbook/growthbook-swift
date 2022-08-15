@@ -42,6 +42,7 @@ xcodebuild archive \
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/macos.xcarchive" \
+    -sdk macosx \
     SKIP_INSTALL=NO
 
 
