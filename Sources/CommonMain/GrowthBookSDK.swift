@@ -110,7 +110,7 @@ public struct GrowthBookModel {
         if let features = features {
             gbContext.features = features
         } else {
-            refreshCacheInternal()
+            refreshCache(completion: nil)
         }
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
@@ -118,7 +118,19 @@ public struct GrowthBookModel {
 
     /// Manually Refresh Cache
     @objc public func refreshCache(completion: CacheRefreshHandler?) {
-        refreshCacheInternal(completion: completion)
+        featureVM.fetchFeatures(apiUrl: gbContext.hostURL) {[weak self] result, isRemote in
+            switch result {
+                case .success(let features):
+                    self?.gbContext.features = features
+                    if isRemote {
+                        completion?(true)
+                    }
+                case .failure:
+                    if isRemote {
+                        completion?(false)
+                    }
+            }
+        }
     }
 
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
@@ -154,21 +166,5 @@ public struct GrowthBookModel {
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
     @objc public func setAttributes(attributes: Any) {
         gbContext.attributes = JSON(attributes)
-    }
-    
-    private func refreshCacheInternal(completion: CacheRefreshHandler? = nil) {
-        featureVM.fetchFeatures(apiUrl: gbContext.hostURL) {[weak self] result, isRemote in
-            switch result {
-                case .success(let features):
-                    self?.gbContext.features = features
-                    if isRemote {
-                        completion?(true)
-                    }
-                case .failure:
-                    if isRemote {
-                        completion?(false)
-                    }
-            }
-        }
     }
 }

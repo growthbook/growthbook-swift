@@ -21,7 +21,7 @@ class FeaturesViewModel {
             let decoder = JSONDecoder()
             if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: json) {
                 if let features = jsonPetitions.features {
-                    completion(.success(features), true)
+                    completion(.success(features), false)
                 } else {
                     completion(.failure(.failedParsedData), false)
                     logger.error("Failed parsed local data")
