@@ -29,4 +29,4 @@ jobs:
         export LIB_VERSION=${{ steps.gitversion.outputs.SemVer }}
         pod spec lint
     - name: Release
-      run: COCOAPODS_TRUNK_TOKEN=$({ secrets.COCOA_KEY }) pod trunk push
+      run: COCOAPODS_TRUNK_TOKEN=$({ secrets.COCOA_KEY }) pod trunk push GrowthBook-IOS.podspec
