@@ -2,50 +2,49 @@ import XCTest
 
 @testable import GrowthBook
 
-class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
-    var isSuccess: Bool = false
-    var isError: Bool = false
+class FeaturesViewModelTests: XCTestCase {
 
     func testSuccess() throws {
-        isSuccess = false
-        isError = true
+        let datasource = FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
+        let viewModel = FeaturesViewModel(dataSource: datasource, cachingLayer: MockCachingLayer())
 
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)))
+        let completedExpectation = expectation(description: "Completed")
+        viewModel.fetchFeatures(apiUrl: "") { result, _ in
+            if case .success = result {
+                completedExpectation.fulfill()
+            }
+        }
 
-        viewModel.fetchFeatures(apiUrl: "")
-
-        XCTAssertTrue(isSuccess)
-        XCTAssertFalse(isError)
+        waitForExpectations(timeout: 0.3, handler: nil)
     }
 
     func testError() throws {
-        isSuccess = false
-        isError = true
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: .failedToLoadData)))
 
-        viewModel.fetchFeatures(apiUrl: "")
+        let datasource = FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: .failedToLoadData))
+        let viewModel = FeaturesViewModel(dataSource: datasource, cachingLayer: MockCachingLayer())
 
-        XCTAssertFalse(isSuccess)
-        XCTAssertTrue(isError)
+        let errorExpectation = expectation(description: "Error")
+        viewModel.fetchFeatures(apiUrl: "") { result, _ in
+            if case .failure = result {
+                errorExpectation.fulfill()
+            }
+        }
+
+        waitForExpectations(timeout: 0.3, handler: nil)
     }
 
     func testInvalid() throws {
-        isSuccess = false
-        isError = true
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().errorResponse, error: nil)))
-        viewModel.fetchFeatures(apiUrl: "")
 
-        XCTAssertFalse(isSuccess)
-        XCTAssertTrue(isError)
-    }
+        let datasource = FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().errorResponse, error: nil))
+        let viewModel = FeaturesViewModel(dataSource: datasource, cachingLayer: MockCachingLayer())
+        
+        let errorExpectation = expectation(description: "Invalid")
+        viewModel.fetchFeatures(apiUrl: "") { result, _ in
+            if case .failure = result {
+                errorExpectation.fulfill()
+            }
+        }
 
-    func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
-        isSuccess = true
-        isError = false
-    }
-
-    func featuresFetchFailed(error: SDKError, isRemote: Bool) {
-        isSuccess = false
-        isError = true
+        waitForExpectations(timeout: 0.3, handler: nil)
     }
 }
