@@ -44,7 +44,7 @@ public class FeaturesViewModel {
             case .success(let data):
                 self?.prepareFeaturesData(data: data)
             case .failure(let error):
-                self?.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
+                self?.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
                 logger.error("Failed get features: \(error.localizedDescription)")
             }
         }
@@ -59,7 +59,7 @@ public class FeaturesViewModel {
 
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             guard let features = jsonPetitions.features else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
                 return
             }
             delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
