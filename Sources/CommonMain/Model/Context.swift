@@ -2,8 +2,8 @@ import Foundation
 
 /// Defines the GrowthBook context.
 @objc public class Context: NSObject {
-    /// Host URL for GrowthBook
-    public let hostURL: String?
+    /// URL
+    public let url: String?
     /// Switch to globally disable all experiments. Default true.
     public let isEnabled: Bool
     /// Map of user attributes that are used to assign variations
@@ -19,14 +19,14 @@ import Foundation
     // Feature definitions - To be pulled from API / Cache
     var features: Features
 
-    init(hostURL: String?,
+    init(url: String?,
          isEnabled: Bool,
          attributes: JSON,
          forcedVariations: JSON?,
          isQaMode: Bool,
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:]) {
-        self.hostURL = hostURL
+        self.url = url
         self.isEnabled = isEnabled
         self.attributes = attributes
         self.forcedVariations = forcedVariations

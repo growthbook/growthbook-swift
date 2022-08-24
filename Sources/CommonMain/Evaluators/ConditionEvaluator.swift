@@ -6,7 +6,7 @@ import Foundation
 /// There are a handful of functions to define, and be aware that some of them may reference function definitions further below.
 
 /// Enum For different Attribute Types supported by GrowthBook
-public enum AttributeType: String {
+enum AttributeType: String {
     /// String Type Attribute
     case gbString = "string"
     /// Number Type Attribute
@@ -23,7 +23,7 @@ public enum AttributeType: String {
     case gbUnknown = "unknown"
 }
 
-public func getAttributeType(index: Int) -> String {
+func getAttributeType(index: Int) -> String {
     switch index {
     case 0:
         return AttributeType.gbNumber.rawValue
@@ -45,7 +45,7 @@ public func getAttributeType(index: Int) -> String {
 }
 
 /// Evaluator Class for Conditions
-public class ConditionEvaluator {
+class ConditionEvaluator {
     /// This is the main function used to evaluate a condition.
     /// - attributes : User Attributes
     /// - condition : to be evaluated

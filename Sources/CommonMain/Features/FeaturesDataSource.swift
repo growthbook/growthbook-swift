@@ -1,7 +1,7 @@
 import Foundation
 
 /// DataSource for Feature API
-public class FeaturesDataSource {
+class FeaturesDataSource {
     let dispatcher: NetworkProtocol
     
     init(dispatcher: NetworkProtocol = CoreNetworkClient()) {

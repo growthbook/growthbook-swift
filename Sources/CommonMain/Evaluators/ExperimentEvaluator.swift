@@ -3,7 +3,7 @@ import Foundation
 /// Experiment Evaluator Class
 /// 
 /// Takes Context & Experiment & returns Experiment Result
-public class ExperimentEvaluator {
+class ExperimentEvaluator {
 
     /// Takes Context & Experiment & returns Experiment Result
     func evaluateExperiment(context: Context, experiment: Experiment) -> ExperimentResult {

@@ -11,7 +11,7 @@ protocol GrowthBookProtocol: AnyObject {
 }
 
 public struct GrowthBookModel {
-    var hostURL: String?
+    var url: String?
     var features: Data?
     var attributes: JSON
     var trackingClosure: TrackingCallback
@@ -31,8 +31,8 @@ public struct GrowthBookModel {
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
 
-    @objc public init(hostURL: String, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
-        growthBookBuilderModel = GrowthBookModel(hostURL: hostURL, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    @objc public init(url: String, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
+        growthBookBuilderModel = GrowthBookModel(url: url, attributes: JSON(attributes), trackingClosure: trackingCallback)
         self.refreshHandler = refreshHandler
     }
 
@@ -41,8 +41,8 @@ public struct GrowthBookModel {
         self.refreshHandler = refreshHandler
     }
 
-    init(hostURL: String, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
-        growthBookBuilderModel = GrowthBookModel(hostURL: hostURL, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    init(url: String, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
+        growthBookBuilderModel = GrowthBookModel(url: url, attributes: JSON(attributes), trackingClosure: trackingCallback)
         self.refreshHandler = refreshHandler
     }
 
@@ -83,7 +83,7 @@ public struct GrowthBookModel {
 
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
-            hostURL: growthBookBuilderModel.hostURL,
+            url: growthBookBuilderModel.url,
             isEnabled: growthBookBuilderModel.isEnabled,
             attributes: growthBookBuilderModel.attributes,
             forcedVariations: growthBookBuilderModel.forcedVariations,
@@ -127,7 +127,7 @@ public struct GrowthBookModel {
 
     /// Manually Refresh Cache
     @objc public func refreshCache() {
-        featureVM.fetchFeatures(apiUrl: gbContext.hostURL)
+        featureVM.fetchFeatures(apiUrl: gbContext.url)
     }
 
     /// Get Context - Holding the complete data regarding cached features & attributes etc.

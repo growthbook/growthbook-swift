@@ -1,13 +1,13 @@
 import Foundation
 
 /// Interface for Feature API Completion Events
-public protocol FeaturesFlowDelegate: AnyObject {
+protocol FeaturesFlowDelegate: AnyObject {
     func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool)
     func featuresFetchFailed(error: SDKError, isRemote: Bool)
 }
 
 /// View Model for Features
-public class FeaturesViewModel {
+class FeaturesViewModel {
     weak var delegate: FeaturesFlowDelegate?
     let dataSource: FeaturesDataSource
 
