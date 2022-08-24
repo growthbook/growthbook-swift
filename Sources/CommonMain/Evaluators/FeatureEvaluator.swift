@@ -5,7 +5,7 @@ import Foundation
 /// Takes Context and Feature Key
 ///
 /// Returns Calculated Feature Result against that key
-public class FeatureEvaluator {
+class FeatureEvaluator {
 
     /// Takes Context and Feature Key
     ///

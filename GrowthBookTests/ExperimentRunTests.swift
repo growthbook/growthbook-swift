@@ -17,7 +17,7 @@ class ExperimentRunTests: XCTestCase {
             let testContext = ContextTest(json: item[1].dictionaryValue)
             let experiment = Experiment(json: item[2].dictionaryValue)
 
-            let gbContext = Context(hostURL: nil,
+            let gbContext = Context(url: nil,
                                     isEnabled: testContext.isEnabled,
                                     attributes: testContext.attributes,
                                     forcedVariations: testContext.forcedVariations,

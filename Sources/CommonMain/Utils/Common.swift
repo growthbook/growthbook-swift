@@ -1,7 +1,6 @@
 import Foundation
 
 final class Common {
-
     // MARK: - Enum, Const
     static let offsetBasis32: UInt32 = 2166136261
     static let offsetBasis64: UInt64 = 14695981039346656037
@@ -12,7 +11,6 @@ final class Common {
 
 // MARK: - Algorithm
 extension Common {
-
     static func fnv1<T: FixedWidthInteger>(_ array: [UInt8], offsetBasis: T, prime: T) -> T {
         var hash: T = offsetBasis
 

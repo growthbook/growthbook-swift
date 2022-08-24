@@ -7,8 +7,8 @@ import Foundation
     func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void)
 }
 
-public class CoreNetworkClient: NetworkProtocol {
-    public func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+class CoreNetworkClient: NetworkProtocol {
+    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
         guard let url = URL(string: url) else { return }
 
         let request = URLSession.shared.dataTask(with: url) {(data: Data?, response: URLResponse?, error: Error?) in
