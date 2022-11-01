@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		231FB2292910F78D0035546E /* json.json in Resources */ = {isa = PBXBuildFile; fileRef = 84391F2628016C85003309DC /* json.json */; };
 		84095C792817EC7800ADDF19 /* JsonManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C772817EAB700ADDF19 /* JsonManager.swift */; };
 		84095C8C281823BC00ADDF19 /* LoggingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8A281822B900ADDF19 /* LoggingManager.swift */; };
 		84095C902818245700ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
@@ -368,6 +369,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				231FB2292910F78D0035546E /* json.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
