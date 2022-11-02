@@ -27,7 +27,7 @@ class FeaturesViewModel {
             if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: json) {
                 if let features = jsonPetitions.features {
                     // Call Success Delegate with mention of data available but its not remote
-                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
+                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
                 } else {
                     delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
                     logger.error("Failed parsed local data")
