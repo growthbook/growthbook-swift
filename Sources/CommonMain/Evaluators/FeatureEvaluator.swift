@@ -83,7 +83,7 @@ class FeatureEvaluator {
     private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil) -> FeatureResult {
         var isFalse = false
         if let value = value {
-            isFalse = value.stringValue == "false" || value.stringValue.isEmpty || value.stringValue == "0"
+            isFalse = value.stringValue == "false" || value.stringValue == "0" || (value.stringValue.isEmpty && value.dictionary == nil && value.array == nil)
         }
         return FeatureResult(value: value, isOn: !isFalse, source: source.rawValue, experiment: experiment, result: result)
     }

@@ -1699,6 +1699,23 @@
           }
         ],
         [
+          "uses custom values - json (Bug: when json value is given, feature.isOn gives false, Expected: when feature value is non-null, valid json, feature.isOn should give true)",
+          {
+            "features": {
+              "feature": {
+                "defaultValue": { "isJSON" : true }
+              }
+            }
+          },
+          "feature",
+          {
+            "value": { "isJSON" : true },
+            "on": true,
+            "off": false,
+            "source": "defaultValue"
+          }
+        ],
+        [
           "force rules",
           {
             "features": {
