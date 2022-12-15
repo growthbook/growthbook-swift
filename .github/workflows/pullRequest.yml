@@ -5,7 +5,7 @@ on:
     branches: [ '**' ]  
 
 jobs:
-  release:
+  build_framework:
     runs-on: macos-latest
     steps:
     - uses: actions/checkout@v3
