@@ -103,4 +103,25 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         let expValue = sdkInstance.run(experiment: Experiment(key: "fwewrwefw"))
         XCTAssertTrue(expValue.variationId == 0)
     }
+    
+    func testEncrypt() throws {
+        let sdkInstance = GrowthBookBuilder(url: testURL,
+                                        attributes: testAttributes,
+                                        trackingCallback: { _, _ in },
+                                        refreshHandler: nil).initializer()
+        let decoder = JSONDecoder()
+        let keyString = "Ns04T5n9+59rl2x3SlNHtQ=="
+        let encryptedFeatures = "vMSg2Bj/IurObDsWVmvkUg==.L6qtQkIzKDoE2Dix6IAKDcVel8PHUnzJ7JjmLjFZFQDqidRIoCxKmvxvUj2kTuHFTQ3/NJ3D6XhxhXXv2+dsXpw5woQf0eAgqrcxHrbtFORs18tRXRZza7zqgzwvcznx"
+        let expectedResult = "{\"testfeature1\":{\"defaultValue\":true,\"rules\":[{\"condition\":{\"id\":\"1234\"},\"force\":false}]}}"
+        sdkInstance.setEncryptedFeatures(encryptedString: encryptedFeatures, encryptionKey: keyString)
+        guard
+            let dataExpectedResult = expectedResult.data(using: .utf8),
+            let features = try? decoder.decode([String: Feature].self, from: dataExpectedResult)
+        else {
+            XCTFail()
+            return
+        }
+        XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].condition == features["testfeature1"]?.rules?[0].condition)
+        XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].force == features["testfeature1"]?.rules?[0].force)
+    }
 }

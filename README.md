@@ -147,6 +147,12 @@ func getFeatureValue(feature id: String, defaultValue: JSON) -> JSON
 func isOn(feature id: String) -> Bool
 ```
 
+- The setEncryptedFeatures method takes an encrypted string with an encryption key and then decrypts it with the default method of decrypting or with a method of decrypting from the user.
+
+```swift
+func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil)
+```
+
 
 ## Models
 

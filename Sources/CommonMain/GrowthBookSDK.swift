@@ -151,6 +151,26 @@ public struct GrowthBookModel {
             refreshHandler?(true)
         }
     }
+    
+    /// The setEncryptedFeatures method takes an encrypted string with an encryption key and then decrypts it with the default method of decrypting or with a method of decrypting from the user
+    @objc public func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil) {
+        let crypto: CryptoProtocol = subtle ?? Crypto()
+        let decoder = JSONDecoder()
+        let arrayEncryptedString = encryptedString.components(separatedBy: ".")
+       
+        guard let iv = arrayEncryptedString.first,
+              let cipherText = arrayEncryptedString.last,
+              let keyBase64 = Data(base64Encoded: encryptionKey),
+              let ivBase64 = Data(base64Encoded: iv),
+              let cipherTextBase64 = Data(base64Encoded: cipherText),
+              let plainTextBuffer = try? crypto.decrypt(key: keyBase64.map{$0},
+                                                                    iv: ivBase64.map{$0},
+                                                                    cypherText: cipherTextBase64.map{$0}),
+              let features = try? decoder.decode([String: Feature].self, from: Data(plainTextBuffer))
+        else { return }
+
+        gbContext.features = features
+    }
 
     @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
         if isRemote {
