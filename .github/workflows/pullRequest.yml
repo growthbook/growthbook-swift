@@ -1,0 +1,20 @@
+name: CI pullRequest
+
+on:
+  pull_request:
+    branches: [ '**' ]  
+
+jobs:
+  build_framework:
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        clean: 'true'
+        fetch-depth: 0
+    - name: Select Xcode
+      run: sudo xcode-select -switch /Applications/Xcode.app
+    - name: Run Unit Test
+      run: ./Scripts/runTest.sh
+    - name: Build Framework
+      run: ./Scripts/build.sh
