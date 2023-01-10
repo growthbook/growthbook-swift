@@ -34,4 +34,5 @@ typealias BucketRange = (Float, Float)
 @objc public enum SDKError: NSInteger, Error {
     case failedToLoadData = 0
     case failedParsedData = 1
+    case failedMissingKey = 2
 }

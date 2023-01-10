@@ -12,6 +12,7 @@ protocol GrowthBookProtocol: AnyObject {
 
 public struct GrowthBookModel {
     var url: String?
+    var encryptionKey: String?
     var features: Data?
     var attributes: JSON
     var trackingClosure: TrackingCallback
@@ -23,6 +24,7 @@ public struct GrowthBookModel {
 
 /// GrowthBookBuilder - inItializer for GrowthBook SDK for Apps
 /// - HostURL - Server URL
+/// - EncryptionKey - Key for decrypting encrypted feature from API
 /// - UserAttributes - User Attributes
 /// - Tracking Closure - Track Events for Experiments
 @objc public class GrowthBookBuilder: NSObject, GrowthBookProtocol {
@@ -31,8 +33,8 @@ public struct GrowthBookModel {
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
 
-    @objc public init(url: String, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
-        growthBookBuilderModel = GrowthBookModel(url: url, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    @objc public init(url: String, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
+        growthBookBuilderModel = GrowthBookModel(url: url, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback)
         self.refreshHandler = refreshHandler
     }
 
@@ -41,8 +43,8 @@ public struct GrowthBookModel {
         self.refreshHandler = refreshHandler
     }
 
-    init(url: String, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
-        growthBookBuilderModel = GrowthBookModel(url: url, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    init(url: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
+        growthBookBuilderModel = GrowthBookModel(url: url, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback)
         self.refreshHandler = refreshHandler
     }
 
@@ -84,6 +86,7 @@ public struct GrowthBookModel {
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
             url: growthBookBuilderModel.url,
+            encryptionKey: growthBookBuilderModel.encryptionKey,
             isEnabled: growthBookBuilderModel.isEnabled,
             attributes: growthBookBuilderModel.attributes,
             forcedVariations: growthBookBuilderModel.forcedVariations,
@@ -119,6 +122,7 @@ public struct GrowthBookModel {
         if let features = features {
             gbContext.features = features
         } else {
+            featureVM.encryptionKey = context.encryptionKey ?? ""
             refreshCache()
         }
         // Logger setup. if we have logHandler we have to re-initialise logger
@@ -155,20 +159,8 @@ public struct GrowthBookModel {
     /// The setEncryptedFeatures method takes an encrypted string with an encryption key and then decrypts it with the default method of decrypting or with a method of decrypting from the user
     @objc public func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil) {
         let crypto: CryptoProtocol = subtle ?? Crypto()
-        let decoder = JSONDecoder()
-        let arrayEncryptedString = encryptedString.components(separatedBy: ".")
-       
-        guard let iv = arrayEncryptedString.first,
-              let cipherText = arrayEncryptedString.last,
-              let keyBase64 = Data(base64Encoded: encryptionKey),
-              let ivBase64 = Data(base64Encoded: iv),
-              let cipherTextBase64 = Data(base64Encoded: cipherText),
-              let plainTextBuffer = try? crypto.decrypt(key: keyBase64.map{$0},
-                                                                    iv: ivBase64.map{$0},
-                                                                    cypherText: cipherTextBase64.map{$0}),
-              let features = try? decoder.decode([String: Feature].self, from: Data(plainTextBuffer))
-        else { return }
-
+        guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
+        
         gbContext.features = features
     }
 

@@ -18,6 +18,7 @@ class ExperimentRunTests: XCTestCase {
             let experiment = Experiment(json: item[2].dictionaryValue)
 
             let gbContext = Context(url: nil,
+                                    encryptionKey: nil,
                                     isEnabled: testContext.isEnabled,
                                     attributes: testContext.attributes,
                                     forcedVariations: testContext.forcedVariations,

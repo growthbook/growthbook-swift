@@ -18,6 +18,19 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertFalse(isError)
     }
 
+    func testSuccessForEncryptedFeatures() throws {
+        isSuccess = false
+        isError = true
+        
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)))
+        
+        viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
+        viewModel.fetchFeatures(apiUrl: "")
+        
+        XCTAssertTrue(isSuccess)
+        XCTAssertFalse(isError)
+    }
+    
     func testError() throws {
         isSuccess = false
         isError = true

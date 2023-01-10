@@ -5,15 +5,18 @@ import XCTest
 class GrowthBookSDKBuilderTests: XCTestCase {
     let testURL = "https://host.com/api/features/4r23r324f23"
     let testAttributes: JSON = JSON()
-
+    let testKeyString = "Ns04T5n9+59rl2x3SlNHtQ=="
+    
     func testSDKInitializationDefault() throws {
         let sdkInstance = GrowthBookBuilder(url: testURL,
-                                        attributes: testAttributes,
-                                        trackingCallback: { _, _ in },
-                                        refreshHandler: nil).initializer()
+                                            encryptionKey: testKeyString,
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).initializer()
         
         XCTAssertTrue(sdkInstance.getGBContext().isEnabled)
         XCTAssertTrue(sdkInstance.getGBContext().url == testURL)
+        XCTAssertTrue(sdkInstance.getGBContext().encryptionKey == testKeyString)
         XCTAssertFalse(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
         
@@ -24,10 +27,10 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         let variations: [String: Int] = [:]
 
         let sdkInstance = GrowthBookBuilder(url: testURL,
-                                        attributes: testAttributes,
-                                        trackingCallback: { _, _ in },
-                                        refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in }).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
-
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in }).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
+        
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
         XCTAssertTrue(sdkInstance.getGBContext().url == testURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
@@ -41,10 +44,10 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         let variations: [String: Int] = [:]
 
         let sdkInstance = GrowthBookBuilder(url: testURL,
-                                        attributes: testAttributes,
-                                        trackingCallback: { _, _ in },
-                                        refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
-
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
+        
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
         XCTAssertTrue(sdkInstance.getGBContext().url == testURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
@@ -52,13 +55,30 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         
     }
     
+    func testSDKInitializationDataWithEncripted() throws {
+        
+        let variations: [String: Int] = [:]
+        
+        let sdkInstance = GrowthBookBuilder(url: testURL,
+                                            encryptionKey: "3tfeoyW0wlo47bDnbWDkxg==",
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
+        
+        XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
+        XCTAssertTrue(sdkInstance.getGBContext().url == testURL)
+        XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
+        XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
+        XCTAssertTrue(sdkInstance.getGBContext().features.contains(where: { $0.key == "pricing-test-new"}))
+    }
+    
     func testSDKRefreshHandler() throws {
         
         var isRefreshed = false
         let sdkInstance = GrowthBookBuilder(url: testURL,
-                                        attributes: testAttributes,
-                                        trackingCallback: { _, _ in },
-                                        refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in
             isRefreshed = true
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
 
@@ -77,9 +97,9 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         var isRefreshed = false
 
         let sdkInstance = GrowthBookBuilder(url: testURL,
-                                        attributes: testAttributes,
-                                        trackingCallback: { _, _ in },
-                                        refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in
             isRefreshed = true
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
         
@@ -91,10 +111,10 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     
     func testSDKRunMethods() throws {
         let sdkInstance = GrowthBookBuilder(url: testURL,
-                                        attributes: testAttributes,
-                                        trackingCallback: { _, _ in },
-                                        refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in
-
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in
+            
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
         
         let featureValue = sdkInstance.evalFeature(id: "fwrfewrfe")
@@ -106,14 +126,13 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     
     func testEncrypt() throws {
         let sdkInstance = GrowthBookBuilder(url: testURL,
-                                        attributes: testAttributes,
-                                        trackingCallback: { _, _ in },
-                                        refreshHandler: nil).initializer()
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).initializer()
         let decoder = JSONDecoder()
-        let keyString = "Ns04T5n9+59rl2x3SlNHtQ=="
         let encryptedFeatures = "vMSg2Bj/IurObDsWVmvkUg==.L6qtQkIzKDoE2Dix6IAKDcVel8PHUnzJ7JjmLjFZFQDqidRIoCxKmvxvUj2kTuHFTQ3/NJ3D6XhxhXXv2+dsXpw5woQf0eAgqrcxHrbtFORs18tRXRZza7zqgzwvcznx"
         let expectedResult = "{\"testfeature1\":{\"defaultValue\":true,\"rules\":[{\"condition\":{\"id\":\"1234\"},\"force\":false}]}}"
-        sdkInstance.setEncryptedFeatures(encryptedString: encryptedFeatures, encryptionKey: keyString)
+        sdkInstance.setEncryptedFeatures(encryptedString: encryptedFeatures, encryptionKey: testKeyString)
         guard
             let dataExpectedResult = expectedResult.data(using: .utf8),
             let features = try? decoder.decode([String: Feature].self, from: dataExpectedResult)

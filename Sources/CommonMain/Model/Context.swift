@@ -4,6 +4,8 @@ import Foundation
 @objc public class Context: NSObject {
     /// URL
     public let url: String?
+    /// Encryption key for encrypted features.
+    public let encryptionKey: String?
     /// Switch to globally disable all experiments. Default true.
     public let isEnabled: Bool
     /// Map of user attributes that are used to assign variations
@@ -20,6 +22,7 @@ import Foundation
     var features: Features
 
     init(url: String?,
+         encryptionKey: String?,
          isEnabled: Bool,
          attributes: JSON,
          forcedVariations: JSON?,
@@ -27,6 +30,7 @@ import Foundation
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:]) {
         self.url = url
+        self.encryptionKey = encryptionKey
         self.isEnabled = isEnabled
         self.attributes = attributes
         self.forcedVariations = forcedVariations
