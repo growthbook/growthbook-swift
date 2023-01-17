@@ -11,6 +11,7 @@ import CommonCrypto
 @objc public protocol CryptoProtocol: AnyObject {
     func encrypt(key: [UInt8], iv: [UInt8], plainText: [UInt8]) throws -> [UInt8]
     func decrypt(key: [UInt8], iv: [UInt8], cypherText: [UInt8]) throws -> [UInt8]
+    func getFeaturesFromEncryptedFeatures(encryptedString: String, encryptionKey: String) -> [String : Feature]?
 }
 
 class Crypto: CryptoProtocol {
@@ -109,6 +110,30 @@ class Crypto: CryptoProtocol {
         plaintext.removeLast(plaintext.count - plaintextCount)
 
         return plaintext
+    }
+    
+    /// Use encryption key to get features from encryptedFeatures.
+    ///
+    /// - Parameters:
+    ///   - encryptedString: Encrypted string.
+    ///   - encryptionKey: The key to encrypt with; must be a supported size (128, 192, 256).
+    /// - Returns: The features.
+    
+    func getFeaturesFromEncryptedFeatures(encryptedString: String, encryptionKey: String) -> [String : Feature]? {
+        let decoder = JSONDecoder()
+        let arrayEncryptedString = encryptedString.components(separatedBy: ".")
+        guard let iv = arrayEncryptedString.first,
+              let cipherText = arrayEncryptedString.last,
+              let keyBase64 = Data(base64Encoded: encryptionKey),
+              let ivBase64 = Data(base64Encoded: iv),
+              let cipherTextBase64 = Data(base64Encoded: cipherText),
+              let plainTextBuffer = try? decrypt(key: keyBase64.map{$0},
+                                                 iv: ivBase64.map{$0},
+                                                 cypherText: cipherTextBase64.map{$0}),
+              let features = try? decoder.decode([String: Feature].self, from: Data(plainTextBuffer))
+        else { return nil }
+                
+        return features
     }
 }
 

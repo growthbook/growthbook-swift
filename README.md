@@ -71,6 +71,16 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>
 
     }).initializer()
 ```
+You must also provide the encryption key if you intend to use data encryption.
+
+```swift
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    encryptionKey: <String>,
+    attributes: <[String: Any]>,
+    trackingCallback: { experiment, experimentResult in 
+
+    }).initializer()
+```
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(features: <Data>,
@@ -161,6 +171,8 @@ func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle
 class Context {
     /// URL
     let url: String?
+    /// Encryption key for encrypted features.
+    let encryptionKey: String?
     /// Switch to globally disable all experiments. Default true.
     let isEnabled: Bool
     /// Map of user attributes that are used to assign variations

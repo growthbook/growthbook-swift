@@ -10,7 +10,8 @@ protocol FeaturesFlowDelegate: AnyObject {
 class FeaturesViewModel {
     weak var delegate: FeaturesFlowDelegate?
     let dataSource: FeaturesDataSource
-
+    var encryptionKey: String?
+    
     /// Caching Manager
     let manager = CachingManager.shared
 
@@ -58,11 +59,23 @@ class FeaturesViewModel {
         let decoder = JSONDecoder()
 
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
-            guard let features = jsonPetitions.features else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
-                return
+            if let features = jsonPetitions.features, features != [:] {
+                delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
+            } else {
+                if let encryptedString = jsonPetitions.encryptedFeatures, !encryptedString.isEmpty  {
+                    if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+                        let crypto: CryptoProtocol = Crypto()
+                        guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
+                        delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
+                    } else {
+                        delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
+                        return
+                    }
+                } else {
+                    delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
+                    return
+                }
             }
-            delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
         }
     }
 }
