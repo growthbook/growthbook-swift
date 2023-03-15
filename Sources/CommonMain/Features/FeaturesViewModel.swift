@@ -30,7 +30,7 @@ class FeaturesViewModel {
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
             } else {
                 delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
-                logger.error("Failed parsed local data")
+                logger.error("Failed parse local data")
             }
         } else {
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
