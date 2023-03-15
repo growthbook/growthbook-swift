@@ -31,6 +31,57 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertFalse(isError)
     }
     
+    func testGetDataFromCache() throws {
+        isSuccess = false
+        isError = true
+        
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)))
+        
+        viewModel.fetchFeatures(apiUrl: "")
+        
+        let cachingManager: CachingLayer = CachingManager()
+        
+        guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
+            XCTFail()
+            return
+        }
+        
+        if let features = try? JSONDecoder().decode(Features.self, from: featureData), features != [:] {
+            XCTAssertTrue(true)
+        } else {
+            XCTFail()
+        }
+        
+        XCTAssertTrue(isSuccess)
+        XCTAssertFalse(isError)
+    }
+    
+    func testWithEncryptGetDataFromCache() throws {
+        isSuccess = false
+        isError = true
+        
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)))
+        
+        viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
+        viewModel.fetchFeatures(apiUrl: "")
+        
+        let cachingManager: CachingLayer = CachingManager()
+        
+        guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
+            XCTFail()
+            return
+        }
+        
+        if let features = try? JSONDecoder().decode(Features.self, from: featureData), features != [:] {
+            XCTAssertTrue(true)
+        } else {
+            XCTFail()
+        }
+        
+        XCTAssertTrue(isSuccess)
+        XCTAssertFalse(isError)
+    }
+    
     func testError() throws {
         isSuccess = false
         isError = true
