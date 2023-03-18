@@ -25,14 +25,12 @@ class FeaturesViewModel {
         // Check for cache data
         if let json = manager.getData(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
-            if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: json) {
-                if let features = jsonPetitions.features {
-                    // Call Success Delegate with mention of data available but its not remote
-                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
-                } else {
-                    delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
-                    logger.error("Failed parsed local data")
-                }
+            if let features = try? decoder.decode(Features.self, from: json) {
+                // Call Success Delegate with mention of data available but its not remote
+                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+            } else {
+                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                logger.error("Failed parse local data")
             }
         } else {
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
@@ -53,19 +51,23 @@ class FeaturesViewModel {
 
     /// Cache API Response and push success event
     func prepareFeaturesData(data: Data) {
-        manager.putData(fileName: Constants.featureCache, content: data)
-
         // Call Success Delegate with mention of data available with remote
         let decoder = JSONDecoder()
 
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             if let features = jsonPetitions.features, features != [:] {
+                if let featureData = try? JSONEncoder().encode(features) {
+                    manager.putData(fileName: Constants.featureCache, content: featureData)
+                }
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
             } else {
                 if let encryptedString = jsonPetitions.encryptedFeatures, !encryptedString.isEmpty  {
                     if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                         let crypto: CryptoProtocol = Crypto()
                         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
+                        if let featureData = try? JSONEncoder().encode(features) {
+                            manager.putData(fileName: Constants.featureCache, content: featureData)
+                        }
                         delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
                     } else {
                         delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
