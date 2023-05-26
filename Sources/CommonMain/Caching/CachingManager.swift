@@ -60,7 +60,7 @@ public class CachingManager: CachingLayer {
     func getTargetFile(fileName: String) -> String {
         // Get Documents Directory Path
         guard let directoryPath = NSSearchPathForDirectoriesInDomains(
-            .documentDirectory,
+            .cachesDirectory,
             .userDomainMask,
             true
         ).first else { return "" }
