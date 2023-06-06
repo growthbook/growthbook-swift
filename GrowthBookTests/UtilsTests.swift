@@ -198,4 +198,12 @@ class UtilsTests: XCTestCase {
 
         XCTAssertTrue(Utils.shared.getGBNameSpace(namespace: items) == nil)
     }
+    
+    func testPaddedVersionString() throws {
+        let startValue = "v1.2.3-rc.1+build123"
+        let expectedValue = "    1-    2-    3-rc-    1"
+        let endValue = Utils.shared.paddedVersionString(input: startValue)
+        
+        XCTAssertEqual(endValue, expectedValue)
+    }
 }

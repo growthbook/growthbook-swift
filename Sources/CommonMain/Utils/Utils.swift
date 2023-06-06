@@ -106,6 +106,23 @@ public class Utils {
         }
         return nil
     }
+    
+    func paddedVersionString(input: String) -> String {
+        var parts = input.replacingOccurrences(of: "[v]", with: "", options: .regularExpression)
+        if let range = parts.range(of: "+")?.lowerBound {
+            parts = String(parts.prefix(upTo: range))
+        }
+        
+        var partArray = parts.components(separatedBy: [".", "-"])
+        
+        if partArray.count == 3 {
+            partArray.append("~")
+        }
+        
+        let paddedVersion = partArray.map({ $0.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil ? "    " + $0 : $0}).joined(separator: "-")
+                
+        return paddedVersion
+    }
 
     private func digest(_ string: String) -> UInt32 {
         return Common.fnv1a(Array(string.utf8), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
