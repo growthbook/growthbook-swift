@@ -319,6 +319,30 @@ class ConditionEvaluator {
             let targetPrimitiveValue = conditionValue
             let sourcePrimitiveValue = attributeValue
             switch operatorKey {
+            case "$veq":
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
+                    return Utils.shared.paddedVersionString(input: attributeString) == Utils.shared.paddedVersionString(input: conditionString)
+                }
+            case "$vne":
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
+                    return Utils.shared.paddedVersionString(input: attributeString) != Utils.shared.paddedVersionString(input: conditionString)
+                }
+            case "$vgt":
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
+                    return Utils.shared.paddedVersionString(input: attributeString) > Utils.shared.paddedVersionString(input: conditionString)
+                }
+            case "$vgte":
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
+                    return Utils.shared.paddedVersionString(input: attributeString) >= Utils.shared.paddedVersionString(input: conditionString)
+                }
+            case "$vlt":
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
+                    return Utils.shared.paddedVersionString(input: attributeString) < Utils.shared.paddedVersionString(input: conditionString)
+                }
+            case "$vlte":
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
+                    return Utils.shared.paddedVersionString(input: attributeString) <= Utils.shared.paddedVersionString(input: conditionString)
+                }
             // Evaluate EQ operator - whether condition equals to attribute
             case "$eq":
                 return  attributeValue == conditionValue
