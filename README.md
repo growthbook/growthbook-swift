@@ -15,6 +15,7 @@
   - **Apple TvOS version 12 & Above**
   - **Apple WatchOS version 5.0 & Above**
 - **Adjust variation weights and targeting without deploying new code**
+- **Latest spec version: 0.5.0 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
 
 
 
