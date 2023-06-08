@@ -201,7 +201,7 @@ class Feature {
     let rules: [FeatureRule]?
 }
 
-/// Rule object consists of letious definitions to apply to calculate feature value
+/// Rule object consists of various definitions to apply to calculate feature value
 struct FeatureRule {
     /// Optional targeting condition
     let condition: JSON?
@@ -209,15 +209,15 @@ struct FeatureRule {
     let coverage: Float?
     /// Immediately force a specific value (ignore every other option besides condition and coverage)
     let force: JSON?
-    /// Run an experiment (A/B test) and randomly choose between these letiations
+    /// Run an experiment (A/B test) and randomly choose between these variations
     let variations: [JSON]?
     /// The globally unique tracking key for the experiment (default to the feature key)
     let key: String?
-    /// How to weight traffic between letiations. Must add to 1.
+    /// How to weight traffic between variations. Must add to 1.
     let weights: [Float]?
     /// A tuple that contains the namespace identifier, plus a range of coverage for the experiment.
     let namespace: [JSON]?
-    /// What user attribute should be used to assign letiations (defaults to id)
+    /// What user attribute should be used to assign variations (defaults to id)
     let hashAttribute: String?
 }
 
