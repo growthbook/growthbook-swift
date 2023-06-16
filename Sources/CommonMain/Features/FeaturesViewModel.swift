@@ -8,7 +8,7 @@ protocol FeaturesFlowDelegate: AnyObject {
 
 /// View Model for Features
 class FeaturesViewModel {
-    weak var delegate: FeaturesFlowDelegate?
+    var delegate: FeaturesFlowDelegate?
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
     
@@ -38,12 +38,12 @@ class FeaturesViewModel {
         }
 
         guard let apiUrl = apiUrl else { return }
-        dataSource.fetchFeatures(apiUrl: apiUrl) { [weak self] result in
+        dataSource.fetchFeatures(apiUrl: apiUrl) { result in
             switch result {
             case .success(let data):
-                self?.prepareFeaturesData(data: data)
+                self.prepareFeaturesData(data: data)
             case .failure(let error):
-                self?.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
+                self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
                 logger.error("Failed get features: \(error.localizedDescription)")
             }
         }
