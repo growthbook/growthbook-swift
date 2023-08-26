@@ -20,16 +20,36 @@ class CachingManagerTest: XCTestCase {
         let fileName = "gb-features.txt"
 
         do {
-            let data = try JSON("GrowthBook").rawData()
+            let data = try JSON(["GrowthBook": "GrowthBook"]).rawData()
             manager.saveContent(fileName: fileName, content: data)
 
             if let fileContents = manager.getContent(fileName: fileName) {
                 let json = try JSON(data: fileContents)
-                XCTAssertTrue(json.stringValue == "GrowthBook")
+                XCTAssertTrue(json.dictionary == ["GrowthBook": "GrowthBook"])
+            } else {
+                XCTFail()
+                logger.error("Failed get content")
             }
         } catch {
+            XCTFail()
             logger.error("Failed get raw data or parse json error: \(error.localizedDescription)")
         }
     }
 
+    func testClearCache() throws {
+        
+        let fileName = "gb-features.txt"
+
+        do {
+            let data = try JSON(["GrowthBook": "GrowthBook"]).rawData()
+            manager.saveContent(fileName: fileName, content: data)
+
+            manager.clearCache()
+            
+            XCTAssertTrue(manager.getContent(fileName: fileName) == nil)
+        } catch {
+            XCTFail()
+            logger.error("Failed get raw data or parse json error: \(error.localizedDescription)")
+        }
+    }
 }

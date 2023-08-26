@@ -143,4 +143,30 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].condition == features["testfeature1"]?.rules?[0].condition)
         XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].force == features["testfeature1"]?.rules?[0].force)
     }
+    
+    func testClearCache() throws {
+        
+        let sdkInstance = GrowthBookBuilder(url: testURL,
+                                            attributes: testAttributes,
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil).setRefreshHandler(refreshHandler: { _ in
+
+        }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
+            .setCacheDirectory(.documents)
+            .initializer()
+        
+        let fileName = "gb-features.txt"
+
+        do {
+            let data = try JSON(["GrowthBook": "GrowthBook"]).rawData()
+            CachingManager.shared.saveContent(fileName: fileName, content: data)
+
+            sdkInstance.clearCache()
+
+            XCTAssertTrue(CachingManager.shared.getContent(fileName: fileName) == nil)
+        } catch {
+            XCTFail()
+            logger.error("Failed get raw data or parse json error: \(error.localizedDescription)")
+        }
+    }
 }
