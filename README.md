@@ -107,6 +107,7 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>
     .setQAMode(isEnabled: true) // Enable / Disable QA Mode
     .setForcedVariations(forcedVariations: <[String: Int]>) // Pass Forced Variations
     .setLogLevel(<LoggerLevel>) // Set log level for SDK Logger, by default log level is set to `info`
+    .setCacheDirectory(<CacheDirectory>) // This function configures the cache directory used by the application to the designated directory type. Subsequent cache-related operations will target this directory.
     .initializer()
 ```
 

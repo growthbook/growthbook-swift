@@ -106,9 +106,10 @@ public class Utils {
         }
         return nil
     }
-    
+
     func paddedVersionString(input: String) -> String {
         var parts = input.replacingOccurrences(of: "[v]", with: "", options: .regularExpression)
+        
         if let range = parts.range(of: "+")?.lowerBound {
             parts = String(parts.prefix(upTo: range))
         }
@@ -119,9 +120,7 @@ public class Utils {
             partArray.append("~")
         }
         
-        let paddedVersion = partArray.map({ $0.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil ? "    " + $0 : $0}).joined(separator: "-")
-                
-        return paddedVersion
+        return partArray.map({ $0.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil ? String(repeating: " ", count: 5 - $0.count) + $0 : $0}).joined(separator: "-")
     }
 
     private func digest(_ string: String) -> UInt32 {

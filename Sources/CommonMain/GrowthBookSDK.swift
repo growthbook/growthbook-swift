@@ -20,6 +20,7 @@ public struct GrowthBookModel {
     var isQaMode: Bool = false
     var isEnabled: Bool = true
     var forcedVariations: JSON?
+    var cacheDirectory: CacheDirectory = .applicationSupport
 }
 
 /// GrowthBookBuilder - inItializer for GrowthBook SDK for Apps
@@ -82,6 +83,11 @@ public struct GrowthBookModel {
         growthBookBuilderModel.isEnabled = isEnabled
         return self
     }
+    
+    @objc public func setCacheDirectory(_ directory: CacheDirectory) -> GrowthBookBuilder {
+        CachingManager.shared.updateCacheDirectory(directory)
+        return self
+    }
 
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
@@ -132,6 +138,11 @@ public struct GrowthBookModel {
     /// Manually Refresh Cache
     @objc public func refreshCache() {
         featureVM.fetchFeatures(apiUrl: gbContext.url)
+    }
+    
+    /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
+    @objc public func clearCache() {
+        CachingManager.shared.clearCache()
     }
 
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
