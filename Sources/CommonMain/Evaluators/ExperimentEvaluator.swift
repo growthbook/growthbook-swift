@@ -63,7 +63,7 @@ class ExperimentEvaluator {
             bucketRange = Utils.shared.getBucketRanges(numVariations: experiment.variations.count, coverage: coverage, weights: weights)
         }
 
-        let hash = Utils.shared.hash(data: attributeValue + experiment.key)
+        let hash = Utils.shared.hash(seed: experiment.key, value: attributeValue, version: 1) ?? 0.0
         let assigned = Utils.shared.chooseVariation(n: hash, ranges: bucketRange)
 
         // If not assigned a variation (assigned === -1), return immediately (not in experiment, variationId 0)
@@ -91,6 +91,8 @@ class ExperimentEvaluator {
 
     /// This is a helper method to create an ExperimentResult object.
     private func getExperimentResult(gbContext: Context, experiment: Experiment, variationIndex: Int = 0, inExperiment: Bool = false) -> ExperimentResult {
+        let key = experiment.key
+        let name = experiment.name
         var targetVariationIndex = variationIndex
 
         // Check whether variationIndex lies within bounds of variations size
@@ -115,7 +117,7 @@ class ExperimentEvaluator {
                                 variationId: targetVariationIndex,
                                 value: targetValue,
                                 hashAttribute: hashAttribute,
-                                hashValue: hashValue)
+                                hashValue: hashValue, key: key, name: name)
     }
 
 }

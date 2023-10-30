@@ -6,11 +6,10 @@ import Foundation
 ///
 /// Returns Calculated Feature Result against that key
 class FeatureEvaluator {
-
     /// Takes Context and Feature Key
     ///
     /// Returns Calculated Feature Result against that key
-    func evaluateFeature(context: Context, featureKey: String) -> FeatureResult {
+    func evaluateFeature(context: Context, featureKey: String, attributeOverrides: JSON) -> FeatureResult {
 
         guard let targetFeature: Feature = context.features[featureKey] else {
             return prepareResult(value: JSON.null, source: FeatureSource.unknownFeature)
@@ -25,9 +24,22 @@ class FeatureEvaluator {
                 if let condition = rule.condition {
                     guard ConditionEvaluator().isEvalCondition(attributes: context.attributes, conditionObj: condition) else { continue }
                 }
+                
+                // If there are filters for who is included
+                if let filters = rule.filters {
+                    if isFilteredOut(filters: filters, attributeOverrides: attributeOverrides, context: context) {
+                        print("Skip rule because of filters")
+                        continue
+                    }
+                }
 
                 // If rule.force is set
                 if let force = rule.force {
+                    
+                    if !isIncludedInRollout(seed: rule.seed ?? "", hashAttribute: rule.hashAttribute, range: rule.range, coverage: rule.coverage, hashVersion: rule.hashVersion, attributeOverrides: attributeOverrides, context: context) {
+                        print("Skip rule because user not included in rollout")
+                    } 
+                    
                     // If rule.coverage is set
                     if let coverage = rule.coverage {
 
@@ -40,7 +52,7 @@ class FeatureEvaluator {
                         }
 
                         // Compute a hash using the Fowler–Noll–Vo algorithm (specifically fnv32-1a)
-                        let hashFNV = Utils.shared.hash(data: attributeValue + featureKey)
+                        let hashFNV = Utils.shared.hash(seed: featureKey, value: attributeValue, version: 1.0) ?? 0.0
                         // If the hash is greater than rule.coverage, skip the rule
                         if hashFNV > coverage {
                             continue
@@ -57,8 +69,22 @@ class FeatureEvaluator {
                                          namespace: rule.namespace,
                                          hashAttribute: rule.hashAttribute,
                                          weights: rule.weights,
-                                         coverage: rule.coverage)
+                                         coverage: rule.coverage,
+                                         ranges: rule.ranges,
+                                         meta: rule.meta,
+                                         filters: rule.filters,
+                                         seed: rule.seed,
+                                         name: rule.name,
+                                         phase: rule.phase)
 
+                    // If there are filters for who is included
+                    if let filters = exp.filters {
+                        if isFilteredOut(filters: filters, attributeOverrides: attributeOverrides, context: context) {
+                            print("Skip because of filters")
+                            continue
+                        }
+                    }
+                    
                     // Run the experiment.
                     let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: exp)
                     guard result.inExperiment else {
@@ -75,6 +101,56 @@ class FeatureEvaluator {
         // Return (value = defaultValue or null, source = defaultValue)
         let defaultValue = targetFeature.defaultValue ?? JSON.null
         return prepareResult(value: defaultValue, source: FeatureSource.defaultValue)
+    }
+    
+    ///Returns tuple out of 2 elements: the attribute itself an its hash value
+    private func getHashAttribute(attr: String?, attributeOverrides: JSON, context: Context) -> (hashAttribute: String, hashValue: String) {
+        let hashAttribute = attr ?? "id"
+        var hashValue = ""
+        
+        if attributeOverrides[hashAttribute] != .null {
+            hashValue = attributeOverrides[hashAttribute].stringValue
+        } else if context.attributes[hashAttribute] != .null {
+            hashValue = context.attributes[hashAttribute].stringValue
+        }
+        
+        return (hashAttribute, hashValue)
+    }
+    
+    ///Determines if the user is part of a gradual feature rollout.
+    private func isIncludedInRollout(seed: String, hashAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?, attributeOverrides: JSON, context: Context) -> Bool {
+        if range == nil, coverage == nil {
+            return true
+        }
+        
+        let hashValue = getHashAttribute(attr: hashAttribute, attributeOverrides: attributeOverrides, context: context).hashValue
+        
+        let hash = Utils.shared.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
+        
+        guard let hash = hash else { return false }
+        
+        if let range = range {
+            return Utils.shared.inRange(n: hash, range: range)
+        } else if let coverage = coverage {
+            return hash <= coverage
+        } else {
+            return true
+        }
+    }
+    
+    ///This is a helper method to evaluate `filters` for both feature flags and experiments.
+    private func isFilteredOut(filters: [Filter], attributeOverrides: JSON, context: Context) -> Bool {
+        return filters.contains { filter in
+            let hashAttribute = getHashAttribute(attr: filter.attribute, attributeOverrides: attributeOverrides, context: context)
+            let hashValue = hashAttribute.hashValue
+            
+            let hash = Utils.shared.hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
+            guard let hashValue = hash else { return true }
+            
+            return !filter.ranges.contains { r in
+                return Utils.shared.inRange(n: hashValue, range: r)
+            }
+        }
     }
 
     /// This is a helper method to create a FeatureResult object.

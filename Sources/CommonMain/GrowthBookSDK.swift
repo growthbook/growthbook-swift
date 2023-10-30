@@ -157,7 +157,7 @@ public struct GrowthBookModel {
 
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
-        return FeatureEvaluator().evaluateFeature(context: gbContext, featureKey: id).value ?? defaultValue
+        return FeatureEvaluator().evaluateFeature(context: gbContext, featureKey: id, attributeOverrides: gbContext.attributes).value ?? defaultValue
     }
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
@@ -183,7 +183,7 @@ public struct GrowthBookModel {
 
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
-        return FeatureEvaluator().evaluateFeature(context: gbContext, featureKey: id)
+        return FeatureEvaluator().evaluateFeature(context: gbContext, featureKey: id, attributeOverrides: gbContext.attributes)
     }
 
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off

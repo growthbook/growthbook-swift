@@ -165,6 +165,11 @@ func isOn(feature id: String) -> Bool
 func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil)
 ```
 
+- Checks if the number is in range of numbers
+
+```swift
+func inRange(n: Float, range: BucketRange) -> Bool
+```
 
 ## Models
 
@@ -221,6 +226,24 @@ struct FeatureRule {
     let namespace: [JSON]?
     /// What user attribute should be used to assign variations (defaults to id)
     let hashAttribute: String?
+    /// Hash version of hash function
+    let hashVersion: Float?
+    /// A more precise version of `coverage`
+    let range: BucketRange?
+    /// Ranges for experiment variations
+    let ranges: [BucketRange]?
+    /// Meta info about the experiment variations
+    let meta: [VariationMeta]?
+    /// Array of filters to apply to the rule
+    let filters: [Filter]?
+    /// Seed to use for hashing
+    let seed: String?
+    /// Human-readable name for the experiment
+    let name: String?
+    /// The phase id of the experiment
+    let phase: String?
+    /// Array of tracking calls to fire
+    let tracks: [TrackData]?
 }
 
 /// Enum For defining feature value source
@@ -275,6 +298,18 @@ class Experiment {
     var condition: JSON?
     /// All users included in the experiment will be forced into the specific variation index
     var force: Int?
+    /// Array of ranges, one per variation
+    let ranges: [BucketRange]?
+    /// Meta info about the variations
+    let meta: [VariationMeta]?
+    /// Array of filters to apply
+    let filters: [Filter]?
+    /// The hash seed to use
+    let seed: String?
+    /// Human-readable name for the experiment
+    let name: String?
+    /// Id of the current experiment phase
+    let phase: String?
 }
 
 /// The result of running an Experiment given a specific Context
@@ -288,8 +323,33 @@ class ExperimentResult {
     /// The user attribute used to assign a variation
     let hashAttribute: String?
     /// The value of that attribute
-    let hashValue: String?
+    let valueHash: String?
+    /// The unique key for the assigned variation
+    let key: String
+    /// The human-readable name of the assigned variation
+    let name: String?
+    /// The hash value used to assign a variation (float from `0` to `1`)
+    let bucket: Float?
+    /// Used for holdout groups
+    let passthrough: Bool?
 }
+
+/// Meta info about the variations
+public struct VariationMeta {
+    /// Used to implement holdout groups
+    let passthrough: Bool?
+    /// A unique key for this variation
+    let key: String?
+    /// A human-readable name for this variation
+    let name: String?
+}
+
+///Used for remote feature evaluation to trigger the `TrackingCallback`
+public struct TrackData {
+    let experiment: Experiment
+    let result: ExperimentResult
+}
+
 ```
 
 

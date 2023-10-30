@@ -25,7 +25,6 @@ class TestHelper {
     }
 
     func getFeatureData() -> [JSON]? {
-
         let array = testData?.dictionaryValue["feature"]
         return array?.arrayValue
     }
@@ -48,6 +47,10 @@ class TestHelper {
     func getEqualWeightsData() -> [JSON]? {
         let array = testData?.dictionaryValue["getEqualWeights"] 
         return array?.arrayValue
+    }
+    
+    func getDecryptData() -> [JSON]? {
+        testData?.dictionaryValue["decrypt"]?.arrayValue
     }
 
     private func loadTestData() -> JSON? {

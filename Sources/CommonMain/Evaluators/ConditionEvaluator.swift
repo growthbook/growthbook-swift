@@ -167,11 +167,16 @@ class ConditionEvaluator {
 
     /// Evaluates Condition Value against given condition & attributes
     func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?) -> Bool {
-        let conditionJson = JSON(conditionValue)
         // If conditionValue is a string, number, boolean, return true if it's "equal" to attributeValue and false if not.
-        if let attributeValue = attributeValue {
-            if isPrimitive(value: conditionValue) && isPrimitive(value: attributeValue) {
-                return conditionValue == attributeValue
+        var unwrappedAttribute = attributeValue
+        
+        if attributeValue == nil {
+            unwrappedAttribute = .null
+        }
+        
+        if let unwrappedAttribute = unwrappedAttribute {
+            if isPrimitive(value: conditionValue) && isPrimitive(value: unwrappedAttribute) {
+                return conditionValue == unwrappedAttribute
             }
         } else if isPrimitive(value: conditionValue) {
             return false
@@ -192,9 +197,9 @@ class ConditionEvaluator {
         }
 
         // If conditionValue is an object, loop over each key/value pair:
-        if let _ = conditionJson.dictionary {
+        if let _ = conditionValue.dictionary {
 
-            if isOperatorObject(obj: conditionJson) {
+            if isOperatorObject(obj: conditionValue) {
                 for key in conditionValue.dictionaryValue.keys {
                     // If evalOperatorCondition(key, attributeValue, value) is false, return false
                     if let value = conditionValue.dictionaryValue[key], !isEvalOperatorCondition(operatorKey: key, attributeValue: attributeValue, conditionValue: value) {
@@ -401,7 +406,8 @@ class ConditionEvaluator {
     }
 
     private func isPrimitive(value: JSON) -> Bool {
-        if value.number != nil || value.string != nil || value.bool != nil || value.int != nil {
+        
+        if value.number != nil || value.string != nil || value.bool != nil || value.int != nil || value == .null {
             return true
         }
         return false
