@@ -67,16 +67,17 @@ Now you can start/stop tests, adjust coverage and variation weights, and apply a
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
-    }).initializer()
+    }, backroundSync: Bool?).initializer()
 ```
 You must also provide the encryption key if you intend to use data encryption.
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
-    encryptionKey: <String>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -84,7 +85,8 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>
 ```
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(features: <Data>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -95,6 +97,7 @@ There are additional properties which can be setup at the time of initialization
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -173,6 +176,8 @@ func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle
 class Context {
     /// URL
     let url: String?
+    /// URL for enabling streaming updates
+    let sseURl: String?
     /// Encryption key for encrypted features.
     let encryptionKey: String?
     /// Switch to globally disable all experiments. Default true.
@@ -347,6 +352,17 @@ public struct TrackData {
 
 ```
 
+
+## Streaming updates
+
+To enable streaming updates set backgroundSync variable to "true" and add streaming updates URL
+
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
+    attributes: <[String: Any]>,
+    trackingCallback: { experiment, experimentResult in 
+
+    }, backgroundSync: true).initializer( 
 
 
 ## License

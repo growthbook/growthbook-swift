@@ -11,17 +11,19 @@ class FeaturesViewModel {
     var delegate: FeaturesFlowDelegate?
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
+    var backgroundSync: Bool?
     
     /// Caching Manager
     let manager = CachingManager.shared
 
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, backgroundSync: Bool?) {
         self.delegate = delegate
         self.dataSource = dataSource
+        self.backgroundSync = backgroundSync
     }
 
     /// Fetch Features
-    func fetchFeatures(apiUrl: String?) {
+    func fetchFeatures(apiUrl: String?, sseURL: String?) {
         // Check for cache data
         if let json = manager.getData(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
@@ -37,16 +39,31 @@ class FeaturesViewModel {
             logger.error("Failed load local data")
         }
 
-        guard let apiUrl = apiUrl else { return }
-        dataSource.fetchFeatures(apiUrl: apiUrl) { result in
-            switch result {
-            case .success(let data):
-                self.prepareFeaturesData(data: data)
-            case .failure(let error):
-                self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
-                logger.error("Failed get features: \(error.localizedDescription)")
+        if let apiUrl = apiUrl {
+            dataSource.fetchFeatures(apiUrl: apiUrl) { result in
+                switch result {
+                case .success(let data):
+                    self.prepareFeaturesData(data: data)
+                case .failure(let error):
+                    self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
+                    logger.error("Failed get features: \(error.localizedDescription)")
+                }
             }
         }
+        
+        if let urlString = sseURL, let url = URL(string: urlString) {
+            if backgroundSync ?? false {
+                let streamingUpdate = SSEHandler(url: url, headers: ["Authorization": "Bearer basic-auth-token"])
+                streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
+                    guard let jsonData = data?.data(using: .utf8) else { return }
+                    self?.prepareFeaturesData(data: jsonData)
+                }
+                streamingUpdate.connect()
+            } else {
+                SSEHandler(url: url).disconnect()
+            }
+        }
+        
     }
 
     /// Cache API Response and push success event

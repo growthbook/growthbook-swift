@@ -158,8 +158,8 @@ class FeatureEvaluator {
             let hash = Utils.shared.hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
             guard let hashValue = hash else { return true }
             
-            return !filter.ranges.contains { r in
-                return Utils.shared.inRange(n: hashValue, range: r)
+            return !filter.ranges.contains { range in
+                return Utils.shared.inRange(n: hashValue, range: range)
             }
         }
     }

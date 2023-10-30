@@ -15,7 +15,7 @@ typealias Features = [String: Feature]
 typealias Condition = JSON
 
 /// Handler for Refresh Cache Request
-///
+/// 
 /// It updates back whether cache was refreshed or not
 public typealias CacheRefreshHandler = (Bool) -> Void
 

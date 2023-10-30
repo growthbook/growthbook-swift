@@ -12,6 +12,7 @@ protocol GrowthBookProtocol: AnyObject {
 
 public struct GrowthBookModel {
     var url: String?
+    var sseUrl: String?
     var encryptionKey: String?
     var features: Data?
     var attributes: JSON
@@ -21,6 +22,7 @@ public struct GrowthBookModel {
     var isEnabled: Bool = true
     var forcedVariations: JSON?
     var cacheDirectory: CacheDirectory = .applicationSupport
+    var backgroundSync: Bool
 }
 
 /// GrowthBookBuilder - inItializer for GrowthBook SDK for Apps
@@ -34,18 +36,18 @@ public struct GrowthBookModel {
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
 
-    @objc public init(url: String, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
-        growthBookBuilderModel = GrowthBookModel(url: url, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    @objc public init(url: String? = nil, sseUrl: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false) {
+        growthBookBuilderModel = GrowthBookModel(url: url, sseUrl: sseUrl, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
         self.refreshHandler = refreshHandler
     }
 
-    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
-        growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool) {
+        growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
         self.refreshHandler = refreshHandler
     }
 
-    init(url: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?) {
-        growthBookBuilderModel = GrowthBookModel(url: url, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback)
+    init(url: String, sseUrl: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool) {
+        growthBookBuilderModel = GrowthBookModel(url: url, sseUrl: sseUrl, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
         self.refreshHandler = refreshHandler
     }
 
@@ -92,12 +94,14 @@ public struct GrowthBookModel {
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
             url: growthBookBuilderModel.url,
+            sseUrl: growthBookBuilderModel.sseUrl,
             encryptionKey: growthBookBuilderModel.encryptionKey,
             isEnabled: growthBookBuilderModel.isEnabled,
             attributes: growthBookBuilderModel.attributes,
             forcedVariations: growthBookBuilderModel.forcedVariations,
             isQaMode: growthBookBuilderModel.isQaMode,
-            trackingClosure: growthBookBuilderModel.trackingClosure
+            trackingClosure: growthBookBuilderModel.trackingClosure,
+            backgroundSync: growthBookBuilderModel.backgroundSync
         )
         if let features = growthBookBuilderModel.features {
             CachingManager.shared.saveContent(fileName: Constants.featureCache, content: features)
@@ -126,7 +130,7 @@ public struct GrowthBookModel {
         self.networkDispatcher = networkDispatcher
         self.attributeOverrides = attributes
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), backgroundSync: gbContext.backgroundSync)
         if let features = features {
             gbContext.features = features
         } else {
@@ -136,10 +140,10 @@ public struct GrowthBookModel {
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
     }
-
+    
     /// Manually Refresh Cache
     @objc public func refreshCache() {
-        featureVM.fetchFeatures(apiUrl: gbContext.url)
+        featureVM.fetchFeatures(apiUrl: gbContext.url, sseURL: gbContext.sseUrl)
     }
     
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
