@@ -18,12 +18,13 @@ class ExperimentRunTests: XCTestCase {
             let experiment = Experiment(json: item[2].dictionaryValue)
 
             let gbContext = Context(url: nil,
+                                    sseUrl: nil,
                                     encryptionKey: nil,
                                     isEnabled: testContext.isEnabled,
                                     attributes: testContext.attributes,
                                     forcedVariations: testContext.forcedVariations,
                                     isQaMode: testContext.isQaMode,
-                                    trackingClosure: { _, _ in })
+                                    trackingClosure: { _, _ in }, backgroundSync: false)
 
             let evaluator = ExperimentEvaluator()
             let result = evaluator.evaluateExperiment(context: gbContext, experiment: experiment)

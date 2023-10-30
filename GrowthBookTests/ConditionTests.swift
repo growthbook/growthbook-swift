@@ -53,6 +53,10 @@ class ConditionTests: XCTestCase {
         XCTAssertTrue(evaluator.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON("abc"), conditionValue: JSON("abc")))
         
         XCTAssertTrue(evaluator.isEvalOperatorCondition(operatorKey: "$vlt", attributeValue: "0.9.0", conditionValue: "0.10.0"))
+        
+        XCTAssertTrue(evaluator.isEvalOperatorCondition(operatorKey: "$in", attributeValue: JSON("abc"), conditionValue: [JSON("abc")]))
+        
+        XCTAssertFalse(evaluator.isEvalOperatorCondition(operatorKey: "$nin", attributeValue: JSON("abc"), conditionValue: [JSON("abc")]))
     }
 
     func testConditionFailAttributeDoesNotExist() throws {

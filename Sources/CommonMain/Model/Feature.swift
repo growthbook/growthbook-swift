@@ -31,6 +31,24 @@ public struct FeatureRule: Codable {
     public let namespace: [JSON]?
     /// What user attribute should be used to assign variations (defaults to id)
     public let hashAttribute: String?
+    /// Hash version of hash function
+    public let hashVersion: Float?
+    /// A more precise version of `coverage`
+    public let range: BucketRange?
+    /// Ranges for experiment variations
+    public let ranges: [BucketRange]?
+    /// Meta info about the experiment variations
+    public let meta: [VariationMeta]?
+    /// Array of filters to apply to the rule
+    public let filters: [Filter]?
+    /// Seed to use for hashing
+    public let seed: String?
+    /// Human-readable name for the experiment
+    public let name: String?
+    /// The phase id of the experiment
+    public let phase: String?
+    /// Array of tracking calls to fire
+    public let tracks: [TrackData]?
 
     init(condition: Condition? = nil,
          coverage: Float? = nil,
@@ -39,7 +57,16 @@ public struct FeatureRule: Codable {
          key: String? = nil,
          weights: [Float]? = nil,
          namespace: [JSON]? = nil,
-         hashAttribute: String? = nil) {
+         hashAttribute: String? = nil,
+         hashVersion: Float? = nil,
+         range: BucketRange? = nil,
+         ranges: [BucketRange]? = nil,
+         meta: [VariationMeta]? = nil,
+         filters: [Filter]? = nil,
+         seed: String? = nil,
+         name: String? = nil,
+         phase: String? = nil,
+         tracks: [TrackData]? = nil) {
         self.condition = condition
         self.coverage = coverage
         self.force = force
@@ -48,6 +75,15 @@ public struct FeatureRule: Codable {
         self.weights = weights
         self.namespace = namespace
         self.hashAttribute = hashAttribute
+        self.hashVersion = hashVersion
+        self.range = range
+        self.ranges = ranges
+        self.meta = meta
+        self.filters = filters
+        self.seed = seed
+        self.name = name
+        self.phase = phase
+        self.tracks = tracks
     }
 }
 

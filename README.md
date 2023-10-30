@@ -67,16 +67,17 @@ Now you can start/stop tests, adjust coverage and variation weights, and apply a
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
-    }).initializer()
+    }, backroundSync: Bool?).initializer()
 ```
 You must also provide the encryption key if you intend to use data encryption.
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
-    encryptionKey: <String>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -84,7 +85,8 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>
 ```
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(features: <Data>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -95,6 +97,7 @@ There are additional properties which can be setup at the time of initialization
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -173,6 +176,8 @@ func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle
 class Context {
     /// URL
     let url: String?
+    /// URL for enabling streaming updates
+    let sseURl: String?
     /// Encryption key for encrypted features.
     let encryptionKey: String?
     /// Switch to globally disable all experiments. Default true.
@@ -221,6 +226,24 @@ struct FeatureRule {
     let namespace: [JSON]?
     /// What user attribute should be used to assign variations (defaults to id)
     let hashAttribute: String?
+    /// Hash version of hash function
+    let hashVersion: Float?
+    /// A more precise version of `coverage`
+    let range: BucketRange?
+    /// Ranges for experiment variations
+    let ranges: [BucketRange]?
+    /// Meta info about the experiment variations
+    let meta: [VariationMeta]?
+    /// Array of filters to apply to the rule
+    let filters: [Filter]?
+    /// Seed to use for hashing
+    let seed: String?
+    /// Human-readable name for the experiment
+    let name: String?
+    /// The phase id of the experiment
+    let phase: String?
+    /// Array of tracking calls to fire
+    let tracks: [TrackData]?
 }
 
 /// Enum For defining feature value source
@@ -275,6 +298,18 @@ class Experiment {
     var condition: JSON?
     /// All users included in the experiment will be forced into the specific variation index
     var force: Int?
+    /// Array of ranges, one per variation
+    let ranges: [BucketRange]?
+    /// Meta info about the variations
+    let meta: [VariationMeta]?
+    /// Array of filters to apply
+    let filters: [Filter]?
+    /// The hash seed to use
+    let seed: String?
+    /// Human-readable name for the experiment
+    let name: String?
+    /// Id of the current experiment phase
+    let phase: String?
 }
 
 /// The result of running an Experiment given a specific Context
@@ -288,10 +323,46 @@ class ExperimentResult {
     /// The user attribute used to assign a variation
     let hashAttribute: String?
     /// The value of that attribute
-    let hashValue: String?
+    let valueHash: String?
+    /// The unique key for the assigned variation
+    let key: String
+    /// The human-readable name of the assigned variation
+    let name: String?
+    /// The hash value used to assign a variation (float from `0` to `1`)
+    let bucket: Float?
+    /// Used for holdout groups
+    let passthrough: Bool?
 }
+
+/// Meta info about the variations
+public struct VariationMeta {
+    /// Used to implement holdout groups
+    let passthrough: Bool?
+    /// A unique key for this variation
+    let key: String?
+    /// A human-readable name for this variation
+    let name: String?
+}
+
+///Used for remote feature evaluation to trigger the `TrackingCallback`
+public struct TrackData {
+    let experiment: Experiment
+    let result: ExperimentResult
+}
+
 ```
 
+
+## Streaming updates
+
+To enable streaming updates set backgroundSync variable to "true" and add streaming updates URL
+
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
+    sseUrl: <GrowthBook_SSEURL/API_KEY>,
+    attributes: <[String: Any]>,
+    trackingCallback: { experiment, experimentResult in 
+
+    }, backgroundSync: true).initializer( 
 
 
 ## License

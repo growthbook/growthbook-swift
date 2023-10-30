@@ -1,7 +1,7 @@
 import Foundation
 
 /// Defines a single experiment
-@objc public class Experiment: NSObject, Decodable {
+@objc public class Experiment: NSObject, Codable {
     /// The globally unique tracking key for the experiment
     public let key: String
     /// The different variations to choose between
@@ -20,16 +20,34 @@ import Foundation
     public var condition: JSON?
     /// All users included in the experiment will be forced into the specific variation index
     public var force: Int?
-
+    /// Array of ranges, one per variation
+    public let ranges: [BucketRange]?
+    /// Meta info about the variations
+    public let meta: [VariationMeta]?
+    /// Array of filters to apply
+    public let filters: [Filter]?
+    /// The hash seed to use
+    public let seed: String?
+    /// Human-readable name for the experiment
+    public let name: String?
+    /// Id of the current experiment phase
+    public let phase: String?
+    
     public init(key: String,
-         variations: [Any] = [],
-         namespace: [Any]? = nil,
-         hashAttribute: String? = nil,
-         weights: [Float]? = nil,
-         isActive: Bool = true,
-         coverage: Float? = nil,
-         condition: Any? = nil,
-         force: Int? = nil) {
+                variations: [Any] = [],
+                namespace: [Any]? = nil,
+                hashAttribute: String? = nil,
+                weights: [Float]? = nil,
+                isActive: Bool = true,
+                coverage: Float? = nil,
+                condition: Any? = nil,
+                force: Int? = nil,
+                ranges: [BucketRange]? = nil,
+                meta: [VariationMeta]? = nil,
+                filters: [Filter]? = nil,
+                seed: String? = nil,
+                name: String? = nil,
+                phase: String? = nil) {
         self.key = key
         self.variations = JSON(variations).arrayValue
         if let namespace = namespace {
@@ -45,6 +63,12 @@ import Foundation
             self.condition = JSON(condition)
         }
         self.force = force
+        self.ranges = ranges
+        self.meta = meta
+        self.filters = filters
+        self.seed = seed
+        self.name = name
+        self.phase = phase
     }
 
     init(key: String,
@@ -55,7 +79,13 @@ import Foundation
          isActive: Bool = true,
          coverage: Float? = nil,
          condition: Condition? = nil,
-         force: Int? = nil) {
+         force: Int? = nil,
+         ranges: [BucketRange]? = nil,
+         meta: [VariationMeta]? = nil,
+         filters: [Filter]? = nil,
+         seed: String? = nil,
+         name: String? = nil,
+         phase: String? = nil) {
         self.key = key
         self.variations = variations
         self.namespace = namespace
@@ -65,6 +95,12 @@ import Foundation
         self.coverage = coverage
         self.condition = condition
         self.force = force
+        self.ranges = ranges
+        self.meta = meta
+        self.filters = filters
+        self.seed = seed
+        self.name = name
+        self.phase = phase
     }
 
     init(json: [String: JSON]) {
@@ -87,6 +123,19 @@ import Foundation
         condition = json["condition"]
 
         force = json["force"]?.intValue
+        
+        ranges = json["ranges"]?.arrayObject as? [BucketRange]
+        
+        meta = json["meta"]?.arrayObject as? [VariationMeta]
+        
+        filters = json["filters"]?.arrayObject as? [Filter]
+        
+        seed = json["seed"]?.stringValue
+        
+        name = json["name"]?.stringValue
+        
+        phase = json["phase"]?.stringValue
+        
     }
 }
 
@@ -102,12 +151,32 @@ import Foundation
     public let hashAttribute: String?
     /// The value of that attribute
     public let valueHash: String?
+    /// The unique key for the assigned variation
+    public let key: String
+    /// The human-readable name of the assigned variation
+    public let name: String?
+    /// The hash value used to assign a variation (float from `0` to `1`)
+    public let bucket: Float?
+    /// Used for holdout groups
+    public let passthrough: Bool?
 
-    init(inExperiment: Bool, variationId: Int, value: JSON, hashAttribute: String? = nil, hashValue: String? = nil) {
+    init(inExperiment: Bool,
+         variationId: Int,
+         value: JSON,
+         hashAttribute: String? = nil,
+         hashValue: String? = nil,
+         key: String,
+         name: String? = nil,
+         bucket: Float? = nil,
+         passthrough: Bool? = nil) {
         self.inExperiment = inExperiment
         self.variationId = variationId
         self.value = value
         self.hashAttribute = hashAttribute
         self.valueHash = hashValue
+        self.key = key
+        self.name = name
+        self.bucket = bucket
+        self.passthrough = passthrough
     }
 }

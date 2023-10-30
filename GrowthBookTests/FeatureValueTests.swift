@@ -18,19 +18,21 @@ class FeatureValueTests: XCTestCase {
             let testData = FeaturesTest(json: item[1].dictionaryValue)
 
             let gbContext = Context(url: nil,
+                                    sseUrl: nil,
                                     encryptionKey: nil,
                                     isEnabled: true,
                                     attributes: testData.attributes,
                                     forcedVariations: JSON(),
                                     isQaMode: false,
-                                    trackingClosure: { _, _ in })
+                                    trackingClosure: { _, _ in }, 
+                                    backgroundSync: false)
 
             if let features = testData.features {
                 gbContext.features = features
             }
 
-            let evaluator = FeatureEvaluator()
-            let result = evaluator.evaluateFeature(context: gbContext, featureKey: item[2].stringValue)
+            let evaluator = FeatureEvaluator(context: gbContext, featureKey: item[2].stringValue, attributeOverrides: item)
+            let result = evaluator.evaluateFeature()
 
             let expectedResult = FeatureResultTest(json: item[3].dictionaryValue)
 

@@ -15,18 +15,29 @@ public class Utils {
 
     /// Hashes a string to a float between 0 and 1
     ///
-    /// fnv32a returns an integer, so we convert that to a float using a modulus
-    func hash(data: String) -> Float {
-        let hash = digest(data)
-        let remainder = hash % 1000
-        let value = Float(remainder) / 1000
-        return value
+    func hash(seed: String, value: String, version: Float) -> Float? {
+        
+        switch version {
+        case 2:
+            // New unbiased hashing algorithm
+            let combinedValue = seed + value
+            let hashedValue = digest(combinedValue + "")
+            return Float(hashedValue % 10000) / 10000
+        case 1:
+            // Original biased hashing algorithm (keep for backwards compatibility)
+            let combinedValue = value + seed
+            let hashedValue = digest(combinedValue + "")
+            return Float(hashedValue % 1000) / 1000
+        default:
+            // Unknown hash version
+            return nil
+        }
     }
 
     /// This checks if a userId is within an experiment namespace or not.
     func inNamespace(userId: String, namespace: NameSpace) -> Bool {
-        let hash = hash(data: userId + "__" + namespace.0)
-        return hash >= namespace.1 && hash < namespace.2
+        guard let hash = hash(seed: namespace.0, value: userId + "__", version: 1.0) else { return false }
+        return inRange(n: hash, range: BucketRange(number1: namespace.1, number2: namespace.2))
     }
 
     /// Returns an array of floats with numVariations items that are all equal and sum to 1. For example, getEqualWeights(2) would return [0.5, 0.5].
@@ -71,23 +82,25 @@ public class Utils {
             let start = cumulative
             cumulative += weight
 
-            return BucketRange(start.roundTo(numFractionDigits: 4), (start + (targetCoverage * weight)).roundTo(numFractionDigits: 4))
+            return BucketRange(number1: start.roundTo(numFractionDigits: 4), number2: (start + (targetCoverage * weight)).roundTo(numFractionDigits: 4))
         }
 
         return bucketRange
     }
+    
+    func inRange(n: Float, range: BucketRange) -> Bool {
+        return n >= range.number1 && n < range.number2
+    }
 
     /// Choose Variation from List of ranges which matches particular number
     func chooseVariation(n: Float, ranges: [BucketRange]) -> Int {
-
         var counter = 0
         for range in ranges {
-            if n >= range.0 && n < range.1 {
+            if inRange(n: n, range: range) {
                 return counter
             }
             counter += 1
         }
-
         return -1
     }
 
