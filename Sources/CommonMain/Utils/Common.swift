@@ -32,5 +32,18 @@ extension Common {
 
         return hash
     }
+    
+    static func isEqual<T>(_ a: T, _ b: T) -> Bool where T : Equatable {
+        return a == b
+    }
+
+    static func isIn<T: Equatable>(actual: T, expected: [T]) -> Bool {
+        // Check if actual is an array
+        if let actualArray = actual as? [T] {
+            return actualArray.contains { expected.contains($0) }
+        }
+        
+        return expected.contains(actual)
+    }
 
 }

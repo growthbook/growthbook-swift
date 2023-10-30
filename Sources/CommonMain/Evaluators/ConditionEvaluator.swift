@@ -167,7 +167,9 @@ class ConditionEvaluator {
 
     /// Evaluates Condition Value against given condition & attributes
     func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?) -> Bool {
+        let conditionJson = JSON(conditionValue)
         // If conditionValue is a string, number, boolean, return true if it's "equal" to attributeValue and false if not.
+        
         var unwrappedAttribute = attributeValue
         
         if attributeValue == nil {
@@ -207,7 +209,7 @@ class ConditionEvaluator {
                     }
                 }
             } else if attributeValue != nil {
-                return isEqual(conditionValue, attributeValue)  //conditionValue.equals(attributeValue)
+                return Common.isEqual(conditionValue, attributeValue)  //conditionValue.equals(attributeValue)
             } else {
                 return false
             }
@@ -285,9 +287,9 @@ class ConditionEvaluator {
         if let conditionValue = conditionJson.array, let attributeValue = attributeValue {
             switch operatorKey {
             case "$in":
-                return conditionValue.contains(attributeValue)
+                return Common.isIn(actual: attributeValue, expected: conditionValue)
             case "$nin":
-                return !conditionValue.contains(attributeValue)
+                return !Common.isIn(actual: attributeValue, expected: conditionValue)
             case "$all":
                 if let attributeValue = attributeValue.array {
                     // Loop through conditionValue array
@@ -412,8 +414,5 @@ class ConditionEvaluator {
         }
         return false
     }
-
-    private func isEqual<T>(_ a: T, _ b: T) -> Bool where T : Equatable {
-        return a == b
-    }
+    
 }

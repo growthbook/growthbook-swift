@@ -46,6 +46,7 @@ class UtilsTests: XCTestCase {
             
             let bucketRange = Utils.shared.getBucketRanges(numVariations: numVariations ?? 1, coverage: coverage ?? 1, weights: weights ?? [])
             
+            
             let status = "\(item.arrayValue[0].stringValue) \nExpected Result - \(item.arrayValue[2].stringValue) \nActual result - \(JSON(bucketRange).stringValue) \n"
             
             if isCompareBucket(expectedResults: JSON.convertToTwoArrayFloat(jsonArray: item.arrayValue[2].arrayValue), calculatedResults: bucketRange) {
@@ -131,6 +132,7 @@ class UtilsTests: XCTestCase {
             let result = Utils.shared.inNamespace(userId: userId, namespace: namespace)
             
             let status = item.arrayValue[0].stringValue + "\nExpected Result - " + item.arrayValue[3].stringValue + "\nActual result - " + String(result) + "\n"
+            
             
             if item.arrayValue[3].stringValue == String(result) {
                 passedScenarios.append(status)

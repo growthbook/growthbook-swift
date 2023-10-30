@@ -6,10 +6,21 @@ import Foundation
 ///
 /// Returns Calculated Feature Result against that key
 class FeatureEvaluator {
+
+    var context: Context
+    var featureKey: String
+    var attributeOverrides: JSON
+    
+    init(context: Context, featureKey: String, attributeOverrides: JSON) {
+        self.context = context
+        self.featureKey = featureKey
+        self.attributeOverrides = attributeOverrides
+    }
+    
     /// Takes Context and Feature Key
     ///
     /// Returns Calculated Feature Result against that key
-    func evaluateFeature(context: Context, featureKey: String, attributeOverrides: JSON) -> FeatureResult {
+    func evaluateFeature() -> FeatureResult {
 
         guard let targetFeature: Feature = context.features[featureKey] else {
             return prepareResult(value: JSON.null, source: FeatureSource.unknownFeature)
@@ -27,7 +38,7 @@ class FeatureEvaluator {
                 
                 // If there are filters for who is included
                 if let filters = rule.filters {
-                    if isFilteredOut(filters: filters, attributeOverrides: attributeOverrides, context: context) {
+                    if isFilteredOut(filters: filters) {
                         print("Skip rule because of filters")
                         continue
                     }
@@ -36,7 +47,7 @@ class FeatureEvaluator {
                 // If rule.force is set
                 if let force = rule.force {
                     
-                    if !isIncludedInRollout(seed: rule.seed ?? "", hashAttribute: rule.hashAttribute, range: rule.range, coverage: rule.coverage, hashVersion: rule.hashVersion, attributeOverrides: attributeOverrides, context: context) {
+                    if !isIncludedInRollout(seed: rule.seed ?? "", hashAttribute: rule.hashAttribute, range: rule.range, coverage: rule.coverage, hashVersion: rule.hashVersion) {
                         print("Skip rule because user not included in rollout")
                     } 
                     
@@ -79,7 +90,7 @@ class FeatureEvaluator {
 
                     // If there are filters for who is included
                     if let filters = exp.filters {
-                        if isFilteredOut(filters: filters, attributeOverrides: attributeOverrides, context: context) {
+                        if isFilteredOut(filters: filters) {
                             print("Skip because of filters")
                             continue
                         }
@@ -104,7 +115,7 @@ class FeatureEvaluator {
     }
     
     ///Returns tuple out of 2 elements: the attribute itself an its hash value
-    private func getHashAttribute(attr: String?, attributeOverrides: JSON, context: Context) -> (hashAttribute: String, hashValue: String) {
+    private func getHashAttribute(attr: String?) -> (hashAttribute: String, hashValue: String) {
         let hashAttribute = attr ?? "id"
         var hashValue = ""
         
@@ -118,12 +129,12 @@ class FeatureEvaluator {
     }
     
     ///Determines if the user is part of a gradual feature rollout.
-    private func isIncludedInRollout(seed: String, hashAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?, attributeOverrides: JSON, context: Context) -> Bool {
+    private func isIncludedInRollout(seed: String, hashAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?) -> Bool {
         if range == nil, coverage == nil {
             return true
         }
         
-        let hashValue = getHashAttribute(attr: hashAttribute, attributeOverrides: attributeOverrides, context: context).hashValue
+        let hashValue = getHashAttribute(attr: hashAttribute).hashValue
         
         let hash = Utils.shared.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
         
@@ -139,9 +150,9 @@ class FeatureEvaluator {
     }
     
     ///This is a helper method to evaluate `filters` for both feature flags and experiments.
-    private func isFilteredOut(filters: [Filter], attributeOverrides: JSON, context: Context) -> Bool {
+    private func isFilteredOut(filters: [Filter]) -> Bool {
         return filters.contains { filter in
-            let hashAttribute = getHashAttribute(attr: filter.attribute, attributeOverrides: attributeOverrides, context: context)
+            let hashAttribute = getHashAttribute(attr: filter.attribute)
             let hashValue = hashAttribute.hashValue
             
             let hash = Utils.shared.hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)

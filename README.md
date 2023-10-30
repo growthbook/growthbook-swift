@@ -165,11 +165,6 @@ func isOn(feature id: String) -> Bool
 func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil)
 ```
 
-- Checks if the number is in range of numbers
-
-```swift
-func inRange(n: Float, range: BucketRange) -> Bool
-```
 
 ## Models
 
