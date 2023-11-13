@@ -167,7 +167,6 @@ class ConditionEvaluator {
 
     /// Evaluates Condition Value against given condition & attributes
     func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?) -> Bool {
-        let conditionJson = JSON(conditionValue)
         // If conditionValue is a string, number, boolean, return true if it's "equal" to attributeValue and false if not.
         
         var unwrappedAttribute = attributeValue
@@ -322,33 +321,33 @@ class ConditionEvaluator {
                 return isEvalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count))
             default: break
             }
-        } else if let attributeValue = attributeValue {
+        } else {
             let targetPrimitiveValue = conditionValue
             let sourcePrimitiveValue = attributeValue
             switch operatorKey {
             case "$veq":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.shared.paddedVersionString(input: attributeString) == Utils.shared.paddedVersionString(input: conditionString)
+                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                    return Utils.paddedVersionString(input: attributeString) == Utils.paddedVersionString(input: conditionString)
                 }
             case "$vne":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.shared.paddedVersionString(input: attributeString) != Utils.shared.paddedVersionString(input: conditionString)
+                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                    return Utils.paddedVersionString(input: attributeString) != Utils.paddedVersionString(input: conditionString)
                 }
             case "$vgt":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.shared.paddedVersionString(input: attributeString) > Utils.shared.paddedVersionString(input: conditionString)
+                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                    return Utils.paddedVersionString(input: attributeString) > Utils.paddedVersionString(input: conditionString)
                 }
             case "$vgte":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.shared.paddedVersionString(input: attributeString) >= Utils.shared.paddedVersionString(input: conditionString)
+                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                    return Utils.paddedVersionString(input: attributeString) >= Utils.paddedVersionString(input: conditionString)
                 }
             case "$vlt":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.shared.paddedVersionString(input: attributeString) < Utils.shared.paddedVersionString(input: conditionString)
+                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                    return Utils.paddedVersionString(input: attributeString) < Utils.paddedVersionString(input: conditionString)
                 }
             case "$vlte":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.shared.paddedVersionString(input: attributeString) <= Utils.shared.paddedVersionString(input: conditionString)
+                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                    return Utils.paddedVersionString(input: attributeString) <= Utils.paddedVersionString(input: conditionString)
                 }
             // Evaluate EQ operator - whether condition equals to attribute
             case "$eq":
@@ -358,36 +357,40 @@ class ConditionEvaluator {
                 return  attributeValue != conditionValue
             // Evaluate LT operator - whether attribute less than to condition
             case "$lt":
-                if let attributeDoubleOrNull = attributeValue.double, let conditionDoubleOrNull = conditionValue.double {
+                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
+                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull < conditionDoubleOrNull
                 }
-                return sourcePrimitiveValue < targetPrimitiveValue
+                return sourcePrimitiveValue ?? 0.0 < targetPrimitiveValue
             // Evaluate LTE operator - whether attribute less than or equal to condition
             case "$lte":
-                if let attributeDoubleOrNull = attributeValue.double, let conditionDoubleOrNull = conditionValue.double {
+                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
+                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull <= conditionDoubleOrNull
                 }
-                return  sourcePrimitiveValue <= targetPrimitiveValue
+                return  sourcePrimitiveValue ?? 0.0 <= targetPrimitiveValue
             // Evaluate GT operator - whether attribute greater than to condition
             case "$gt":
-                if let attributeDoubleOrNull = attributeValue.double, let conditionDoubleOrNull = conditionValue.double {
+                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
+                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull > conditionDoubleOrNull
                 }
-                return  sourcePrimitiveValue > targetPrimitiveValue
+                return  sourcePrimitiveValue ?? 0.0 > targetPrimitiveValue
             // Evaluate GTE operator - whether attribute greater than or equal to condition
             case "$gte":
-                if let attributeDoubleOrNull = attributeValue.double, let conditionDoubleOrNull = conditionValue.double {
+                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
+                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull >= conditionDoubleOrNull
                 }
-                return  sourcePrimitiveValue >= targetPrimitiveValue
+                return  sourcePrimitiveValue ?? 0.0 >= targetPrimitiveValue
             // Evaluate REGEX operator - whether attribute contains condition regex
             case "$regex":
                 let targetPrimitiveValueString = conditionValue.stringValue
-                let sourcePrimitiveValueString = attributeValue.stringValue
-                if isContains(source: sourcePrimitiveValueString, target: targetPrimitiveValueString) {
+                let sourcePrimitiveValueString = attributeValue?.stringValue
+                if isContains(source: sourcePrimitiveValueString ?? "", target: targetPrimitiveValueString) {
                     return true
                 }
-                return sourcePrimitiveValueString.contains(targetPrimitiveValueString)
+                return sourcePrimitiveValueString?.contains(targetPrimitiveValueString) ?? false
 
             default: break
             }

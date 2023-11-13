@@ -63,7 +63,7 @@ class FeatureEvaluator {
                         }
 
                         // Compute a hash using the Fowler–Noll–Vo algorithm (specifically fnv32-1a)
-                        let hashFNV = Utils.shared.hash(seed: featureKey, value: attributeValue, version: 1.0) ?? 0.0
+                        let hashFNV = Utils.hash(seed: featureKey, value: attributeValue, version: 1.0) ?? 0.0
                         // If the hash is greater than rule.coverage, skip the rule
                         if hashFNV > coverage {
                             continue
@@ -136,12 +136,12 @@ class FeatureEvaluator {
         
         let hashValue = getHashAttribute(attr: hashAttribute).hashValue
         
-        let hash = Utils.shared.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
+        let hash = Utils.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
         
         guard let hash = hash else { return false }
         
         if let range = range {
-            return Utils.shared.inRange(n: hash, range: range)
+            return Utils.inRange(n: hash, range: range)
         } else if let coverage = coverage {
             return hash <= coverage
         } else {
@@ -155,11 +155,11 @@ class FeatureEvaluator {
             let hashAttribute = getHashAttribute(attr: filter.attribute)
             let hashValue = hashAttribute.hashValue
             
-            let hash = Utils.shared.hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
+            let hash = Utils.hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
             guard let hashValue = hash else { return true }
             
             return !filter.ranges.contains { range in
-                return Utils.shared.inRange(n: hashValue, range: range)
+                return Utils.inRange(n: hashValue, range: range)
             }
         }
     }
