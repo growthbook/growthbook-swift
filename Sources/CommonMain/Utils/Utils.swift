@@ -11,11 +11,10 @@ import Foundation
 /// - chooseVariation
 /// - getGBNameSpace
 public class Utils {
-    static let shared = Utils()
-
+    
     /// Hashes a string to a float between 0 and 1
     ///
-    func hash(seed: String, value: String, version: Float) -> Float? {
+    static func hash(seed: String, value: String, version: Float) -> Float? {
         
         switch version {
         case 2:
@@ -35,13 +34,13 @@ public class Utils {
     }
 
     /// This checks if a userId is within an experiment namespace or not.
-    func inNamespace(userId: String, namespace: NameSpace) -> Bool {
+    static func inNamespace(userId: String, namespace: NameSpace) -> Bool {
         guard let hash = hash(seed: namespace.0, value: userId + "__", version: 1.0) else { return false }
         return inRange(n: hash, range: BucketRange(number1: namespace.1, number2: namespace.2))
     }
 
     /// Returns an array of floats with numVariations items that are all equal and sum to 1. For example, getEqualWeights(2) would return [0.5, 0.5].
-    func getEqualWeights(numVariations: Int) -> [Float] {
+    static func getEqualWeights(numVariations: Int) -> [Float] {
         var weights: [Float] = []
         if numVariations >= 1 {
             let result = 1.0 / Float(numVariations)
@@ -54,7 +53,7 @@ public class Utils {
     }
 
     /// This converts and experiment's coverage and variation weights into an array of bucket ranges.
-    func getBucketRanges(numVariations: Int, coverage: Float, weights: [Float]) -> [BucketRange] {
+    static func getBucketRanges(numVariations: Int, coverage: Float, weights: [Float]) -> [BucketRange] {
         var bucketRange: [BucketRange]
 
         var targetCoverage = coverage
@@ -88,12 +87,12 @@ public class Utils {
         return bucketRange
     }
     
-    func inRange(n: Float, range: BucketRange) -> Bool {
+    static func inRange(n: Float, range: BucketRange) -> Bool {
         return n >= range.number1 && n < range.number2
     }
 
     /// Choose Variation from List of ranges which matches particular number
-    func chooseVariation(n: Float, ranges: [BucketRange]) -> Int {
+    static func chooseVariation(n: Float, ranges: [BucketRange]) -> Int {
         var counter = 0
         for range in ranges {
             if inRange(n: n, range: range) {
@@ -105,7 +104,7 @@ public class Utils {
     }
 
     /// Convert JsonArray to NameSpace
-    func getGBNameSpace(namespace: [JSON]) -> NameSpace? {
+    static func getGBNameSpace(namespace: [JSON]) -> NameSpace? {
         if namespace.count >= 3 {
 
             let title = namespace[0].string
@@ -120,7 +119,7 @@ public class Utils {
         return nil
     }
 
-    func paddedVersionString(input: String) -> String {
+    static func paddedVersionString(input: String) -> String {
         var parts = input.replacingOccurrences(of: "[v]", with: "", options: .regularExpression)
         
         if let range = parts.range(of: "+")?.lowerBound {
@@ -135,8 +134,18 @@ public class Utils {
         
         return partArray.map({ $0.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil ? String(repeating: " ", count: 5 - $0.count) + $0 : $0}).joined(separator: "-")
     }
+    
+    static func convertJsonToDouble(from value: JSON?) -> Double? {
+        if let doubleValue = value?.double {
+            return doubleValue
+        } else if let stringValue = value?.string {
+            let doubleFromString = Double(stringValue)
+            return doubleFromString
+        }
+        return nil
+    }
 
-    private func digest(_ string: String) -> UInt32 {
+    static private func digest(_ string: String) -> UInt32 {
         return Common.fnv1a(Array(string.utf8), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
     }
 }

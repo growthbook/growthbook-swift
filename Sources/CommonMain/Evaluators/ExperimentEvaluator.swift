@@ -33,8 +33,8 @@ class ExperimentEvaluator {
 
         // If experiment.namespace is set, check if hash value is included in the range and if not, return immediately (not in experiment, variationId 0)
         if let namespaceExperiment = experiment.namespace {
-            let namespace = Utils.shared.getGBNameSpace(namespace: namespaceExperiment)
-            if let namespace = namespace, !Utils.shared.inNamespace(userId: attributeValue, namespace: namespace) {
+            let namespace = Utils.getGBNameSpace(namespace: namespaceExperiment)
+            if let namespace = namespace, !Utils.inNamespace(userId: attributeValue, namespace: namespace) {
                 return getExperimentResult(gbContext: context, experiment: experiment)
             }
         }
@@ -49,7 +49,7 @@ class ExperimentEvaluator {
         // Default variation weights and coverage if not specified
         if experiment.weights == nil {
             // Default weights to an even split between all variations
-            experiment.weights = Utils.shared.getEqualWeights(numVariations: experiment.variations.count)
+            experiment.weights = Utils.getEqualWeights(numVariations: experiment.variations.count)
         }
 
         // Default coverage to 1 (100%)
@@ -60,11 +60,11 @@ class ExperimentEvaluator {
         // Convert weights/coverage to ranges
         var bucketRange: [BucketRange] = []
         if let coverage = experiment.coverage, let weights = experiment.weights {
-            bucketRange = Utils.shared.getBucketRanges(numVariations: experiment.variations.count, coverage: coverage, weights: weights)
+            bucketRange = Utils.getBucketRanges(numVariations: experiment.variations.count, coverage: coverage, weights: weights)
         }
 
-        let hash = Utils.shared.hash(seed: experiment.key, value: attributeValue, version: 1) ?? 0.0
-        let assigned = Utils.shared.chooseVariation(n: hash, ranges: bucketRange)
+        let hash = Utils.hash(seed: experiment.key, value: attributeValue, version: 1) ?? 0.0
+        let assigned = Utils.chooseVariation(n: hash, ranges: bucketRange)
 
         // If not assigned a variation (assigned === -1), return immediately (not in experiment, variationId 0)
         if assigned == -1 {

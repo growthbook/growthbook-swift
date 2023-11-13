@@ -12,7 +12,7 @@ class UtilsTests: XCTestCase {
             let testContext = item.arrayValue[0].stringValue//jsonPrimitive.content
             let experiment = item.arrayValue[1].floatValue
             
-            let result = Utils.shared.hash(seed: "", value: testContext, version: 1)
+            let result = Utils.hash(seed: "", value: testContext, version: 1)
             
             let status = item[0].stringValue + "\nExpected Result - " + item[1].stringValue + "\nActual result - " + String(result ?? 0.0) + "\n"
             
@@ -44,7 +44,7 @@ class UtilsTests: XCTestCase {
                 })
             }
             
-            let bucketRange = Utils.shared.getBucketRanges(numVariations: numVariations ?? 1, coverage: coverage ?? 1, weights: weights ?? [])
+            let bucketRange = Utils.getBucketRanges(numVariations: numVariations ?? 1, coverage: coverage ?? 1, weights: weights ?? [])
             
             
             let status = "\(item.arrayValue[0].stringValue) \nExpected Result - \(item.arrayValue[2].stringValue) \nActual result - \(JSON(bucketRange).stringValue) \n"
@@ -102,7 +102,7 @@ class UtilsTests: XCTestCase {
             let hash = item.arrayValue[1].float
             let rangeData = getPairedData(items: JSON.convertToTwoArrayFloat(jsonArray: item.arrayValue[2].arrayValue))
             
-            let result = Utils.shared.chooseVariation(n: hash ?? 0, ranges: rangeData)
+            let result = Utils.chooseVariation(n: hash ?? 0, ranges: rangeData)
             
             let status = item.arrayValue[0].stringValue + "\nExpected Result - " + item.arrayValue[3].stringValue + "\nActual result - " + String(result) + "\n"
             
@@ -127,9 +127,9 @@ class UtilsTests: XCTestCase {
         for item in evalConditions {
             let userId = item.arrayValue[1].stringValue
             let jsonArray = item.arrayValue[2].arrayValue
-            guard let namespace = Utils.shared.getGBNameSpace(namespace: jsonArray) else { continue }
+            guard let namespace = Utils.getGBNameSpace(namespace: jsonArray) else { continue }
             
-            let result = Utils.shared.inNamespace(userId: userId, namespace: namespace)
+            let result = Utils.inNamespace(userId: userId, namespace: namespace)
             
             let status = item.arrayValue[0].stringValue + "\nExpected Result - " + item.arrayValue[3].stringValue + "\nActual result - " + String(result) + "\n"
             
@@ -156,7 +156,7 @@ class UtilsTests: XCTestCase {
             
             let numVariations = item.arrayValue[0].intValue
             
-            let result = Utils.shared.getEqualWeights(numVariations: numVariations)
+            let result = Utils.getEqualWeights(numVariations: numVariations)
             
             let status =  "Expected Result - \(item.arrayValue[1].stringValue) \nActual result - \(result) \n"
             
@@ -191,18 +191,18 @@ class UtilsTests: XCTestCase {
     }
     
     func testEdgeCases() throws {
-        XCTAssertFalse(Utils.shared.inNamespace(userId: "4242", namespace: NameSpace("", 0.0, 0.0)))
+        XCTAssertFalse(Utils.inNamespace(userId: "4242", namespace: NameSpace("", 0.0, 0.0)))
         
         var items = [JSON]()
         items.append(JSON(1))
         
-        XCTAssertTrue(Utils.shared.getGBNameSpace(namespace: items) == nil)
+        XCTAssertTrue(Utils.getGBNameSpace(namespace: items) == nil)
     }
     
     func testPaddedVersionString() throws {
         let startValue = "v1.2.3-rc.1+build123"
         let expectedValue = "    1-    2-    3-rc-    1"
-        let endValue = Utils.shared.paddedVersionString(input: startValue)
+        let endValue = Utils.paddedVersionString(input: startValue)
         
         XCTAssertEqual(endValue, expectedValue)
     }
