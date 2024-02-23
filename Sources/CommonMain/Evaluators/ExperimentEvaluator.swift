@@ -80,10 +80,13 @@ class ExperimentEvaluator {
         if context.isQaMode {
             return getExperimentResult(gbContext: context, experiment: experiment)
         }
-
-        // Fire context.trackingClosure if set and the combination of hashAttribute, hashValue, experiment.key, and variationId has not been tracked before
+        
         let result = getExperimentResult(gbContext: context, experiment: experiment, variationIndex: assigned, inExperiment: true)
-        context.trackingClosure(experiment, result)
+        
+        // Fire context.trackingClosure if set and the combination of hashAttribute, hashValue, experiment.key, and variationId has not been tracked before
+        if !ExperimentHelper.shared.isTracked(experiment, result) {
+            context.trackingClosure(experiment, result)
+        }
 
         // Return (in experiment, assigned variation)
         return result

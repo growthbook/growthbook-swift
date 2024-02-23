@@ -188,4 +188,25 @@ class GrowthBookSDKBuilderTests: XCTestCase {
             logger.error("Failed get raw data or parse json error: \(error.localizedDescription)")
         }
     }
+    
+    func testTrackingCallback() throws {
+        let attributes = JSON(["id": 1234])
+        var countTrackingCallback = 0
+        
+        let sdkInstance = GrowthBookBuilder(url: testUrl,
+                                            sseUrl: testSseUrl,
+                                            attributes: attributes,
+                                            trackingCallback: { experiment, experimentResult in
+            countTrackingCallback += 1
+        },
+                                            refreshHandler: nil,
+                                            backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
+        
+        let _ = sdkInstance.evalFeature(id: "qrscanpayment1")
+        let _ = sdkInstance.evalFeature(id: "qrscanpayment1")
+        let _ = sdkInstance.evalFeature(id: "qrscanpayment2")
+        let _ = sdkInstance.evalFeature(id: "qrscanpayment2")
+        
+        XCTAssertEqual(2, countTrackingCallback)
+    }
 }
