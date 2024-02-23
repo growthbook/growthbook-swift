@@ -12,6 +12,7 @@
 		84095C8C281823BC00ADDF19 /* LoggingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8A281822B900ADDF19 /* LoggingManager.swift */; };
 		84095C902818245700ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
 		84095C932818254400ADDF19 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C91281824DB00ADDF19 /* Theme.swift */; };
+		840E386F2B88BD75003DFC9F /* ExperimentHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840E386E2B88BD75003DFC9F /* ExperimentHelper.swift */; };
 		8483E6FA2ABC60B900306B55 /* DecryptionUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8483E6F92ABC60B900306B55 /* DecryptionUtils.swift */; };
 		8484CC0C2817D7230092A39B /* (null) in Embed Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		848B8044294B5CB900B22168 /* CryptoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848B8043294B5CB900B22168 /* CryptoTests.swift */; };
@@ -77,6 +78,7 @@
 		84095C8A281822B900ADDF19 /* LoggingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingManager.swift; sourceTree = "<group>"; };
 		84095C8E2818245100ADDF19 /* Formatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatter.swift; sourceTree = "<group>"; };
 		84095C91281824DB00ADDF19 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		840E386E2B88BD75003DFC9F /* ExperimentHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentHelper.swift; sourceTree = "<group>"; };
 		843363F627F845EB0072BFDC /* GrowthBookSDK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookSDK.swift; sourceTree = "<group>"; };
 		843363F827F845EB0072BFDC /* NetworkClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkClient.swift; sourceTree = "<group>"; };
 		843363FA27F845EB0072BFDC /* FeaturesDataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesDataModel.swift; sourceTree = "<group>"; };
@@ -218,6 +220,7 @@
 				8433640227F845EB0072BFDC /* ExperimentEvaluator.swift */,
 				8433640327F845EB0072BFDC /* FeatureEvaluator.swift */,
 				8433640427F845EB0072BFDC /* ConditionEvaluator.swift */,
+				840E386E2B88BD75003DFC9F /* ExperimentHelper.swift */,
 			);
 			path = Evaluators;
 			sourceTree = "<group>";
@@ -456,6 +459,7 @@
 				84CDE3402812F454008B3E6F /* CachingManager.swift in Sources */,
 				84CDE3412812F454008B3E6F /* Feature.swift in Sources */,
 				84095C792817EC7800ADDF19 /* JsonManager.swift in Sources */,
+				840E386F2B88BD75003DFC9F /* ExperimentHelper.swift in Sources */,
 				84CDE3422812F454008B3E6F /* Experiment.swift in Sources */,
 				849952572ADD6D66003BBCF7 /* EventModel.swift in Sources */,
 				84CDE3432812F454008B3E6F /* Context.swift in Sources */,
