@@ -140,7 +140,6 @@ extension SSEHandler {
     }
 }
 
-
 extension SSEHandler {
 
     private func notifyReceivedEvents(_ events: [SSEEvent]) {

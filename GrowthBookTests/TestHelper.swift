@@ -8,6 +8,11 @@ class TestHelper {
             loadTestData()
         }
     }
+    
+    func getServerSideEvent() -> [JSON]? {
+        let array = testData?.dictionaryValue["backgroundsync"]
+        return array?.arrayValue
+    }
 
     func getEvalConditionData() -> [JSON]? {
         let array = testData?.dictionaryValue["evalCondition"]

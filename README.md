@@ -66,8 +66,8 @@ Integration is super easy:
 Now you can start/stop tests, adjust coverage and variation weights, and apply a winning variation to 100% of traffic, all within the Growth Book App without deploying code changes to your site.
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
-    sseUrl: <GrowthBook_SSEURL/API_KEY>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_HOST>,
+    clientKey: <GrowthBook/Client_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -76,8 +76,8 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>
 You must also provide the encryption key if you intend to use data encryption.
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
-    sseUrl: <GrowthBook_SSEURL/API_KEY>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_HOST>,
+    clientKey: <GrowthBook/Client_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -85,8 +85,8 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>
 ```
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
-    sseUrl: <GrowthBook_SSEURL/API_KEY>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_HOST>,
+    clientKey: <GrowthBook/Client_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -96,8 +96,8 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>
 There are additional properties which can be setup at the time of initialization
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
-    sseUrl: <GrowthBook_SSEURL/API_KEY>,
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_HOST>,
+    clientKey: <GrowthBook/Client_KEY>,
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
@@ -174,10 +174,10 @@ func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle
 ```swift
 /// Defines the GrowthBook context.
 class Context {
-    /// URL
-    let url: String?
-    /// URL for enabling streaming updates
-    let sseURl: String?
+    /// api host
+    public let apiHost: String?
+    /// unique client key
+    public let clientKey: String?
     /// Encryption key for encrypted features.
     let encryptionKey: String?
     /// Switch to globally disable all experiments. Default true.
@@ -355,14 +355,12 @@ public struct TrackData {
 
 ## Streaming updates
 
-To enable streaming updates set backgroundSync variable to "true" and add streaming updates URL
+To enable streaming updates set backgroundSync variable to "true"
 
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(url: <GrowthBook_URL/API_KEY>,
-    sseUrl: <GrowthBook_SSEURL/API_KEY>,
-    attributes: <[String: Any]>,
-    trackingCallback: { experiment, experimentResult in 
-
-    }, backgroundSync: true).initializer( 
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>, clientKey: <GrowthBook/ClientKey>, attributes: <[String: Any]>, trackingCallback: { experiment, experimentResult in 
+    }, refreshHandler: { isRefreshed in
+    }, backgroundSync: true)
+    .initializer()
 
 
 ## License

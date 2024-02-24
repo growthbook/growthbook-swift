@@ -11,8 +11,8 @@ protocol GrowthBookProtocol: AnyObject {
 }
 
 public struct GrowthBookModel {
-    var url: String?
-    var sseUrl: String?
+    var apiHost: String?
+    var clientKey: String?
     var encryptionKey: String?
     var features: Data?
     var attributes: JSON
@@ -36,8 +36,8 @@ public struct GrowthBookModel {
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
 
-    @objc public init(url: String? = nil, sseUrl: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false) {
-        growthBookBuilderModel = GrowthBookModel(url: url, sseUrl: sseUrl, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
+    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
         self.refreshHandler = refreshHandler
     }
 
@@ -46,8 +46,8 @@ public struct GrowthBookModel {
         self.refreshHandler = refreshHandler
     }
 
-    init(url: String, sseUrl: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool) {
-        growthBookBuilderModel = GrowthBookModel(url: url, sseUrl: sseUrl, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
+    init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
         self.refreshHandler = refreshHandler
     }
 
@@ -93,8 +93,8 @@ public struct GrowthBookModel {
 
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
-            url: growthBookBuilderModel.url,
-            sseUrl: growthBookBuilderModel.sseUrl,
+            apiHost: growthBookBuilderModel.apiHost,
+            clientKey: growthBookBuilderModel.clientKey,
             encryptionKey: growthBookBuilderModel.encryptionKey,
             isEnabled: growthBookBuilderModel.isEnabled,
             attributes: growthBookBuilderModel.attributes,
@@ -106,6 +106,7 @@ public struct GrowthBookModel {
         if let features = growthBookBuilderModel.features {
             CachingManager.shared.saveContent(fileName: Constants.featureCache, content: features)
         }
+
         return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, attributes: growthBookBuilderModel.attributes)
     }
 }
@@ -130,20 +131,26 @@ public struct GrowthBookModel {
         self.networkDispatcher = networkDispatcher
         self.attributeOverrides = attributes
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), backgroundSync: gbContext.backgroundSync)
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
         if let features = features {
             gbContext.features = features
         } else {
             featureVM.encryptionKey = context.encryptionKey ?? ""
             refreshCache()
         }
+                
+        // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
+        if let sseURL = context.getSSEUrl(), context.backgroundSync {
+            featureVM.connectBackgroundSync(sseUrl: sseURL)
+        }
+        
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
     }
-    
+        
     /// Manually Refresh Cache
     @objc public func refreshCache() {
-        featureVM.fetchFeatures(apiUrl: gbContext.url, sseURL: gbContext.sseUrl)
+        featureVM.fetchFeatures(apiUrl: gbContext.getApiHostURL())
     }
     
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
