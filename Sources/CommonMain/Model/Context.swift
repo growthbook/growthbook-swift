@@ -2,10 +2,10 @@ import Foundation
 
 /// Defines the GrowthBook context.
 @objc public class Context: NSObject {
-    /// URL
-    public let url: String?
-    /// SSE URL
-    public let sseUrl: String?
+    /// api host
+    public let apiHost: String?
+    /// unique client key
+    public let clientKey: String?
     /// Encryption key for encrypted features.
     public let encryptionKey: String?
     /// Switch to globally disable all experiments. Default true.
@@ -19,14 +19,14 @@ import Foundation
     /// A function that takes experiment and result as arguments.
     public let trackingClosure: (Experiment, ExperimentResult) -> Void
     /// Disable background streaming connection
-    public let backgroundSync: Bool?
+    public let backgroundSync: Bool
 
     // Keys are unique identifiers for the features and the values are Feature objects.
     // Feature definitions - To be pulled from API / Cache
     var features: Features
 
-    init(url: String?,
-         sseUrl: String?,
+    init(apiHost: String?,
+         clientKey: String?,
          encryptionKey: String?,
          isEnabled: Bool,
          attributes: JSON,
@@ -34,9 +34,9 @@ import Foundation
          isQaMode: Bool,
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:],
-         backgroundSync: Bool?) {
-        self.url = url
-        self.sseUrl = sseUrl
+         backgroundSync: Bool = false) {
+        self.apiHost = apiHost
+        self.clientKey = clientKey
         self.encryptionKey = encryptionKey
         self.isEnabled = isEnabled
         self.attributes = attributes
@@ -46,4 +46,21 @@ import Foundation
         self.features = features
         self.backgroundSync = backgroundSync
     }
+    
+    @objc public func getApiHostURL() -> String? {
+        if let apiHost = apiHost, let clientKey = clientKey {
+            return "\(apiHost)/api/features/\(clientKey)"
+        } else {
+            return nil
+        }
+    }
+    
+    @objc public func getSSEUrl() -> String? {
+        if let apiHost = apiHost, let clientKey = clientKey {
+            return "\(apiHost)/sub/\(clientKey)"
+        } else {
+            return nil
+        }
+    }
+    
 }

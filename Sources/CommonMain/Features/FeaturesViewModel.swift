@@ -8,22 +8,30 @@ protocol FeaturesFlowDelegate: AnyObject {
 
 /// View Model for Features
 class FeaturesViewModel {
-    var delegate: FeaturesFlowDelegate?
+    weak var delegate: FeaturesFlowDelegate?
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
-    var backgroundSync: Bool?
     
     /// Caching Manager
     let manager = CachingManager.shared
 
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, backgroundSync: Bool?) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource) {
         self.delegate = delegate
         self.dataSource = dataSource
-        self.backgroundSync = backgroundSync
+    }
+    
+    func connectBackgroundSync(sseUrl: String) {
+        guard let url = URL(string: sseUrl) else { return }
+        let streamingUpdate = SSEHandler(url: url)
+        streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
+            guard let jsonData = data?.data(using: .utf8) else { return }
+            self?.prepareFeaturesData(data: jsonData)
+        }
+        streamingUpdate.connect()
     }
 
     /// Fetch Features
-    func fetchFeatures(apiUrl: String?, sseURL: String?) {
+    func fetchFeatures(apiUrl: String?) {
         // Check for cache data
         if let json = manager.getData(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
@@ -38,7 +46,7 @@ class FeaturesViewModel {
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
             logger.error("Failed load local data")
         }
-
+        
         if let apiUrl = apiUrl {
             dataSource.fetchFeatures(apiUrl: apiUrl) { result in
                 switch result {
@@ -50,20 +58,6 @@ class FeaturesViewModel {
                 }
             }
         }
-        
-        if let urlString = sseURL, let url = URL(string: urlString) {
-            if backgroundSync ?? false {
-                let streamingUpdate = SSEHandler(url: url, headers: ["Authorization": "Bearer basic-auth-token"])
-                streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
-                    guard let jsonData = data?.data(using: .utf8) else { return }
-                    self?.prepareFeaturesData(data: jsonData)
-                }
-                streamingUpdate.connect()
-            } else {
-                SSEHandler(url: url).disconnect()
-            }
-        }
-        
     }
 
     /// Cache API Response and push success event
@@ -72,7 +66,7 @@ class FeaturesViewModel {
         let decoder = JSONDecoder()
 
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
-            if let features = jsonPetitions.features, features != [:] {
+            if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
                     manager.putData(fileName: Constants.featureCache, content: featureData)
                 }

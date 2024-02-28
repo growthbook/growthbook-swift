@@ -3,6 +3,7 @@ import XCTest
 @testable import GrowthBook
 
 class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
+    
     var isSuccess: Bool = false
     var isError: Bool = false
 
@@ -10,9 +11,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = false
         isError = true
 
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), backgroundSync: false)
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)))
 
-        viewModel.fetchFeatures(apiUrl: "", sseURL: "")
+        viewModel.fetchFeatures(apiUrl: "")
 
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
@@ -22,11 +23,11 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = false
         isError = true
         
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)), backgroundSync: false)
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)))
         
         viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
-        viewModel.fetchFeatures(apiUrl: "", sseURL: "")
-        
+        viewModel.fetchFeatures(apiUrl: "")
+
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
     }
@@ -35,9 +36,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = false
         isError = true
         
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), backgroundSync: false)
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)))
         
-        viewModel.fetchFeatures(apiUrl: "", sseURL: "")
+        viewModel.fetchFeatures(apiUrl: "")
 
         let cachingManager: CachingLayer = CachingManager()
         
@@ -60,10 +61,10 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = false
         isError = true
         
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)), backgroundSync: false)
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)))
         
         viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
-        viewModel.fetchFeatures(apiUrl: "", sseURL: "")
+        viewModel.fetchFeatures(apiUrl: "")
 
         let cachingManager: CachingLayer = CachingManager()
         
@@ -72,7 +73,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             return
         }
         
-        if let features = try? JSONDecoder().decode(Features.self, from: featureData), features != [:] {
+        if let features = try? JSONDecoder().decode(Features.self, from: featureData) {
             XCTAssertTrue(true)
         } else {
             XCTFail()
@@ -85,9 +86,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     func testError() throws {
         isSuccess = false
         isError = true
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: .failedToLoadData)), backgroundSync: false)
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: .failedToLoadData)))
 
-        viewModel.fetchFeatures(apiUrl: "", sseURL: "")
+        viewModel.fetchFeatures(apiUrl: "")
 
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)
@@ -96,8 +97,8 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     func testInvalid() throws {
         isSuccess = false
         isError = true
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().errorResponse, error: nil)), backgroundSync: false)
-        viewModel.fetchFeatures(apiUrl: "", sseURL: "")
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().errorResponse, error: nil)))
+        viewModel.fetchFeatures(apiUrl: "")
 
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)

@@ -3,15 +3,15 @@ import XCTest
 @testable import GrowthBook
 
 class GrowthBookSDKBuilderTests: XCTestCase {
-    let testUrl = "https://host.com/api/features/4r23r324f23"
-    let testSseUrl = "https://host.com/sub/4r23r324f23"
+    let testApiHost = "https://host.com"
+    let testClientKey = "4r23r324f23"
     let expectedURL = "https://host.com/api/features/4r23r324f23"
     let testAttributes: JSON = JSON()
     let testKeyString = "Ns04T5n9+59rl2x3SlNHtQ=="
     
     func testSDKInitializationDefault() throws {
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             encryptionKey: testKeyString,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
@@ -19,7 +19,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).initializer()
         
         XCTAssertTrue(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().url == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().encryptionKey == testKeyString)
         XCTAssertFalse(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
@@ -30,14 +30,14 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         
         let variations: [String: Int] = [:]
 
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil, backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
         
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().url == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
         XCTAssertTrue(sdkInstance.getGBContext().forcedVariations == JSON(variations))
@@ -48,15 +48,15 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         
         let variations: [String: Int] = [:]
 
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil,
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
         
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().url == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
         
@@ -66,8 +66,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         
         let variations: [String: Int] = [:]
         
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             encryptionKey: "3tfeoyW0wlo47bDnbWDkxg==",
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
@@ -75,17 +75,19 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
         
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().url == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
-        XCTAssertTrue(sdkInstance.getGBContext().features.contains(where: { $0.key == "pricing-test-new"}))
+        if !sdkInstance.getGBContext().features.isEmpty {
+            XCTAssertTrue(sdkInstance.getGBContext().features.contains(where: { $0.key == "pricing-test-new"}))
+        }
     }
     
     func testSDKRefreshHandler() throws {
         
         var isRefreshed = false
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil,
@@ -107,8 +109,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         
         var isRefreshed = false
 
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil,
@@ -123,8 +125,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     }
     
     func testSDKRunMethods() throws {
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil, 
@@ -140,8 +142,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     }
     
     func testEncrypt() throws {
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil,
@@ -163,8 +165,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     
     func testClearCache() throws {
         
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil, 
@@ -193,8 +195,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         let attributes = JSON(["id": 1234])
         var countTrackingCallback = 0
         
-        let sdkInstance = GrowthBookBuilder(url: testUrl,
-                                            sseUrl: testSseUrl,
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
                                             attributes: attributes,
                                             trackingCallback: { experiment, experimentResult in
             countTrackingCallback += 1

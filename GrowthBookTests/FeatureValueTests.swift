@@ -17,8 +17,8 @@ class FeatureValueTests: XCTestCase {
         for item in evalConditions {
             let testData = FeaturesTest(json: item[1].dictionaryValue)
 
-            let gbContext = Context(url: nil,
-                                    sseUrl: nil,
+            let gbContext = Context(apiHost: nil,
+                                    clientKey: nil,
                                     encryptionKey: nil,
                                     isEnabled: true,
                                     attributes: testData.attributes,
