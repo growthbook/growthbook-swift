@@ -25,6 +25,8 @@
 
 [CocoaPods](https://cocoapods.org/) is a dependency manager for Cocoa projects. For usage and installation instructions, visit their website. To integrate GrowthBook into your Xcode project using CocoaPods, specify it in your `Podfile`:
 
+- If you're using version 1.0.46 or above, it could be necessary to set "User Script Sandboxing" to "No" in your build settings.
+
 - Add below line in your podfile, if not there
 
 ```
