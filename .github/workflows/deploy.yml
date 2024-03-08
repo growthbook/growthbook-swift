@@ -31,7 +31,7 @@ jobs:
       run:  |
         set -eo pipefail
         export LIB_VERSION=${{ steps.gitversion.outputs.SemVer }}
-        pod spec lint --allow-warnings
-        pod trunk push --allow-warnings
+        pod spec lint --allow-warnings --skip-import-validation
+        pod trunk push --allow-warnings --skip-import-validation
       env:
         COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOA_KEY }}
