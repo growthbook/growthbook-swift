@@ -45,6 +45,11 @@ public struct GrowthBookModel {
         growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
         self.refreshHandler = refreshHandler
     }
+    
+    @objc public init(hostURL: String?, features: Data?, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil) {
+        growthBookBuilderModel = GrowthBookModel(hostURL: hostURL, features: features, attributes: JSON(attributes), trackingClosure: trackingCallback)
+        self.refreshHandler = refreshHandler
+    }
 
     init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool) {
         growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync)
