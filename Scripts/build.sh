@@ -1,6 +1,6 @@
 #!/bin/bash
 
-   xcodebuild archive \
+xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/ios.xcarchive" \
     -sdk iphoneos \
