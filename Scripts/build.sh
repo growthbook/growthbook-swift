@@ -38,6 +38,17 @@ xcodebuild archive \
     -sdk watchos \
     SKIP_INSTALL=NO
 
+xcodebuild archive \
+    -scheme GrowthBook \
+    -archivePath "./build/vision.xcarchive" \
+    -sdk xros \
+    SKIP_INSTALL=NO
+
+xcodebuild archive \
+    -scheme GrowthBook \
+    -archivePath "./build/vision_sim.xcarchive" \
+    -sdk xrsimulator \
+    SKIP_INSTALL=NO
 
 xcodebuild archive \
     -scheme GrowthBook \
