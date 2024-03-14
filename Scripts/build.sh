@@ -55,7 +55,6 @@ xcodebuild archive \
     -sdk macosx \
     SKIP_INSTALL=NO
 
-
 xcodebuild -create-xcframework \
     -framework "./build/ios.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/ios_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
@@ -63,5 +62,7 @@ xcodebuild -create-xcframework \
     -framework "./build/tv_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/watch.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/watch_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
+    -framework "./build/vision.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
+    -framework "./build/vision_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/macos.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -output "./build/GrowthBook.xcframework"
