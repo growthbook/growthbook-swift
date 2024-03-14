@@ -7,16 +7,12 @@ xcodebuild archive \
     -destination "generic/platform=iOS Simulator" \
     SKIP_INSTALL=NO
 
-
-
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/tv.xcarchive" \
     -destination "generic/platform=tvOS" \
     -destination "generic/platform=tvOS Simulator" \
     SKIP_INSTALL=NO
-
-
 
 xcodebuild archive \
     -scheme GrowthBook \
