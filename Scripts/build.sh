@@ -3,66 +3,45 @@
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/ios.xcarchive" \
-    -sdk iphoneos \
-    SKIP_INSTALL=NO
-
-xcodebuild archive \
-    -scheme GrowthBook \
-    -archivePath "./build/ios_sim.xcarchive" \
-    -sdk iphonesimulator \
+    -destination "generic/platform=iOS" \
+    -destination "generic/platform=iOS Simulator" \
     SKIP_INSTALL=NO
 
 
-xcodebuild archive \
-    -scheme GrowthBook \
-    -archivePath "./build/tv_sim.xcarchive" \
-    -sdk appletvsimulator \
-    SKIP_INSTALL=NO
 
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/tv.xcarchive" \
-    -sdk appletvos \
+    -destination "generic/platform=tvOS" \
+    -destination "generic/platform=tvOS Simulator" \
     SKIP_INSTALL=NO
 
-xcodebuild archive \
-    -scheme GrowthBook \
-    -archivePath "./build/watch_sim.xcarchive" \
-    -sdk watchsimulator \
-    SKIP_INSTALL=NO
+
 
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/watch.xcarchive" \
-    -sdk watchos \
+    -destination "generic/platform=watchOS" \
+    -destination "generic/platform=watchOS Simulator" \
     SKIP_INSTALL=NO
 
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/vision.xcarchive" \
-    -sdk xros \
-    SKIP_INSTALL=NO
-
-xcodebuild archive \
-    -scheme GrowthBook \
-    -archivePath "./build/vision_sim.xcarchive" \
-    -sdk xrsimulator \
+    -destination "generic/platform=visionOS" \
+    -destination "generic/platform=visionOS Simulator" \
     SKIP_INSTALL=NO
 
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/macos.xcarchive" \
-    -sdk macosx \
+    -destination "generic/platform=macOS" \
     SKIP_INSTALL=NO
 
 xcodebuild -create-xcframework \
     -framework "./build/ios.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
-    -framework "./build/ios_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/tv.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
-    -framework "./build/tv_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/watch.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
-    -framework "./build/watch_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/vision.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
-    -framework "./build/vision_sim.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -framework "./build/macos.xcarchive/Products/Library/Frameworks/GrowthBook.framework" \
     -output "./build/GrowthBook.xcframework"
