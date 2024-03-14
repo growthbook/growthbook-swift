@@ -73,7 +73,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             return
         }
         
-        if let features = try? JSONDecoder().decode(Features.self, from: featureData) {
+        if let _ = try? JSONDecoder().decode(Features.self, from: featureData) {
             XCTAssertTrue(true)
         } else {
             XCTFail()
