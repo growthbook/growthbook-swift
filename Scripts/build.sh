@@ -1,6 +1,6 @@
 #!/bin/bash
 
-## Currently a bug introduced in Xcode 15.2 unresolved where the visionOs destination will use the iOS base SDK.
+## Currently a bug introduced in Xcode 15.2 unresolved where the visionOS destination will use the iOS base SDK.
 ## Workaround available here: https://developer.apple.com/documentation/xcode-release-notes/xcode-15_2-release-notes
 ## This build script will fail unless workaround is applied.
 
