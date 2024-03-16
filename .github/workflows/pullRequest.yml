@@ -13,7 +13,7 @@ jobs:
         clean: 'true'
         fetch-depth: 0
     - name: Select Xcode
-      run: sudo xcode-select -switch /Applications/Xcode.app
+      run: sudo xcode-select -switch /Applications/Xcode_15.2.app
     - name: Run Unit Test
       run: ./Scripts/runTest.sh
     - name: Build Framework
