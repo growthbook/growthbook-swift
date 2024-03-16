@@ -6,7 +6,7 @@ on:
 
 jobs:
   build_framework:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
     - uses: actions/checkout@v3
       with:
