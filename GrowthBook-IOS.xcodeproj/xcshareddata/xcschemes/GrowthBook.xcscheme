@@ -20,6 +20,20 @@
                ReferencedContainer = "container:GrowthBook-IOS.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "849114BC280DA71E00C0B9A5"
+               BuildableName = "GrowthBookTests.xctest"
+               BlueprintName = "GrowthBookTests"
+               ReferencedContainer = "container:GrowthBook-IOS.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -28,6 +42,16 @@
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
       <Testables>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "849114BC280DA71E00C0B9A5"
+               BuildableName = "GrowthBookTests.xctest"
+               BlueprintName = "GrowthBookTests"
+               ReferencedContainer = "container:GrowthBook-IOS.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction
