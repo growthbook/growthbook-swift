@@ -25,6 +25,12 @@ let package = Package(
             name: "GrowthBook",
             dependencies: [],
             path: "Sources/CommonMain"
+        ),
+        .testTarget(
+            name: "GrowthBookTests",
+            dependencies: ["GrowthBook"],
+            path: "GrowthBookTests",
+            resources: [.process("Source")]
         )
     ]
 )

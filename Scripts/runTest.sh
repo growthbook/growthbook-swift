@@ -15,3 +15,5 @@ xcodebuild test -project GrowthBook-IOS.xcodeproj \
 xcodebuild test -project GrowthBook-IOS.xcodeproj \
    -scheme GrowthBook \
    -destination 'platform=visionOS Simulator,name=Apple Vision Pro'
+
+swift test
