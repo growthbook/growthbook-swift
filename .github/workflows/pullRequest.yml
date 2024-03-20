@@ -6,14 +6,14 @@ on:
 
 jobs:
   build_framework:
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
     - uses: actions/checkout@v3
       with:
         clean: 'true'
         fetch-depth: 0
     - name: Select Xcode
-      run: sudo xcode-select -switch /Applications/Xcode.app
+      run: sudo xcode-select -switch /Applications/Xcode_15.2.app
     - name: Run Unit Test
       run: ./Scripts/runTest.sh
     - name: Build Framework

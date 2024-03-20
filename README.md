@@ -10,10 +10,12 @@
 
 
 - **Lightweight and fast**
-- **Supports iOS**
-  - **iOS version 12 & Above**
-  - **Apple TvOS version 12 & Above**
-  - **Apple WatchOS version 5.0 & Above**
+- **Supports native Apple platforms**
+  - **macOS version 10.15 & Above**
+  - **iOS version 12.0 & Above**
+  - **Apple tvOS version 12.0 & Above**
+  - **Apple watchOS version 5.0 & Above**
+  - **Apple visionOS version 1.0 & Above**
 - **Adjust variation weights and targeting without deploying new code**
 - **Latest spec version: 0.5.0 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
 

@@ -1,11 +1,19 @@
 #!/bin/bash
 
-xcodebuild -project GrowthBook-IOS.xcodeproj \
+xcodebuild test -project GrowthBook-IOS.xcodeproj \
    -scheme GrowthBook \
-   -sdk iphonesimulator \
-   -destination 'platform=iOS Simulator,name=iPhone 13,OS=16.2'
+   -destination 'platform=iOS Simulator,name=iPhone 15'
 
 xcodebuild test -project GrowthBook-IOS.xcodeproj \
-   -scheme GrowthBookTests \
-   -sdk iphonesimulator \
-   -destination 'platform=iOS Simulator,name=iPhone 13,OS=16.2'
+   -scheme GrowthBook \
+   -destination 'platform=tvOS Simulator,name=Apple TV 4K (3rd generation) (at 1080p)'
+
+xcodebuild test -project GrowthBook-IOS.xcodeproj \
+   -scheme GrowthBook \
+   -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm)'
+
+xcodebuild test -project GrowthBook-IOS.xcodeproj \
+   -scheme GrowthBook \
+   -destination 'platform=visionOS Simulator,name=Apple Vision Pro'
+
+swift test
