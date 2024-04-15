@@ -20,7 +20,14 @@ import Foundation
     public let trackingClosure: (Experiment, ExperimentResult) -> Void
     /// Disable background streaming connection
     public let backgroundSync: Bool
-
+            
+    public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
+    
+    public let stickyBucketService: StickyBucketServiceProtocol?
+    
+    public var stickyBucketIdentifierAttributes: [String]?
+    
+    public let remoteEval: Bool?
     // Keys are unique identifiers for the features and the values are Feature objects.
     // Feature definitions - To be pulled from API / Cache
     var features: Features
@@ -31,20 +38,28 @@ import Foundation
          isEnabled: Bool,
          attributes: JSON,
          forcedVariations: JSON?,
+         stickyBucketAssignmentDocs:  [String: StickyAssignmentsDocument]? = nil,
+         stickyBucketIdentifierAttributes: [String]? = nil,
+         stickyBucketService: StickyBucketServiceProtocol? = nil,
          isQaMode: Bool,
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:],
-         backgroundSync: Bool = false) {
+         backgroundSync: Bool = false,
+         remoteEval: Bool? = nil) {
         self.apiHost = apiHost
         self.clientKey = clientKey
         self.encryptionKey = encryptionKey
         self.isEnabled = isEnabled
         self.attributes = attributes
         self.forcedVariations = forcedVariations
+        self.stickyBucketAssignmentDocs = stickyBucketAssignmentDocs
+        self.stickyBucketIdentifierAttributes = stickyBucketIdentifierAttributes
+        self.stickyBucketService = stickyBucketService
         self.isQaMode = isQaMode
         self.trackingClosure = trackingClosure
         self.features = features
         self.backgroundSync = backgroundSync
+        self.remoteEval = remoteEval
     }
     
     @objc public func getApiHostURL() -> String? {
@@ -62,5 +77,4 @@ import Foundation
             return nil
         }
     }
-    
 }

@@ -24,9 +24,11 @@ class ExperimentRunTests: XCTestCase {
                                     attributes: testContext.attributes,
                                     forcedVariations: testContext.forcedVariations,
                                     isQaMode: testContext.isQaMode,
-                                    trackingClosure: { _, _ in }, backgroundSync: false)
+                                    trackingClosure: { _, _ in }, 
+                                    features: testContext.features,
+                                    backgroundSync: false)
 
-            let evaluator = ExperimentEvaluator()
+            let evaluator = ExperimentEvaluator(attributeOverrides: JSON())
             let result = evaluator.evaluateExperiment(context: gbContext, experiment: experiment)
 
             let status = item[0].stringValue + "\nExpected Result - " + item[3].stringValue + " & " + item[4].stringValue + "\nActual result - " + result.value.stringValue + " & " + String(result.inExperiment) + "\n\n"

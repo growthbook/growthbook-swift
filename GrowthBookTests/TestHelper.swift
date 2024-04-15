@@ -73,6 +73,7 @@ class TestHelper {
 
 struct ContextTest: Codable {
     var attributes: JSON = JSON()
+    var features: [String: Feature] = [:]
     var isQaMode: Bool = false
     var isEnabled: Bool = true
     var forcedVariations: JSON? = nil
@@ -90,19 +91,30 @@ struct ContextTest: Codable {
         if let forcedVariations = json["forcedVariations"] {
             self.forcedVariations = forcedVariations
         }
+        if let features = try? json["features"]?.rawData() {
+            if let features = try? JSONDecoder().decode(Features.self, from: features) {
+                self.features = features
+            }
+        }
     }
 }
 
 struct FeaturesTest: Codable {
     var features: Features? = nil
     var attributes: JSON = JSON()
+    var forcedVariations: JSON? = nil
 
     init(json: [String: JSON]) {
         if let features = json["features"] {
             self.features = TestHelper.convertToFeaturesModel(dict: features.dictionaryValue)
         }
+        
         if let attributes = json["attributes"] {
             self.attributes = attributes
+        }
+        
+        if let forcedVariations = json["forcedVariations"] {
+            self.forcedVariations = forcedVariations
         }
     }
 }
@@ -202,17 +214,11 @@ class ExperimentResultTest {
 extension TestHelper {
     static func convertToFeaturesModel(dict: [String: JSON]) -> Features {
         var newDict: [String: Feature] = [:]
-        if let feature = dict["feature"] {
-
-            if let data = try? feature.rawData() {
-
-                let decoder = JSONDecoder()
-
-                if let jsonPetitions = try? decoder.decode(Feature.self, from: data) {
-                    newDict["feature"] = jsonPetitions
-                }
-            }
+        
+        dict.forEach { (key, value) in
+            newDict[key] = Feature(json: value.dictionaryValue)
         }
+        
         return newDict
     }
 }

@@ -399,15 +399,17 @@ class ConditionEvaluator {
     }
 
     private func isContains(source: String, target: String) -> Bool {
-        let arrayTarget = target.components(separatedBy: "|")
-        if arrayTarget.isEmpty { return false }
-        for item in arrayTarget {
-            if source.contains(item) {
-                return true
-            }
+        let convertedItem = target.replacingOccurrences(of: "([^\\\\])\\/", with: "$1\\/")
+        
+        do {
+            let regex = try NSRegularExpression(pattern: convertedItem)
+            let range = NSRange(location: 0, length: source.utf16.count)
+            let isMatch = regex.firstMatch(in: source, options: [], range: range) != nil
+            
+            return isMatch
+        } catch {
+            return false
         }
-
-        return false
     }
 
     private func isPrimitive(value: JSON) -> Bool {
