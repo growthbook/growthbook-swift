@@ -20,12 +20,13 @@ public class Utils {
         case 2:
             // New unbiased hashing algorithm
             let combinedValue = seed + value
-            let hashedValue = digest(combinedValue + "")
-            return Float(hashedValue % 10000) / 10000
+            let hashedCombinedValue = digest(combinedValue).description + ""
+            let hashedValue = digest(hashedCombinedValue) % 10000
+            return Float(hashedValue) / 10000
         case 1:
             // Original biased hashing algorithm (keep for backwards compatibility)
             let combinedValue = value + seed
-            let hashedValue = digest(combinedValue + "")
+            let hashedValue = digest(combinedValue)
             return Float(hashedValue % 1000) / 1000
         default:
             // Unknown hash version
@@ -41,19 +42,12 @@ public class Utils {
 
     /// Returns an array of floats with numVariations items that are all equal and sum to 1. For example, getEqualWeights(2) would return [0.5, 0.5].
     static func getEqualWeights(numVariations: Int) -> [Float] {
-        var weights: [Float] = []
-        if numVariations >= 1 {
-            let result = 1.0 / Float(numVariations)
-
-            for _ in 0..<numVariations {
-                weights.append(result)
-            }
-        }
-        return weights
+        if numVariations <= 0 { return [] }
+        return Array(repeating: 1.0 / Float(numVariations), count: numVariations)
     }
 
     /// This converts and experiment's coverage and variation weights into an array of bucket ranges.
-    static func getBucketRanges(numVariations: Int, coverage: Float, weights: [Float]) -> [BucketRange] {
+    static func getBucketRanges(numVariations: Int, coverage: Float, weights: [Float]?) -> [BucketRange] {
         var bucketRange: [BucketRange]
 
         var targetCoverage = coverage
@@ -63,15 +57,16 @@ public class Utils {
         if coverage > 1 { targetCoverage = 1 }
 
         // Default to equal weights if the weights don't match the number of variations.
-        var targetWeights = weights
-        if weights.count != numVariations {
-            targetWeights = getEqualWeights(numVariations: numVariations)
+        let equal = getEqualWeights(numVariations: numVariations)
+        var targetWeights = weights ?? equal
+        if targetWeights.count != numVariations {
+            targetWeights = equal
         }
 
         // Default to equal weights if the sum is not equal 1 (or close enough when rounding errors are factored in):
         let weightsSum = targetWeights.sum()
         if weightsSum < 0.99 || weightsSum > 1.01 {
-            targetWeights = getEqualWeights(numVariations: numVariations)
+            targetWeights = equal
         }
 
         // Convert weights to ranges and return
@@ -93,12 +88,10 @@ public class Utils {
 
     /// Choose Variation from List of ranges which matches particular number
     static func chooseVariation(n: Float, ranges: [BucketRange]) -> Int {
-        var counter = 0
-        for range in ranges {
+        for (index, range) in ranges.enumerated() {
             if inRange(n: n, range: range) {
-                return counter
+                return index
             }
-            counter += 1
         }
         return -1
     }
@@ -147,5 +140,32 @@ public class Utils {
 
     static private func digest(_ string: String) -> UInt32 {
         return Common.fnv1a(Array(string.utf8), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
+    }
+    
+    ///Returns tuple out of 2 elements: the attribute itself an its hash value
+    static func getHashAttribute(context: Context, attr: String?, fallback: String? = nil, attributeOverrides: JSON) -> (hashAttribute: String, hashValue: String) {
+        var hashAttribute = attr ?? "id"
+        var hashValue = ""
+        
+        if attributeOverrides[hashAttribute] != .null {
+            hashValue = attributeOverrides[hashAttribute].stringValue
+        } else if context.attributes[hashAttribute] != .null {
+            hashValue = context.attributes[hashAttribute].stringValue
+        }
+        
+        // if no match, try fallback
+        if hashValue.isEmpty, let fallback = fallback {
+            if attributeOverrides[fallback] != .null {
+                hashValue = attributeOverrides[fallback].stringValue
+            } else if context.attributes[fallback] != .null {
+                hashValue = context.attributes[fallback].stringValue
+            }
+            
+            if !hashValue.isEmpty {
+                hashAttribute = fallback
+            }
+        }
+        
+        return (hashAttribute, hashValue)
     }
 }

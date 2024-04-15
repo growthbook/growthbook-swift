@@ -14,6 +14,18 @@ typealias Features = [String: Feature]
 /// Type Alias for Condition Element in GrowthBook Rules
 typealias Condition = JSON
 
+public struct ParentConditionInterface: Codable {
+    public let id: String
+    public let condition: JSON
+    public let gate: Bool?
+    
+    init(json: [String: JSON]) {
+        self.id = json["id"]?.stringValue ?? ""
+        self.condition = json["condition"] ?? JSON()
+        self.gate = json["gate"]?.boolValue
+    }
+}
+
 /// Handler for Refresh Cache Request
 /// 
 /// It updates back whether cache was refreshed or not
@@ -31,6 +43,21 @@ typealias NameSpace = (String, Float, Float)
 public struct BucketRange: Codable {
     let number1: Float
     let number2: Float
+    
+    init(number1: Float, number2: Float) {
+        self.number1 = number1
+        self.number2 = number2
+    }
+    
+    init(json: JSON) {
+        if json.arrayValue.isEmpty {
+            number1 = 0
+            number2 = 0
+        } else {
+            self.number1 = json.arrayValue[0].floatValue
+            self.number2 = json.arrayValue[1].floatValue
+        }
+    }
 }
 
 /// GrowthBook Error Class to handle any error / exception scenario
@@ -48,12 +75,24 @@ public struct VariationMeta: Codable {
     let key: String?
     /// A human-readable name for this variation
     let name: String?
+    
+    init(json: [String: JSON]) {
+        self.passthrough = json["passthrough"]?.boolValue
+        self.key = json["key"]?.stringValue
+        self.name = json["name"]?.stringValue
+    }
 }
 
 ///Used for remote feature evaluation to trigger the `TrackingCallback`
 public struct TrackData: Codable {
     let experiment: Experiment
     let result: ExperimentResult
+    
+    init(json: [String: JSON]) {
+        // TODO: - Need to check it
+        experiment = Experiment(json: json["experiment"]?.dictionaryValue ?? [:])
+        result = ExperimentResult(json: json["result"]?.dictionaryValue ?? [:])
+    }
 }
 
 /// Object used for mutual exclusion and filtering users out of experiments based on random hashes.
@@ -72,5 +111,14 @@ public struct TrackData: Codable {
         self.seed = seed
         self.hashVersion = hashVersion
         self.ranges = ranges
+    }
+    
+    init(json: [String: JSON]) {
+        self.attribute = json["attribute"]?.stringValue
+        self.seed = json["seed"]?.stringValue ?? ""
+        self.hashVersion = json["hashVersion"]?.floatValue ?? 2.0
+        self.ranges = json["ranges"]?.map({ key, value in
+            BucketRange(json: value)
+        }) ?? []
     }
 }

@@ -22,7 +22,7 @@ class FeatureValueTests: XCTestCase {
                                     encryptionKey: nil,
                                     isEnabled: true,
                                     attributes: testData.attributes,
-                                    forcedVariations: JSON(),
+                                    forcedVariations: testData.forcedVariations,
                                     isQaMode: false,
                                     trackingClosure: { _, _ in }, 
                                     backgroundSync: false)
@@ -31,7 +31,7 @@ class FeatureValueTests: XCTestCase {
                 gbContext.features = features
             }
 
-            let evaluator = FeatureEvaluator(context: gbContext, featureKey: item[2].stringValue, attributeOverrides: item)
+            let evaluator = FeatureEvaluator(context: gbContext, featureKey: item[2].stringValue, attributeOverrides: JSON())
             let result = evaluator.evaluateFeature()
 
             let expectedResult = FeatureResultTest(json: item[3].dictionaryValue)

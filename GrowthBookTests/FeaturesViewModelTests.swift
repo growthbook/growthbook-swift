@@ -3,7 +3,6 @@ import XCTest
 @testable import GrowthBook
 
 class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
-    
     var isSuccess: Bool = false
     var isError: Bool = false
 
@@ -112,5 +111,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     func featuresFetchFailed(error: SDKError, isRemote: Bool) {
         isSuccess = false
         isError = true
+    }
+    
+    func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
+        
     }
 }

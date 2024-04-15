@@ -47,6 +47,8 @@
 		84CDE3412812F454008B3E6F /* Feature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640827F845EB0072BFDC /* Feature.swift */; };
 		84CDE3422812F454008B3E6F /* Experiment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640927F845EB0072BFDC /* Experiment.swift */; };
 		84CDE3432812F454008B3E6F /* Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640A27F845EB0072BFDC /* Context.swift */; };
+		84FEA9ED2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FEA9EC2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift */; };
+		84FEA9F12BC9913700111EE2 /* StickyBucketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FEA9EF2BC9913300111EE2 /* StickyBucketService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -118,6 +120,8 @@
 		84CDE3282812F359008B3E6F /* GrowthBook.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = GrowthBook.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		84CDE32A2812F359008B3E6F /* GrowthBook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GrowthBook.h; sourceTree = "<group>"; };
 		84F51E9627F419B000994D1C /* GrowthBook_IOS.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GrowthBook_IOS.h; sourceTree = "<group>"; };
+		84FEA9EC2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StickyAssignmentsDocument.swift; sourceTree = "<group>"; };
+		84FEA9EF2BC9913300111EE2 /* StickyBucketService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StickyBucketService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -166,6 +170,7 @@
 		843363F427F845EB0072BFDC /* CommonMain */ = {
 			isa = PBXGroup;
 			children = (
+				84FEA9EE2BC9911D00111EE2 /* StickyBucket */,
 				84095C83281812EA00ADDF19 /* LoggingManager */,
 				84095C762817EA6400ADDF19 /* JsonManager */,
 				843363F627F845EB0072BFDC /* GrowthBookSDK.swift */,
@@ -236,6 +241,7 @@
 		8433640727F845EB0072BFDC /* Model */ = {
 			isa = PBXGroup;
 			children = (
+				84FEA9EC2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift */,
 				8433640827F845EB0072BFDC /* Feature.swift */,
 				8433640927F845EB0072BFDC /* Experiment.swift */,
 				8433640A27F845EB0072BFDC /* Context.swift */,
@@ -306,6 +312,14 @@
 				843363F427F845EB0072BFDC /* CommonMain */,
 			);
 			path = Sources;
+			sourceTree = "<group>";
+		};
+		84FEA9EE2BC9911D00111EE2 /* StickyBucket */ = {
+			isa = PBXGroup;
+			children = (
+				84FEA9EF2BC9913300111EE2 /* StickyBucketService.swift */,
+			);
+			path = StickyBucket;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -436,6 +450,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				84FEA9ED2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift in Sources */,
 				84CDE3332812F454008B3E6F /* GrowthBookSDK.swift in Sources */,
 				84CDE3342812F454008B3E6F /* NetworkClient.swift in Sources */,
 				84095C902818245700ADDF19 /* Formatter.swift in Sources */,
@@ -449,6 +464,7 @@
 				84BC2E9D294A11F100289BC2 /* Crypto.swift in Sources */,
 				84CDE3392812F454008B3E6F /* Extensions.swift in Sources */,
 				84CDE33A2812F454008B3E6F /* Utils.swift in Sources */,
+				84FEA9F12BC9913700111EE2 /* StickyBucketService.swift in Sources */,
 				84095C8C281823BC00ADDF19 /* LoggingManager.swift in Sources */,
 				84CDE33B2812F454008B3E6F /* Common.swift in Sources */,
 				84CDE33C2812F454008B3E6F /* Logger.swift in Sources */,

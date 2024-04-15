@@ -107,7 +107,7 @@ public struct GrowthBookModel {
             CachingManager.shared.saveContent(fileName: Constants.featureCache, content: features)
         }
 
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, attributes: growthBookBuilderModel.attributes)
+        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher)
     }
 }
 
@@ -119,17 +119,16 @@ public struct GrowthBookModel {
     private var networkDispatcher: NetworkProtocol
     public var gbContext: Context
     private var featureVM: FeaturesViewModel!
-    private var attributeOverrides: JSON
+    private var attributeOverrides: JSON = JSON()
 
     init(context: Context,
          refreshHandler: CacheRefreshHandler? = nil,
          logLevel: Level = .info,
          networkDispatcher: NetworkProtocol = CoreNetworkClient(),
-         features: Features? = nil, attributes: JSON) {
+         features: Features? = nil) {
         gbContext = context
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
-        self.attributeOverrides = attributes
         super.init()
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
         if let features = features {
@@ -146,6 +145,8 @@ public struct GrowthBookModel {
         
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
+        
+        refreshStickyBucketService()
     }
         
     /// Manually Refresh Cache
@@ -175,6 +176,7 @@ public struct GrowthBookModel {
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
         gbContext.features = features
+
         if isRemote {
             refreshHandler?(true)
         }
@@ -206,11 +208,28 @@ public struct GrowthBookModel {
 
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        return ExperimentEvaluator().evaluateExperiment(context: gbContext, experiment: experiment)
+        return ExperimentEvaluator(attributeOverrides: attributeOverrides).evaluateExperiment(context: gbContext, experiment: experiment)
     }
 
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
     @objc public func setAttributes(attributes: Any) {
         gbContext.attributes = JSON(attributes)
+        refreshStickyBucketService()
+    }
+    
+    @objc public func setAttributeOverrides(overrides: Any) {
+        attributeOverrides = JSON(overrides)
+        refreshStickyBucketService()
+    }
+    
+    func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
+        refreshStickyBucketService(model)
+    }
+    
+    private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
+        if (gbContext.stickyBucketService != nil) {
+            let featureEvaluator = FeatureEvaluator(context: gbContext, featureKey: "", attributeOverrides: attributeOverrides)
+            featureEvaluator.refreshStickyBuckets(nil)
+        }
     }
 }

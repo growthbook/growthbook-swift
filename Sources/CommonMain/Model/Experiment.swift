@@ -8,8 +8,20 @@ import Foundation
     public let variations: [JSON]
     /// A tuple that contains the namespace identifier, plus a range of coverage for the experiment
     public let namespace: [JSON]?
+    /// Each item defines a prerequisite where a `condition` must evaluate against a parent feature's value (identified by `id`). If `gate` is true, then this is a blocking feature-level prerequisite; otherwise it applies to the current rule only.
+    public let parentConditions: [ParentConditionInterface]?    
     /// All users included in the experiment will be forced into the specific variation index
     public let hashAttribute: String?
+    /// When using sticky bucketing, can be used as a fallback to assign variations
+    public let fallbackAttribute: String?
+    
+    public let hashVersion: Float?
+    /// If true, sticky bucketing will be disabled for this experiment. (Note: sticky bucketing is only available if a StickyBucketingService is provided in the Context)
+    public let disableStickyBucketing: Bool?
+    /// An sticky bucket version number that can be used to force a re-bucketing of users (default to `0`)
+    public let bucketVersion: Int?
+    /// Any users with a sticky bucket version less than this will be excluded from the experiment
+    public let minBucketVersion: Int?
     /// How to weight traffic between variations. Must add to 1.
     public var weights: [Float]?
     /// If set to false, always return the control (first variation)
@@ -36,7 +48,13 @@ import Foundation
     public init(key: String,
                 variations: [Any] = [],
                 namespace: [Any]? = nil,
+                parentConditions: [ParentConditionInterface]? = nil,
                 hashAttribute: String? = nil,
+                fallBackAttribute: String? = nil,
+                hashVersion: Float? = nil,
+                disableStickyBucketing: Bool? = nil,
+                bucketVersion: Int? = nil,
+                minBucketVersion: Int? = nil,
                 weights: [Float]? = nil,
                 isActive: Bool = true,
                 coverage: Float? = nil,
@@ -55,7 +73,13 @@ import Foundation
         } else {
             self.namespace = nil
         }
+        self.parentConditions = parentConditions
         self.hashAttribute = hashAttribute
+        self.fallbackAttribute = fallBackAttribute
+        self.hashVersion = hashVersion
+        self.disableStickyBucketing = disableStickyBucketing
+        self.bucketVersion = bucketVersion
+        self.minBucketVersion = minBucketVersion
         self.weights = weights
         self.isActive = isActive
         self.coverage = coverage
@@ -74,7 +98,13 @@ import Foundation
     init(key: String,
          variations: [JSON] = [],
          namespace: [JSON]? = nil,
+         parentConditions: [ParentConditionInterface]? = nil,
          hashAttribute: String? = nil,
+         fallBackAttribute: String? = nil,
+         hashVersion: Float? = nil,
+         disableStickyBucketing: Bool? = nil,
+         bucketVersion: Int? = nil,
+         minBucketVersion: Int? = nil,
          weights: [Float]? = nil,
          isActive: Bool = true,
          coverage: Float? = nil,
@@ -89,7 +119,13 @@ import Foundation
         self.key = key
         self.variations = variations
         self.namespace = namespace
+        self.parentConditions = parentConditions
         self.hashAttribute = hashAttribute
+        self.fallbackAttribute = fallBackAttribute
+        self.hashVersion = hashVersion
+        self.disableStickyBucketing = disableStickyBucketing
+        self.bucketVersion = bucketVersion
+        self.minBucketVersion = minBucketVersion
         self.weights = weights
         self.isActive = isActive
         self.coverage = coverage
@@ -109,8 +145,22 @@ import Foundation
         variations = json["variations"]?.arrayValue ?? []
 
         namespace = json["namespace"]?.arrayValue
-
+        
+        parentConditions = json["parentConditions"]?.map({ key, value in
+            ParentConditionInterface(json: value.dictionaryValue)
+        })
+        
         hashAttribute = json["hashAttribute"]?.stringValue
+        
+        fallbackAttribute = json["fallbackAttribute"]?.stringValue
+        
+        hashVersion = json["hashVersion"]?.floatValue
+        
+        disableStickyBucketing = json["disableStickyBucketing"]?.boolValue
+        
+        bucketVersion = json["bucketVersion"]?.intValue
+        
+        minBucketVersion = json["minBucketVersion"]?.intValue
 
         isActive = json["active"]?.boolValue ?? true
 
@@ -124,11 +174,21 @@ import Foundation
 
         force = json["force"]?.intValue
         
-        ranges = json["ranges"]?.arrayObject as? [BucketRange]
+        if json["filters"] != nil {
+            print("")
+        }
         
-        meta = json["meta"]?.arrayObject as? [VariationMeta]
+        ranges = json["ranges"]?.map({ key, value in
+            BucketRange(json: value)
+        })
         
-        filters = json["filters"]?.arrayObject as? [Filter]
+        meta = json["meta"]?.map({ key, value in
+            VariationMeta(json: value.dictionaryValue)
+        })
+                
+        filters = json["filters"]?.map({ key, value in
+            Filter(json: value.dictionaryValue)
+        })
         
         seed = json["seed"]?.stringValue
         
@@ -154,11 +214,17 @@ import Foundation
     /// The unique key for the assigned variation
     public let key: String
     /// The human-readable name of the assigned variation
-    public let name: String?
+    public var name: String?
     /// The hash value used to assign a variation (float from `0` to `1`)
-    public let bucket: Float?
+    public var bucket: Float?
     /// Used for holdout groups
-    public let passthrough: Bool?
+    public var passthrough: Bool?
+    /// If a hash was used to assign a variation
+    public let hashUsed: Bool?
+    /// The id of the feature (if any) that the experiment came from
+    public let featureId: String?
+    /// If sticky bucketing was used to assign a variation
+    public let stickyBucketUsed: Bool?
 
     init(inExperiment: Bool,
          variationId: Int,
@@ -168,7 +234,10 @@ import Foundation
          key: String,
          name: String? = nil,
          bucket: Float? = nil,
-         passthrough: Bool? = nil) {
+         passthrough: Bool? = nil,
+         hashUsed: Bool? = nil,
+         featureId: String? = nil,
+         stickyBucketUsed: Bool? = nil) {
         self.inExperiment = inExperiment
         self.variationId = variationId
         self.value = value
@@ -178,5 +247,23 @@ import Foundation
         self.name = name
         self.bucket = bucket
         self.passthrough = passthrough
+        self.hashUsed = hashUsed
+        self.featureId = featureId
+        self.stickyBucketUsed = stickyBucketUsed
+    }
+    
+    init(json: [String: JSON]) {
+        inExperiment = json["inExperiment"]?.boolValue ?? false
+        variationId = json["variationId"]?.intValue ?? 0
+        value = json["value"] ?? JSON()
+        hashAttribute = json["hashAttribute"]?.stringValue
+        valueHash = json["valueHash"]?.stringValue
+        key = json["key"]?.stringValue ?? ""
+        name = json["name"]?.stringValue
+        bucket = json["bucket"]?.floatValue
+        passthrough = json["passthrough"]?.boolValue
+        hashUsed = json["hashUsed"]?.boolValue
+        featureId = json["featureId"]?.stringValue
+        stickyBucketUsed = json["stickyBucketUsed"]?.boolValue
     }
 }

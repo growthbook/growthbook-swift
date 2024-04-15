@@ -17,6 +17,7 @@ class ConditionTests: XCTestCase {
 
         for item in evalConditions {
             let evaluator = ConditionEvaluator()
+            
             let result = evaluator.isEvalCondition(attributes: item[2], conditionObj: item[1])
 
             let status = item.arrayValue[0].stringValue + "\nExpected Result - " + item.arrayValue[3].stringValue + "\nActual result - " + String(result) + "\n\n"

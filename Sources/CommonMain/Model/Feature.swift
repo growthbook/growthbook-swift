@@ -11,12 +11,24 @@ import Foundation
         self.defaultValue = defaultValue
         self.rules = rules
     }
+    
+    init(json: [String: JSON]) {
+        defaultValue = json["defaultValue"]
+        
+        rules = json["rules"]?.map({ key, value in
+            FeatureRule(json: value.dictionaryValue)
+        })
+    }
 }
 
 /// Rule object consists of various definitions to apply to calculate feature value
 public struct FeatureRule: Codable {
+    
+    public let id: String?
     /// Optional targeting condition
     public let condition: JSON?
+    /// Each item defines a prerequisite where a `condition` must evaluate against a parent feature's value (identified by `id`). If `gate` is true, then this is a blocking feature-level prerequisite; otherwise it applies to the current rule only.
+    public let parentConditions: [ParentConditionInterface]?
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
     public let coverage: Float?
     /// Immediately force a specific value (ignore every other option besides condition and coverage)
@@ -33,6 +45,14 @@ public struct FeatureRule: Codable {
     public let hashAttribute: String?
     /// Hash version of hash function
     public let hashVersion: Float?
+    /// When using sticky bucketing, can be used as a fallback to assign variations
+    public let fallbackAttribute: String?
+    /// If true, sticky bucketing will be disabled for this experiment. (Note: sticky bucketing is only available if a StickyBucketingService is provided in the Context)
+    public let disableStickyBucketing: Bool?
+    /// An sticky bucket version number that can be used to force a re-bucketing of users (default to `0`)
+    public let bucketVersion: Int?
+    /// Any users with a sticky bucket version less than this will be excluded from the experiment
+    public let minBucketVersion: Int?
     /// A more precise version of `coverage`
     public let range: BucketRange?
     /// Ranges for experiment variations
@@ -50,14 +70,19 @@ public struct FeatureRule: Codable {
     /// Array of tracking calls to fire
     public let tracks: [TrackData]?
 
-    init(condition: Condition? = nil,
+    init(id: String? = nil, condition: Condition? = nil,
          coverage: Float? = nil,
+         parentConditions: [ParentConditionInterface]? = nil,
          force: JSON? = nil,
          variations: [JSON]? = nil,
          key: String? = nil,
          weights: [Float]? = nil,
          namespace: [JSON]? = nil,
          hashAttribute: String? = nil,
+         fallBackAttribute: String? = nil,
+         disableStickyBucketing: Bool? = nil,
+         bucketVersion: Int? = nil,
+         minBucketVersion: Int? = nil,
          hashVersion: Float? = nil,
          range: BucketRange? = nil,
          ranges: [BucketRange]? = nil,
@@ -67,14 +92,20 @@ public struct FeatureRule: Codable {
          name: String? = nil,
          phase: String? = nil,
          tracks: [TrackData]? = nil) {
+        self.id = id
         self.condition = condition
         self.coverage = coverage
+        self.parentConditions = parentConditions
         self.force = force
         self.variations = variations
         self.key = key
         self.weights = weights
         self.namespace = namespace
         self.hashAttribute = hashAttribute
+        self.fallbackAttribute = fallBackAttribute
+        self.disableStickyBucketing = disableStickyBucketing
+        self.bucketVersion = bucketVersion
+        self.minBucketVersion = minBucketVersion
         self.hashVersion = hashVersion
         self.range = range
         self.ranges = ranges
@@ -84,6 +115,76 @@ public struct FeatureRule: Codable {
         self.name = name
         self.phase = phase
         self.tracks = tracks
+    }
+    
+    init(json: [String: JSON]) {
+        id = json["id"]?.stringValue
+        
+        condition = json["condition"]
+
+        parentConditions = json["parentConditions"]?.map({ key, value in
+            ParentConditionInterface(json: value.dictionaryValue)
+        })
+        
+        coverage = json["coverage"]?.floatValue
+        
+        force = json["force"]
+        
+        variations = json["variations"]?.arrayValue
+        
+        key = json["key"]?.stringValue
+ 
+        if let weights = json["weights"]?.arrayValue {
+            self.weights = JSON.convertToArrayFloat(jsonArray: weights)
+        } else {
+            self.weights = nil
+        }
+        
+        namespace = json["namespace"]?.arrayValue
+        
+        hashAttribute = json["hashAttribute"]?.stringValue
+        
+        hashVersion = json["hashVersion"]?.floatValue
+
+        fallbackAttribute = json["fallbackAttribute"]?.stringValue
+        
+        disableStickyBucketing = json["disableStickyBucketing"]?.boolValue
+        
+        bucketVersion = json["bucketVersion"]?.intValue
+        
+        minBucketVersion = json["minBucketVersion"]?.intValue
+        
+        if let range = json["range"] {
+            self.range = BucketRange(json: range)
+        } else {
+            self.range = nil
+        }
+        
+        if let ranges = json["ranges"] {
+            self.ranges = ranges.map({ key, value in
+                BucketRange(json: value)
+            })
+        } else {
+            self.ranges = nil
+        }
+        
+        meta = json["meta"]?.map({ key, value in
+            VariationMeta(json: value.dictionaryValue)
+        })
+                
+        filters = json["filters"]?.map({ key, value in
+            Filter(json: value.dictionaryValue)
+        })
+    
+        seed = json["seed"]?.stringValue
+        
+        name = json["name"]?.stringValue
+        
+        phase = json["phase"]?.stringValue
+        
+        tracks = json["tracks"]?.map({ key, value in
+            TrackData(json: value.dictionaryValue)
+        })
     }
 }
 
@@ -97,6 +198,10 @@ enum FeatureSource: String {
     case force
     /// Experiment Value for the Feature is being processed
     case experiment
+    /// CyclicPrerequisite Value for the Feature is being processed
+    case cyclicPrerequisite
+    /// Prerequisite Value for the Feature is being processed
+    case prerequisite
 }
 
  /// Result for Feature
@@ -109,6 +214,8 @@ enum FeatureSource: String {
     public let isOff: Bool
     /// One of "unknownFeature", "defaultValue", "force", or "experiment"
     public let source: String
+    
+//    public let ruleId: String
     /// When source is "experiment", this will be the Experiment object used
     public let experiment: Experiment?
     /// When source is "experiment", this will be an ExperimentResult object
@@ -119,6 +226,7 @@ enum FeatureSource: String {
         self.isOff = !isOn
         self.value = value
         self.source = source
+//        self.ruleId = ruleId
         self.experiment = experiment
         self.experimentResult = result
     }

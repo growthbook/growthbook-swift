@@ -2,7 +2,8 @@ import Foundation
 
 /// Interface for Feature API Completion Events
 protocol FeaturesFlowDelegate: AnyObject {
-    func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool)
+    func featuresFetchedSuccessfully(features: Features, isRemote: Bool)
+    func featuresAPIModelSuccessfully(model: FeaturesDataModel)
     func featuresFetchFailed(error: SDKError, isRemote: Bool)
 }
 
@@ -11,13 +12,13 @@ class FeaturesViewModel {
     weak var delegate: FeaturesFlowDelegate?
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
-    
     /// Caching Manager
     let manager = CachingManager.shared
-
+        
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource) {
         self.delegate = delegate
         self.dataSource = dataSource
+        self.fetchFeatures(apiUrl: nil)
     }
     
     func connectBackgroundSync(sseUrl: String) {
@@ -66,6 +67,7 @@ class FeaturesViewModel {
         let decoder = JSONDecoder()
 
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
+            delegate?.featuresAPIModelSuccessfully(model: jsonPetitions)
             if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
                     manager.putData(fileName: Constants.featureCache, content: featureData)
@@ -76,6 +78,7 @@ class FeaturesViewModel {
                     if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                         let crypto: CryptoProtocol = Crypto()
                         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
+                        
                         if let featureData = try? JSONEncoder().encode(features) {
                             manager.putData(fileName: Constants.featureCache, content: featureData)
                         }
