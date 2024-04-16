@@ -14,7 +14,7 @@ import Foundation
     public let hashAttribute: String?
     /// When using sticky bucketing, can be used as a fallback to assign variations
     public let fallbackAttribute: String?
-    
+    /// The hash version to use (default to `1`)
     public let hashVersion: Float?
     /// If true, sticky bucketing will be disabled for this experiment. (Note: sticky bucketing is only available if a StickyBucketingService is provided in the Context)
     public let disableStickyBucketing: Bool?

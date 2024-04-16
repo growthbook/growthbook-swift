@@ -16,5 +16,21 @@ class FeaturesDataSource {
             fetchResult(.failure(error))
         })
     }
-
+    
+    /// Executes API Call to fetch features and send data for remote eval
+    func fetchRemoteEval(apiUrl: String, params: RemoteEvalParams?, fetchResult: @escaping (Result<Data, Error>) -> Void) {
+        var payload: [String: Any] = [:]
+        
+        if let params = params {
+            payload["attributes"] = params.attributes?.object
+            payload["forcedFeatures"] = params.forcedFeatures?.arrayObject
+            payload["forcedVariations"] = params.forcedVariations?.object
+        }
+                 
+        dispatcher.consumePOSTRequest(url: apiUrl, params: payload) { data in
+            fetchResult(.success(data))
+        } errorResult: { error in
+            fetchResult(.failure(error))
+        }
+    }
 }

@@ -32,7 +32,7 @@ class FeaturesViewModel {
     }
 
     /// Fetch Features
-    func fetchFeatures(apiUrl: String?) {
+    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
         // Check for cache data
         if let json = manager.getData(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
@@ -49,13 +49,25 @@ class FeaturesViewModel {
         }
         
         if let apiUrl = apiUrl {
-            dataSource.fetchFeatures(apiUrl: apiUrl) { result in
-                switch result {
-                case .success(let data):
-                    self.prepareFeaturesData(data: data)
-                case .failure(let error):
-                    self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
-                    logger.error("Failed get features: \(error.localizedDescription)")
+            if remoteEval {
+                dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { result in
+                    switch result {
+                    case .success(let data):
+                        self.prepareFeaturesData(data: data)
+                    case .failure(let error):
+                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
+                        logger.error("Failed get features: \(error.localizedDescription)")
+                    }
+                }
+            } else {
+                dataSource.fetchFeatures(apiUrl: apiUrl) { result in
+                    switch result {
+                    case .success(let data):
+                        self.prepareFeaturesData(data: data)
+                    case .failure(let error):
+                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
+                        logger.error("Failed get features: \(error.localizedDescription)")
+                    }
                 }
             }
         }
@@ -65,7 +77,6 @@ class FeaturesViewModel {
     func prepareFeaturesData(data: Data) {
         // Call Success Delegate with mention of data available with remote
         let decoder = JSONDecoder()
-
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             delegate?.featuresAPIModelSuccessfully(model: jsonPetitions)
             if let features = jsonPetitions.features {

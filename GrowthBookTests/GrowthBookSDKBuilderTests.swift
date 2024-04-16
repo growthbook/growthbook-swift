@@ -19,7 +19,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).initializer()
         
         XCTAssertTrue(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getFeaturesURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().encryptionKey == testKeyString)
         XCTAssertFalse(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
@@ -37,7 +37,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             refreshHandler: nil, backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
         
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getFeaturesURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
         XCTAssertTrue(sdkInstance.getGBContext().forcedVariations == JSON(variations))
@@ -56,7 +56,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
         
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getFeaturesURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
         
@@ -75,7 +75,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
         
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
-        XCTAssertTrue(sdkInstance.getGBContext().getApiHostURL() == expectedURL)
+        XCTAssertTrue(sdkInstance.getGBContext().getFeaturesURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
         if !sdkInstance.getGBContext().features.isEmpty {
