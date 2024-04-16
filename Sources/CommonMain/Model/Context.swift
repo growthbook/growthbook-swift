@@ -2,7 +2,7 @@ import Foundation
 
 /// Defines the GrowthBook context.
 @objc public class Context: NSObject {
-    /// api host
+    /// your api host
     public let apiHost: String?
     /// unique client key
     public let clientKey: String?
@@ -13,7 +13,7 @@ import Foundation
     /// Map of user attributes that are used to assign variations
     public var attributes: JSON
     /// Force specific experiments to always assign a specific variation (used for QA)
-    public let forcedVariations: JSON?
+    public var forcedVariations: JSON?
     /// If true, random assignment is disabled and only explicitly forced variations are used.
     public let isQaMode: Bool
     /// A function that takes experiment and result as arguments.
@@ -26,8 +26,8 @@ import Foundation
     public let stickyBucketService: StickyBucketServiceProtocol?
     
     public var stickyBucketIdentifierAttributes: [String]?
-    
-    public let remoteEval: Bool?
+
+    public let remoteEval: Bool
     // Keys are unique identifiers for the features and the values are Feature objects.
     // Feature definitions - To be pulled from API / Cache
     var features: Features
@@ -45,7 +45,7 @@ import Foundation
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:],
          backgroundSync: Bool = false,
-         remoteEval: Bool? = nil) {
+         remoteEval: Bool = false) {
         self.apiHost = apiHost
         self.clientKey = clientKey
         self.encryptionKey = encryptionKey
@@ -62,9 +62,17 @@ import Foundation
         self.remoteEval = remoteEval
     }
     
-    @objc public func getApiHostURL() -> String? {
+    @objc public func getFeaturesURL() -> String? {
         if let apiHost = apiHost, let clientKey = clientKey {
             return "\(apiHost)/api/features/\(clientKey)"
+        } else {
+            return nil
+        }
+    }
+    
+    @objc public func getRemoteEvalUrl() -> String? {
+        if let apiHost = apiHost, let clientKey = clientKey {
+            return  "\(apiHost)/api/eval/\(clientKey)"
         } else {
             return nil
         }

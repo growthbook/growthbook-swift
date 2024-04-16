@@ -106,11 +106,14 @@ public struct TrackData: Codable {
     /// Array of ranges that are included
     var ranges: [BucketRange]
     
-    init(attribute: String?, seed: String, hashVersion: Float, ranges: [BucketRange]) {
+    var fallbackAttribute: String?
+    
+    init(attribute: String?, seed: String, hashVersion: Float, ranges: [BucketRange], fallbackAttribute: String?) {
         self.attribute = attribute
         self.seed = seed
         self.hashVersion = hashVersion
         self.ranges = ranges
+        self.fallbackAttribute = fallbackAttribute
     }
     
     init(json: [String: JSON]) {

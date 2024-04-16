@@ -17,6 +17,10 @@ class MockNetworkClient: NetworkProtocol {
             errorResult(error)
         }
     }
+    
+    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (any Error) -> Void) {
+        
+    }
 }
 
 class MockResponse {
