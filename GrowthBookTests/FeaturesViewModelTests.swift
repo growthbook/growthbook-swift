@@ -65,6 +65,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertTrue(hasFeatures)
     }
     
     func testWithEncryptGetDataFromCache() throws {
@@ -91,6 +92,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertTrue(hasFeatures)
     }
     
     func testError() throws {
@@ -102,6 +104,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)
+        XCTAssertFalse(hasFeatures)
     }
 
     func testInvalid() throws {
@@ -112,6 +115,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)
+        XCTAssertFalse(hasFeatures)
     }
 
     func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
