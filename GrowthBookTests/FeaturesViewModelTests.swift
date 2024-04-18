@@ -5,6 +5,15 @@ import XCTest
 class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     var isSuccess: Bool = false
     var isError: Bool = false
+    var hasFeatures: Bool = false
+    
+    override func setUp() {
+        super.setUp()
+        
+        isSuccess = false
+        isError = true
+        hasFeatures = false
+    }
 
     func testSuccess() throws {
         isSuccess = false
@@ -16,6 +25,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertTrue(hasFeatures)
     }
 
     func testSuccessForEncryptedFeatures() throws {
@@ -29,6 +39,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertTrue(hasFeatures)
     }
     
     func testGetDataFromCache() throws {
@@ -54,6 +65,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertTrue(hasFeatures)
     }
     
     func testWithEncryptGetDataFromCache() throws {
@@ -80,6 +92,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertTrue(hasFeatures)
     }
     
     func testError() throws {
@@ -91,6 +104,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)
+        XCTAssertFalse(hasFeatures)
     }
 
     func testInvalid() throws {
@@ -101,16 +115,19 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)
+        XCTAssertFalse(hasFeatures)
     }
 
     func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
         isSuccess = true
         isError = false
+        hasFeatures = !features.isEmpty
     }
 
     func featuresFetchFailed(error: SDKError, isRemote: Bool) {
         isSuccess = false
         isError = true
+        hasFeatures = false
     }
     
     func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
