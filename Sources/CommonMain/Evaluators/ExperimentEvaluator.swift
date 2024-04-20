@@ -41,7 +41,7 @@ class ExperimentEvaluator {
         var stickyBucketVersionIsBlocked = false
         
         if context.stickyBucketService != nil, !(experiment.disableStickyBucketing ?? true) {
-            let (variation, versionIsBlocked) = getStickyBucketVariation(context: context, 
+            let (variation, versionIsBlocked) = Utils.getStickyBucketVariation(context: context, 
                                                                          experimentKey: experiment.key,
                                                                          experimentBucketVersion: experiment.bucketVersion ?? 0,
                                                                          minExperimentBucketVersion: experiment.minBucketVersion ?? 0,
@@ -54,7 +54,7 @@ class ExperimentEvaluator {
         // Some checks are not needed if we already have a sticky bucket
         if !foundStickyBucket {
             if let filters = experiment.filters {
-                if isFilteredOut(context: context, filters: filters) {
+                if Utils.isFilteredOut(filters: filters, context: context, attributeOverrides: attributeOverrides) {
                     print("Skip because of filters")
                     return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false)
                 }
@@ -77,14 +77,14 @@ class ExperimentEvaluator {
                 for parentCondition in parentConditions {
                     
                     // TODO: option is to not pass attributeOverrides
-                    var parentResult = FeatureEvaluator(context: context, featureKey: parentCondition.id, attributeOverrides: JSON(parentCondition.condition)).evaluateFeature()
+                    let parentResult = FeatureEvaluator(context: context, featureKey: parentCondition.id, attributeOverrides: JSON(parentCondition.condition)).evaluateFeature()
                     
                     if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
                         return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false)
                     }
                     
                     let evalObj = ["value": parentResult.value]
-                    var evalCondition = ConditionEvaluator().isEvalCondition(
+                    let evalCondition = ConditionEvaluator().isEvalCondition(
                         attributes: JSON(evalObj),
                         conditionObj: parentCondition.condition
                     )
@@ -133,10 +133,10 @@ class ExperimentEvaluator {
         let result = getExperimentResult(gbContext: context, experiment: experiment, variationIndex: assigned, hashUsed: true, bucket: hash, stickyBucketUsed: foundStickyBucket)
         print("ExperimentResult: \(result)")
         if context.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? true) {
-            let (key, doc, changed) = generateStickyBucketAssignmentDoc(context: context,
+            let (key, doc, changed) = Utils.generateStickyBucketAssignmentDoc(context: context,
                                                                         attributeName: hashAttribute,
                                                                         attributeValue: hashValue,
-                                                                        assignments: [getStickyBucketExperimentKey(experiment.key,
+                                                                        assignments: [Utils.getStickyBucketExperimentKey(experiment.key,
                                                                                                                    experiment.bucketVersion ?? 0): result.key])
             if changed {
                 context.stickyBucketAssignmentDocs = context.stickyBucketAssignmentDocs ?? [:]
@@ -192,85 +192,5 @@ class ExperimentEvaluator {
         }
         
         return result
-    }
-    
-    func getStickyBucketAssignments(context: Context) -> [String: String] {
-        var mergedAssignments: [String: String] = [:]
-        
-        context.stickyBucketAssignmentDocs?.values.forEach({ doc in
-            mergedAssignments.merge(doc.assignments)
-        })
-        return mergedAssignments
-    }
-    
-    func getStickyBucketVariation(
-        context: Context,
-        experimentKey: String,
-        experimentBucketVersion: Int = 0,
-        minExperimentBucketVersion: Int = 0,
-        meta: [VariationMeta] = []
-    ) -> (variation: Int, versionIsBlocked: Bool?) {
-        
-        let id = getStickyBucketExperimentKey(experimentKey, experimentBucketVersion)
-        let assignments = getStickyBucketAssignments(context: context)
-        
-        // users with any blocked bucket version (0 to minExperimentBucketVersion) are excluded from the test
-        if minExperimentBucketVersion > 0 {
-            for version in 0...minExperimentBucketVersion {
-                let blockedKey = getStickyBucketExperimentKey(experimentKey, version)
-                if let _ = assignments[blockedKey] {
-                    return (variation: -1, versionIsBlocked: true)
-                }
-            }
-        }
-        guard let variationKey = assignments[id] else {
-            return (variation: -1, versionIsBlocked: nil)
-        }
-        guard let variation = meta.firstIndex(where: { $0.key == variationKey }) else {
-            // invalid assignment, treat as "no assignment found"
-            return (variation: -1, versionIsBlocked: nil)
-        }
-        
-        return (variation: variation, versionIsBlocked: nil)
-    }
-    
-    func getStickyBucketExperimentKey(_ experimentKey: String, _ experimentBucketVersion: Int = 0) -> String {
-        return  "\(experimentKey)__\(experimentBucketVersion)" //`${experimentKey}__${experimentBucketVersion}`;
-    }
-    
-    private func isFilteredOut(context: Context, filters: [Filter]) -> Bool {
-        return filters.contains { filter in
-            let hashAttribute = Utils.getHashAttribute(context: context, attr: filter.attribute, attributeOverrides: attributeOverrides)
-            let hashValue = hashAttribute.hashValue
-            
-            let hash = Utils.hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
-            guard let hashValue = hash else { return true }
-            
-            return !filter.ranges.contains { range in
-                return Utils.inRange(n: hashValue, range: range)
-            }
-        }
-    }
-    
-    func generateStickyBucketAssignmentDoc(context: Context,
-                                           attributeName: String,
-                                           attributeValue: String,
-                                           assignments: [String: String]) -> (key: String, doc: StickyAssignmentsDocument, changed: Bool) {
-        let key = "\(attributeName)||\(attributeValue)"
-            let existingAssignments: [String: String] = (context.stickyBucketAssignmentDocs?[key]?.assignments) ?? [:]
-            var newAssignments = existingAssignments
-            assignments.forEach { newAssignments[$0] = $1 }
-        
-        let changed = NSDictionary(dictionary: existingAssignments).isEqual(to: newAssignments) == false
-        
-        return (
-                key: key,
-                doc: StickyAssignmentsDocument(
-                    attributeName: attributeName,
-                    attributeValue: attributeValue,
-                    assignments: newAssignments
-                ),
-                changed: changed
-            )
     }
 }

@@ -76,7 +76,7 @@ class FeatureEvaluator {
                 
                 // If there are filters for who is included
                 if let filters = rule.filters {
-                    if isFilteredOut(filters: filters) {
+                    if Utils.isFilteredOut(filters: filters, context: context, attributeOverrides: attributeOverrides) {
                         print("Skip rule because of filters")
                         continue
                     }
@@ -111,25 +111,27 @@ class FeatureEvaluator {
                         }
                     }
                     
-                    
-//                    // If rule.coverage is set
-                    if let coverage = rule.coverage {
-
-                        let key = rule.hashAttribute ?? Constants.idAttributeKey
-                        // Get the user hash value (context.attributes[rule.hashAttribute || "id"]) and if empty, skip the rule
-                        guard let attributeValue = context.attributes.dictionaryValue[key]?.stringValue,
-                              attributeValue.isEmpty == false
-                        else {
-                            continue
+                    // Ignore coverage if the rule has a range
+                    if rule.range == nil {
+                        // If rule.coverage is set
+                        if let coverage = rule.coverage {
+                            
+                            let key = rule.hashAttribute ?? Constants.idAttributeKey
+                            // Get the user hash value (context.attributes[rule.hashAttribute || "id"]) and if empty, skip the rule
+                            guard let attributeValue = context.attributes.dictionaryValue[key]?.stringValue,
+                                  attributeValue.isEmpty == false
+                            else {
+                                continue
+                            }
+                            
+                            // Compute a hash using the Fowler–Noll–Vo algorithm (specifically fnv32-1a)
+                            let hashFNV = Utils.hash(seed: featureKey, value: attributeValue, version: 1.0) ?? 0.0
+                            // If the hash is greater than rule.coverage, skip the rule
+                            if hashFNV > coverage {
+                                continue ruleLoop
+                            }
+                            
                         }
-
-                        // Compute a hash using the Fowler–Noll–Vo algorithm (specifically fnv32-1a)
-                        let hashFNV = Utils.hash(seed: featureKey, value: attributeValue, version: 1.0) ?? 0.0
-                        // If the hash is greater than rule.coverage, skip the rule
-                        if hashFNV > coverage {
-                            continue
-                        }
-
                     }
 
                     // Return (value = forced value, source = force)
@@ -178,116 +180,7 @@ class FeatureEvaluator {
         // Return (value = defaultValue or null, source = defaultValue)
         let defaultValue = targetFeature.defaultValue ?? .null
         return prepareResult(value: defaultValue, source: FeatureSource.defaultValue)
-    }
-    
-    func refreshStickyBuckets(_ data: FeaturesDataModel?) {
-        guard let stickyBucketService = context.stickyBucketService else {
-            return
-        }
-        
-        let attributes = getStickyBucketAttributes(data);
-        context.stickyBucketAssignmentDocs = stickyBucketService.getAllAssignments(attributes: attributes)
-    }
-    
-    func getStickyBucketAttributes(_ data: FeaturesDataModel?) -> [String: String] {
-        
-        var attributes: [String: String] = [:]
-        context.stickyBucketIdentifierAttributes = context.stickyBucketIdentifierAttributes != nil
-        ? deriveStickyBucketIdentifierAttributes(data)
-        : context.stickyBucketIdentifierAttributes
-        
-        context.stickyBucketIdentifierAttributes?.forEach { attr in
-            let hashValue = Utils.getHashAttribute(context: context, attr: attr, attributeOverrides: attributeOverrides)
-            attributes[attr] = hashValue.hashValue
-        }
-        return attributes
-    }
-    
-    func deriveStickyBucketIdentifierAttributes(_ data: FeaturesDataModel?) -> [String] {
-        
-        var attributes: Set<String> = []
-        
-        let features = data?.features ?? context.features
-            
-        features.keys.forEach({ id in
-            let feature = features[id]
-            if let rules = feature?.rules {
-                for rule in rules {
-                    if let variations = rule.variations {
-                        attributes.insert(rule.hashAttribute ?? "id")
-                        if let fallbackAttribute = rule.fallbackAttribute {
-                            attributes.insert(fallbackAttribute)
-                        }
-                    }
-                }
-            }
-        })
-        return Array(attributes)
-    }
-    
-    func getStickyBucketAssignments() -> [String: String] {
-        var mergedAssignments: [String: String] = [:]
-        
-        context.stickyBucketAssignmentDocs?.values.forEach({ doc in
-            mergedAssignments.merge(doc.assignments)
-        })
-        return mergedAssignments
-    }
-    
-    func getStickyBucketVariation(
-        experimentKey: String,
-        experimentBucketVersion: Int = 0,
-        minExperimentBucketVersion: Int = 0,
-        meta: [VariationMeta] = []
-    ) -> (variation: Int, versionIsBlocked: Bool?) {
-        
-        let id = getStickyBucketExperimentKey(experimentKey, experimentBucketVersion)
-        let assignments = getStickyBucketAssignments()
-        
-        // users with any blocked bucket version (0 to minExperimentBucketVersion) are excluded from the test
-        if minExperimentBucketVersion > 0 {
-            for version in 0...minExperimentBucketVersion {
-                let blockedKey = getStickyBucketExperimentKey(experimentKey, version)
-                if let _ = assignments[blockedKey] {
-                    return (variation: -1, versionIsBlocked: true)
-                }
-            }
-        }
-        guard let variationKey = assignments[id] else {
-            return (variation: -1, versionIsBlocked: nil)
-        }
-        guard let variation = meta.firstIndex(where: { $0.key == variationKey }) else {
-            // invalid assignment, treat as "no assignment found"
-            return (variation: -1, versionIsBlocked: nil)
-        }
-        
-        return (variation: variation, versionIsBlocked: nil)
-    }
-    
-    func getStickyBucketExperimentKey(_ experimentKey: String, _ experimentBucketVersion: Int = 0) -> String {
-        return  "\(experimentKey)__\(experimentBucketVersion)" //`${experimentKey}__${experimentBucketVersion}`;
-    }
-    
-    func generateStickyBucketAssignmentDoc(attributeName: String,
-                                           attributeValue: String,
-                                           assignments: [String: String]) -> (key: String, doc: StickyAssignmentsDocument, changed: Bool) {
-        let key = "\(attributeName)||\(attributeValue)"
-            let existingAssignments: [String: String] = (context.stickyBucketAssignmentDocs?[key]?.assignments) ?? [:]
-            var newAssignments = existingAssignments
-            assignments.forEach { newAssignments[$0] = $1 }
-        
-        let changed = NSDictionary(dictionary: existingAssignments).isEqual(to: newAssignments) == false
-        
-        return (
-                key: key,
-                doc: StickyAssignmentsDocument(
-                    attributeName: attributeName,
-                    attributeValue: attributeValue,
-                    assignments: newAssignments
-                ),
-                changed: changed
-            )
-    }
+    }    
     
     ///Determines if the user is part of a gradual feature rollout.
     private func isIncludedInRollout(seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?) -> Bool {
@@ -310,21 +203,6 @@ class FeatureEvaluator {
         }
     }
     
-    ///This is a helper method to evaluate `filters` for both feature flags and experiments.
-    private func isFilteredOut(filters: [Filter]) -> Bool {
-        return filters.contains { filter in
-            let hashAttribute = Utils.getHashAttribute(context: context, attr: filter.attribute, attributeOverrides: attributeOverrides)
-            let hashValue = hashAttribute.hashValue
-            
-            let hash = Utils.hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
-            guard let hashValue = hash else { return true }
-            
-            return !filter.ranges.contains { range in
-                return Utils.inRange(n: hashValue, range: range)
-            }
-        }
-    }
-
     /// This is a helper method to create a FeatureResult object.
     ///
     /// Besides the passed-in arguments, there are two derived values - on and off, which are just the value cast to booleans.
@@ -333,7 +211,7 @@ class FeatureEvaluator {
         if let value = value {
             isFalse = value.stringValue == "false" || value.stringValue == "0" || (value.stringValue.isEmpty && value.dictionary == nil && value.array == nil)
         }
-        return FeatureResult(value: value, isOn: !isFalse, source: source.rawValue,  experiment: experiment, result: result)
+        return FeatureResult(value: value, isOn: !isFalse, source: source.rawValue, experiment: experiment, result: result)
     }
     
     private func getAttributes() -> JSON {
