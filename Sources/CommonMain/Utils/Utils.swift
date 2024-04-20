@@ -13,7 +13,6 @@ import Foundation
 public class Utils {
     
     /// Hashes a string to a float between 0 and 1
-    ///
     static func hash(seed: String, value: String, version: Float) -> Float? {
         
         switch version {
@@ -31,6 +30,21 @@ public class Utils {
         default:
             // Unknown hash version
             return nil
+        }
+    }
+    
+    ///This is a helper method to evaluate `filters` for both feature flags and experiments.
+    static func isFilteredOut(filters: [Filter], context: Context, attributeOverrides: JSON) -> Bool {
+        return filters.contains { filter in
+            let hashAttribute = Utils.getHashAttribute(context: context, attr: filter.attribute, attributeOverrides: attributeOverrides)
+            let hashValue = hashAttribute.hashValue
+            
+            let hash = hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
+            guard let hashValue = hash else { return true }
+            
+            return !filter.ranges.contains { range in
+                return inRange(n: hashValue, range: range)
+            }
         }
     }
 
@@ -168,4 +182,121 @@ public class Utils {
         
         return (hashAttribute, hashValue)
     }
+    
+    // Returns assignments for StickyAssignmentsDocuments
+    static func getStickyBucketAssignments(context: Context) -> [String: String] {
+        var mergedAssignments: [String: String] = [:]
+        
+        context.stickyBucketAssignmentDocs?.values.forEach({ doc in
+            mergedAssignments.merge(doc.assignments)
+        })
+        return mergedAssignments
+    }
+    
+    // Update sticky bucketing configuration
+    static func refreshStickyBuckets(context: Context, attributeOverrides: JSON, data: FeaturesDataModel?) {
+        guard let stickyBucketService = context.stickyBucketService else {
+            return
+        }
+        
+        let attributes = getStickyBucketAttributes(context: context, attributeOverrides: attributeOverrides, data: data);
+        context.stickyBucketAssignmentDocs = stickyBucketService.getAllAssignments(attributes: attributes)
+    }
+    
+    // Returns hash value for every attribute
+    static func getStickyBucketAttributes(context: Context, attributeOverrides: JSON, data: FeaturesDataModel?) -> [String: String] {
+        
+        var attributes: [String: String] = [:]
+        context.stickyBucketIdentifierAttributes = context.stickyBucketIdentifierAttributes != nil
+        ? deriveStickyBucketIdentifierAttributes(context: context, data: data)
+        : context.stickyBucketIdentifierAttributes
+        
+        context.stickyBucketIdentifierAttributes?.forEach { attr in
+            let hashValue = Utils.getHashAttribute(context: context, attr: attr, attributeOverrides: attributeOverrides)
+            attributes[attr] = hashValue.hashValue
+        }
+        return attributes
+    }
+    
+    // Returns fallback attributes for features that have variations
+    static func deriveStickyBucketIdentifierAttributes(context: Context, data: FeaturesDataModel?) -> [String] {
+        
+        var attributes: Set<String> = []
+        
+        let features = data?.features ?? context.features
+            
+        features.keys.forEach({ id in
+            let feature = features[id]
+            if let rules = feature?.rules {
+                for rule in rules {
+                    if rule.variations != nil {
+                        attributes.insert(rule.hashAttribute ?? "id")
+                        if let fallbackAttribute = rule.fallbackAttribute {
+                            attributes.insert(fallbackAttribute)
+                        }
+                    }
+                }
+            }
+        })
+        return Array(attributes)
+    }
+    
+    // Get variation of sticky bucketing to use specific functionality
+    static func getStickyBucketVariation(context: Context,
+        experimentKey: String,
+        experimentBucketVersion: Int = 0,
+        minExperimentBucketVersion: Int = 0,
+        meta: [VariationMeta] = []
+    ) -> (variation: Int, versionIsBlocked: Bool?) {
+        
+        let id = getStickyBucketExperimentKey(experimentKey, experimentBucketVersion)
+        let assignments = getStickyBucketAssignments(context: context)
+        
+        // users with any blocked bucket version (0 to minExperimentBucketVersion) are excluded from the test
+        if minExperimentBucketVersion > 0 {
+            for version in 0...minExperimentBucketVersion {
+                let blockedKey = getStickyBucketExperimentKey(experimentKey, version)
+                if let _ = assignments[blockedKey] {
+                    return (variation: -1, versionIsBlocked: true)
+                }
+            }
+        }
+        guard let variationKey = assignments[id] else {
+            return (variation: -1, versionIsBlocked: nil)
+        }
+        guard let variation = meta.firstIndex(where: { $0.key == variationKey }) else {
+            // invalid assignment, treat as "no assignment found"
+            return (variation: -1, versionIsBlocked: nil)
+        }
+        
+        return (variation: variation, versionIsBlocked: nil)
+    }
+    
+    // Get experiment key that is going to use sticky bucketing
+    static func getStickyBucketExperimentKey(_ experimentKey: String, _ experimentBucketVersion: Int = 0) -> String {
+        return  "\(experimentKey)__\(experimentBucketVersion)" //`${experimentKey}__${experimentBucketVersion}`;
+    }
+    
+    // Create assignment document
+    static func generateStickyBucketAssignmentDoc(context: Context, attributeName: String,
+                                           attributeValue: String,
+                                           assignments: [String: String]) -> (key: String, doc: StickyAssignmentsDocument, changed: Bool) {
+        let key = "\(attributeName)||\(attributeValue)"
+            let existingAssignments: [String: String] = (context.stickyBucketAssignmentDocs?[key]?.assignments) ?? [:]
+            var newAssignments = existingAssignments
+            assignments.forEach { newAssignments[$0] = $1 }
+        
+        let changed = NSDictionary(dictionary: existingAssignments).isEqual(to: newAssignments) == false
+        
+        return (
+                key: key,
+                doc: StickyAssignmentsDocument(
+                    attributeName: attributeName,
+                    attributeValue: attributeValue,
+                    assignments: newAssignments
+                ),
+                changed: changed
+            )
+    }
+    
 }

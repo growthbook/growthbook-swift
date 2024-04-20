@@ -19,7 +19,11 @@ class MockNetworkClient: NetworkProtocol {
     }
     
     func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (any Error) -> Void) {
-        
+        if let successResponse = successResponse {
+            successResult(successResponse.data(using: .utf8) ?? Data())
+        } else if let error = error {
+            errorResult(error)
+        }
     }
 }
 

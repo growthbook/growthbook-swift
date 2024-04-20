@@ -214,8 +214,6 @@ enum FeatureSource: String {
     public let isOff: Bool
     /// One of "unknownFeature", "defaultValue", "force", or "experiment"
     public let source: String
-    
-//    public let ruleId: String
     /// When source is "experiment", this will be the Experiment object used
     public let experiment: Experiment?
     /// When source is "experiment", this will be an ExperimentResult object
@@ -226,7 +224,6 @@ enum FeatureSource: String {
         self.isOff = !isOn
         self.value = value
         self.source = source
-//        self.ruleId = ruleId
         self.experiment = experiment
         self.experimentResult = result
     }

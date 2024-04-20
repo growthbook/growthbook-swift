@@ -20,13 +20,13 @@ import Foundation
     public let trackingClosure: (Experiment, ExperimentResult) -> Void
     /// Disable background streaming connection
     public let backgroundSync: Bool
-            
-    public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
-    
+    /// Sticky bucketing is enabled if stickyBucketService is available
     public let stickyBucketService: StickyBucketServiceProtocol?
-    
+    /// Stick bucketing specific configurations for specific keys
+    public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
+    /// Features that uses sticky bucketing
     public var stickyBucketIdentifierAttributes: [String]?
-
+    /// Enable to use remote evaluation
     public let remoteEval: Bool
     // Keys are unique identifiers for the features and the values are Feature objects.
     // Feature definitions - To be pulled from API / Cache

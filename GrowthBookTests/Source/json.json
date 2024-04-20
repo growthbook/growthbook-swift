@@ -3045,8 +3045,35 @@
       }
     ],
     [
-          "Force rule, hash version 2",
-          {
+        "Force rule with range, ignores coverage",
+        {
+            "attributes": {
+                "id": "1"
+            },
+            "features": {
+                "feature": {
+                    "defaultValue": 0,
+                    "rules": [
+                        {
+                            "force": 2,
+                            "coverage": 0.01,
+                            "range": [0, 0.99]
+                        }
+                    ]
+                }
+            }
+        },
+        "feature",
+        {
+            "value": 2,
+            "on": true,
+            "off": false,
+            "source": "force"
+        }
+    ],
+    [
+        "Force rule, hash version 2",
+        {
             "attributes": {
               "id": "1"
             },

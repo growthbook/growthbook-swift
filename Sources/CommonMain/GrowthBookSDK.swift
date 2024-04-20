@@ -22,6 +22,7 @@ public struct GrowthBookModel {
     var isEnabled: Bool = true
     var forcedVariations: JSON?
     var cacheDirectory: CacheDirectory = .applicationSupport
+    var stickyBucketService: StickyBucketServiceProtocol?
     var backgroundSync: Bool
     var remoteEval: Bool
 }
@@ -63,6 +64,11 @@ public struct GrowthBookModel {
         self.networkDispatcher = networkDispatcher
         return self
     }
+    
+    public func setStickyBucketService(stickyBucketService: StickyBucketServiceProtocol? = nil) -> GrowthBookBuilder {
+        growthBookBuilderModel.stickyBucketService = stickyBucketService
+        return self
+    }
 
     /// Set log level for SDK Logger
     ///
@@ -100,6 +106,7 @@ public struct GrowthBookModel {
             isEnabled: growthBookBuilderModel.isEnabled,
             attributes: growthBookBuilderModel.attributes,
             forcedVariations: growthBookBuilderModel.forcedVariations,
+            stickyBucketService: growthBookBuilderModel.stickyBucketService,
             isQaMode: growthBookBuilderModel.isQaMode,
             trackingClosure: growthBookBuilderModel.trackingClosure,
             backgroundSync: growthBookBuilderModel.backgroundSync,
@@ -255,8 +262,7 @@ public struct GrowthBookModel {
     
     private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
         if (gbContext.stickyBucketService != nil) {
-            let featureEvaluator = FeatureEvaluator(context: gbContext, featureKey: "", attributeOverrides: attributeOverrides)
-            featureEvaluator.refreshStickyBuckets(nil)
+            Utils.refreshStickyBuckets(context: gbContext, attributeOverrides: attributeOverrides, data: data)
         }
     }
 }
