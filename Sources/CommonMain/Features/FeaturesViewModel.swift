@@ -29,6 +29,12 @@ class FeaturesViewModel {
             self?.prepareFeaturesData(data: jsonData)
         }
         streamingUpdate.connect()
+        
+        streamingUpdate.onDissconnect { _, shouldReconnect, _ in
+            if let shouldReconnect = shouldReconnect, shouldReconnect {
+                streamingUpdate.connect()
+            }
+        }
     }
 
     /// Fetch Features
