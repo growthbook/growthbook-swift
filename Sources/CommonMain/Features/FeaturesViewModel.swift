@@ -45,7 +45,7 @@ class FeaturesViewModel {
             }
         } else {
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
-            logger.error("Failed load local data")
+            logger.error("Failed load data from local storage or data is empty")
         }
         
         if let apiUrl = apiUrl {
@@ -88,12 +88,18 @@ class FeaturesViewModel {
                 if let encryptedString = jsonPetitions.encryptedFeatures, !encryptedString.isEmpty  {
                     if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                         let crypto: CryptoProtocol = Crypto()
-                        guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
-                        
-                        if let featureData = try? JSONEncoder().encode(features) {
-                            manager.putData(fileName: Constants.featureCache, content: featureData)
+                        if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
+                            if let featureData = try? JSONEncoder().encode(features) {
+                                manager.putData(fileName: Constants.featureCache, content: featureData)
+                            } else {
+                                logger.error("Failed encode features")
+                            }
+                            delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
+                        } else {
+                            delegate?.featuresFetchFailed(error: .failedEncryptedFeatures, isRemote: true)
+                            logger.error("Failed get features from encrypted features")
+                            return
                         }
-                        delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
                     } else {
                         delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
                         return
