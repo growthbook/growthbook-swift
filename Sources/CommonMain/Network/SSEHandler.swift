@@ -161,7 +161,7 @@ extension SSEHandler {
     private func shouldReconnect(statusCode: Int) -> Bool {
         switch statusCode {
         case 200:
-            return false
+            return true
         case _ where statusCode > 200 && statusCode < 300:
             return true
         default:
