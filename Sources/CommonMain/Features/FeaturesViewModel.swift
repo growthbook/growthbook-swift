@@ -76,6 +76,9 @@ class FeaturesViewModel {
                     }
                 }
             }
+        } else {
+            delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
+            logger.error("Failed get api URL")
         }
     }
 
@@ -108,13 +111,19 @@ class FeaturesViewModel {
                         }
                     } else {
                         delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
+                        logger.error("Failed get encryption key or it's empty")
                         return
                     }
                 } else {
-                    delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
+                    delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
+                    logger.error("Failed get encrypted features or it's empty")
                     return
                 }
             }
+        } else {
+            delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
+            logger.error("Failed get features data model")
+            return
         }
     }
 }
