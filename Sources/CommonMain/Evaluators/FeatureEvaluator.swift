@@ -136,7 +136,6 @@ class FeatureEvaluator {
 
                     // Return (value = forced value, source = force)
                     
-                    // TODO: check why do we need return rule.id as well
                     return prepareResult(value: force, source: FeatureSource.force)
                 } else {
                     
@@ -172,9 +171,7 @@ class FeatureEvaluator {
                         return prepareResult(value: result.value, source: FeatureSource.experiment, experiment: exp, result: result)
                     }
                 }
-
             }
-
         }
 
         // Return (value = defaultValue or null, source = defaultValue)
@@ -186,6 +183,10 @@ class FeatureEvaluator {
     private func isIncludedInRollout(seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?) -> Bool {
         if range == nil, coverage == nil {
             return true
+        }
+        
+        if range == nil, coverage == 0 {
+            return false
         }
         
         let hashValue = Utils.getHashAttribute(context: context, attr: hashAttribute, fallback: fallbackAttribute, attributeOverrides: attributeOverrides).hashValue

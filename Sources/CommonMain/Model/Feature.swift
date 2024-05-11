@@ -23,7 +23,7 @@ import Foundation
 
 /// Rule object consists of various definitions to apply to calculate feature value
 public struct FeatureRule: Codable {
-    
+    /// Unique feature rule id
     public let id: String?
     /// Optional targeting condition
     public let condition: JSON?
@@ -117,7 +117,7 @@ public struct FeatureRule: Codable {
         self.tracks = tracks
     }
     
-    init(json: [String: JSON]) {
+    init(json: [String: JSON]) {        
         id = json["id"]?.stringValue
         
         condition = json["condition"]

@@ -133,7 +133,15 @@ public class Utils {
             parts = String(parts.prefix(upTo: range))
         }
         
-        var partArray = parts.components(separatedBy: [".", "-"])
+        let stringArray = parts.components(separatedBy: [".", "-"])
+        
+        var partArray: [String] = []
+        
+        for part in stringArray {
+            if part != "" {
+                partArray.append(part)
+            }
+        }
         
         if partArray.count == 3 {
             partArray.append("~")
