@@ -9,6 +9,11 @@ class TestHelper {
         }
     }
     
+    func getStickyBucketingData() -> [JSON]? {
+        let array = testData?.dictionaryValue["stickyBucket"]
+        return array?.arrayValue
+    }
+    
     func getServerSideEvent() -> [JSON]? {
         let array = testData?.dictionaryValue["backgroundsync"]
         return array?.arrayValue
@@ -103,8 +108,9 @@ struct FeaturesTest: Codable {
     var features: Features? = nil
     var attributes: JSON = JSON()
     var forcedVariations: JSON? = nil
+    var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]? = nil
 
-    init(json: [String: JSON]) {
+    init(json: [String: JSON], stickyBucketingJson: [JSON]? = nil) {
         if let features = json["features"] {
             self.features = TestHelper.convertToFeaturesModel(dict: features.dictionaryValue)
         }
@@ -115,6 +121,23 @@ struct FeaturesTest: Codable {
         
         if let forcedVariations = json["forcedVariations"] {
             self.forcedVariations = forcedVariations
+        }
+        
+        if let stickyBucketingJson = stickyBucketingJson {
+            var docArray: [StickyAssignmentsDocument] = []
+            var newDict: [String: StickyAssignmentsDocument] = [:]
+
+            stickyBucketingJson.forEach { value in
+                let doc = StickyAssignmentsDocument(attributeName: value.dictionaryValue["attributeName"]?.stringValue ?? "", attributeValue: value.dictionaryValue["attributeValue"]?.stringValue ?? "", assignments: value.dictionaryValue["assignments"]?.dictionaryValue ?? [:])
+                docArray.append(doc)
+            }
+            
+            docArray.forEach { value in
+                let key = "\(value.attributeName)||\(value.attributeValue)"
+                newDict[key] = value
+            }
+            
+            self.stickyBucketAssignmentDocs = newDict == [:] ? nil : newDict
         }
     }
 }
@@ -168,46 +191,69 @@ class FeatureResultTest {
 
 class ExperimentResultTest {
     /// Whether or not the user is part of the experiment
-    let inExperiment: Bool
+    let inExperiment: Bool?
     /// The array index of the assigned variation
-    let variationId: Int
+    let variationId: Int?
     /// The array value of the assigned variation
-    let value: JSON
+    let value: JSON?
     /// The user attribute used to assign a variation
-    var hashAttribute: String? = nil
-    ///  The value of that attribute
-    var hashValue: String? = nil
+    let hashAttribute: String?
+    /// The value of that attribute
+    let hashValue: String?
+    /// The unique key for the assigned variation
+    let key: String?
+    /// The human-readable name of the assigned variation
+    var name: String?
+    /// The hash value used to assign a variation (float from `0` to `1`)
+    var bucket: Float?
+    /// Used for holdout groups
+    var passthrough: Bool?
+    /// If a hash was used to assign a variation
+    let hashUsed: Bool?
+    /// The id of the feature (if any) that the experiment came from
+    let featureId: String?
+    /// If sticky bucketing was used to assign a variation
+    let stickyBucketUsed: Bool?
 
-    init(inExperiment: Bool, variationId: Int, value: JSON, hashAttribute: String? = nil, hashValue: String? = nil) {
+    init(inExperiment: Bool,
+         variationId: Int,
+         value: JSON,
+         hashAttribute: String? = nil,
+         hashValue: String? = nil,
+         key: String,
+         name: String? = nil,
+         bucket: Float? = nil,
+         passthrough: Bool? = nil,
+         hashUsed: Bool? = nil,
+         featureId: String? = nil,
+         stickyBucketUsed: Bool? = nil) {
         self.inExperiment = inExperiment
         self.variationId = variationId
         self.value = value
         self.hashAttribute = hashAttribute
         self.hashValue = hashValue
+        self.key = key
+        self.name = name
+        self.bucket = bucket
+        self.passthrough = passthrough
+        self.hashUsed = hashUsed
+        self.featureId = featureId
+        self.stickyBucketUsed = stickyBucketUsed
     }
-
+    
     init(json: [String: JSON]) {
-        if let inExperiment = json["inExperiment"] {
-            self.inExperiment = inExperiment.boolValue
-        } else {
-            self.inExperiment = false
-        }
-        if let variationId = json["variationId"] {
-            self.variationId = variationId.intValue
-        } else {
-            self.variationId = 0
-        }
-        if let value = json["value"] {
-            self.value = value
-        } else {
-            self.value = JSON()
-        }
-        if let hashAttribute = json["hashAttribute"] {
-            self.hashAttribute = hashAttribute.string
-        }
-        if let hashValue = json["hashValue"] {
-            self.hashValue = hashValue.string
-        }
+        inExperiment = json["inExperiment"]?.boolValue
+        variationId = json["variationId"]?.intValue
+        value = json["value"]
+        hashAttribute = json["hashAttribute"]?.stringValue
+        hashValue = json["hashValue"]?.stringValue
+        key = json["key"]?.stringValue
+        name = json["name"]?.stringValue
+        bucket = json["bucket"]?.floatValue
+        passthrough = json["passthrough"]?.boolValue
+        hashUsed = json["hashUsed"]?.boolValue
+        featureId = json["featureId"]?.stringValue
+        stickyBucketUsed = json["stickyBucketUsed"]?.boolValue
     }
 }
 

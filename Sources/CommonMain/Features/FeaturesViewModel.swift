@@ -85,6 +85,7 @@ class FeaturesViewModel {
     /// Cache API Response and push success event
     func prepareFeaturesData(data: Data) {
         // Call Success Delegate with mention of data available with remote
+        
         let decoder = JSONDecoder()
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             delegate?.featuresAPIModelSuccessfully(model: jsonPetitions)

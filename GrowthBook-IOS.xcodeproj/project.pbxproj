@@ -28,8 +28,9 @@
 		849952512ACDB676003BBCF7 /* SSEHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849952502ACDB676003BBCF7 /* SSEHandler.swift */; };
 		849952572ADD6D66003BBCF7 /* EventModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849952562ADD6D66003BBCF7 /* EventModel.swift */; };
 		849952592ADD704A003BBCF7 /* EventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849952582ADD704A003BBCF7 /* EventHandler.swift */; };
+		84AE3B1A2BE2466C006BA49B /* RemoteEvalModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84AE3B182BE2466B006BA49B /* RemoteEvalModel.swift */; };
+		84AE3B1B2BE2466C006BA49B /* StickyAssignmentsDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84AE3B192BE2466C006BA49B /* StickyAssignmentsDocument.swift */; };
 		84BC2E9D294A11F100289BC2 /* Crypto.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84BC2E9C294A11F100289BC2 /* Crypto.swift */; };
-		84C55A322BCF08940058E669 /* RemoteEvalModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84C55A312BCF08940058E669 /* RemoteEvalModel.swift */; };
 		84CDE32B2812F359008B3E6F /* GrowthBook.h in Headers */ = {isa = PBXBuildFile; fileRef = 84CDE32A2812F359008B3E6F /* GrowthBook.h */; settings = {ATTRIBUTES = (Public, ); }; };
 		84CDE3332812F454008B3E6F /* GrowthBookSDK.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843363F627F845EB0072BFDC /* GrowthBookSDK.swift */; };
 		84CDE3342812F454008B3E6F /* NetworkClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843363F827F845EB0072BFDC /* NetworkClient.swift */; };
@@ -48,7 +49,7 @@
 		84CDE3412812F454008B3E6F /* Feature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640827F845EB0072BFDC /* Feature.swift */; };
 		84CDE3422812F454008B3E6F /* Experiment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640927F845EB0072BFDC /* Experiment.swift */; };
 		84CDE3432812F454008B3E6F /* Context.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433640A27F845EB0072BFDC /* Context.swift */; };
-		84FEA9ED2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FEA9EC2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift */; };
+		84E82C3D2BD2AF8F003F000B /* StickyBucketingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84E82C3C2BD2AF8F003F000B /* StickyBucketingTests.swift */; };
 		84FEA9F12BC9913700111EE2 /* StickyBucketService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84FEA9EF2BC9913300111EE2 /* StickyBucketService.swift */; };
 /* End PBXBuildFile section */
 
@@ -117,12 +118,13 @@
 		849952502ACDB676003BBCF7 /* SSEHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSEHandler.swift; sourceTree = "<group>"; };
 		849952562ADD6D66003BBCF7 /* EventModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventModel.swift; sourceTree = "<group>"; };
 		849952582ADD704A003BBCF7 /* EventHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventHandler.swift; sourceTree = "<group>"; };
+		84AE3B182BE2466B006BA49B /* RemoteEvalModel.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = RemoteEvalModel.swift; sourceTree = "<group>"; };
+		84AE3B192BE2466C006BA49B /* StickyAssignmentsDocument.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StickyAssignmentsDocument.swift; sourceTree = "<group>"; };
 		84BC2E9C294A11F100289BC2 /* Crypto.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Crypto.swift; sourceTree = "<group>"; };
-		84C55A312BCF08940058E669 /* RemoteEvalModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteEvalModel.swift; sourceTree = "<group>"; };
 		84CDE3282812F359008B3E6F /* GrowthBook.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = GrowthBook.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		84CDE32A2812F359008B3E6F /* GrowthBook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GrowthBook.h; sourceTree = "<group>"; };
+		84E82C3C2BD2AF8F003F000B /* StickyBucketingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyBucketingTests.swift; sourceTree = "<group>"; };
 		84F51E9627F419B000994D1C /* GrowthBook_IOS.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GrowthBook_IOS.h; sourceTree = "<group>"; };
-		84FEA9EC2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StickyAssignmentsDocument.swift; sourceTree = "<group>"; };
 		84FEA9EF2BC9913300111EE2 /* StickyBucketService.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = StickyBucketService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -243,11 +245,11 @@
 		8433640727F845EB0072BFDC /* Model */ = {
 			isa = PBXGroup;
 			children = (
-				84FEA9EC2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift */,
 				8433640827F845EB0072BFDC /* Feature.swift */,
 				8433640927F845EB0072BFDC /* Experiment.swift */,
 				8433640A27F845EB0072BFDC /* Context.swift */,
-				84C55A312BCF08940058E669 /* RemoteEvalModel.swift */,
+				84AE3B182BE2466B006BA49B /* RemoteEvalModel.swift */,
+				84AE3B192BE2466C006BA49B /* StickyAssignmentsDocument.swift */,
 			);
 			path = Model;
 			sourceTree = "<group>";
@@ -265,6 +267,7 @@
 			children = (
 				84391F2528016C5C003309DC /* Source */,
 				84391F0827FD64EB003309DC /* FeaturesViewModelTests.swift */,
+				84E82C3C2BD2AF8F003F000B /* StickyBucketingTests.swift */,
 				84391F0C27FD701D003309DC /* ConditionTests.swift */,
 				84391F0E27FD715B003309DC /* ExperimentRunTests.swift */,
 				84391F1027FD7388003309DC /* FeatureValueTests.swift */,
@@ -443,6 +446,7 @@
 				848B8044294B5CB900B22168 /* CryptoTests.swift in Sources */,
 				849114CB280DA73100C0B9A5 /* TestHelper.swift in Sources */,
 				849114CC280DA73100C0B9A5 /* UtilsTests.swift in Sources */,
+				84E82C3D2BD2AF8F003F000B /* StickyBucketingTests.swift in Sources */,
 				849114CD280DA73100C0B9A5 /* GrowthBookSDKBuilderTests.swift in Sources */,
 				849114CE280DA73100C0B9A5 /* MockNetworkClient.swift in Sources */,
 				849114CF280DA73100C0B9A5 /* CachingManagerTest.swift in Sources */,
@@ -453,7 +457,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				84FEA9ED2BC98F4F00111EE2 /* StickyAssignmentsDocument.swift in Sources */,
 				84CDE3332812F454008B3E6F /* GrowthBookSDK.swift in Sources */,
 				84CDE3342812F454008B3E6F /* NetworkClient.swift in Sources */,
 				84095C902818245700ADDF19 /* Formatter.swift in Sources */,
@@ -467,6 +470,7 @@
 				84BC2E9D294A11F100289BC2 /* Crypto.swift in Sources */,
 				84CDE3392812F454008B3E6F /* Extensions.swift in Sources */,
 				84CDE33A2812F454008B3E6F /* Utils.swift in Sources */,
+				84AE3B1A2BE2466C006BA49B /* RemoteEvalModel.swift in Sources */,
 				84FEA9F12BC9913700111EE2 /* StickyBucketService.swift in Sources */,
 				84095C8C281823BC00ADDF19 /* LoggingManager.swift in Sources */,
 				84CDE33B2812F454008B3E6F /* Common.swift in Sources */,
@@ -477,12 +481,12 @@
 				84CDE33F2812F454008B3E6F /* ConditionEvaluator.swift in Sources */,
 				84CDE3402812F454008B3E6F /* CachingManager.swift in Sources */,
 				84CDE3412812F454008B3E6F /* Feature.swift in Sources */,
+				84AE3B1B2BE2466C006BA49B /* StickyAssignmentsDocument.swift in Sources */,
 				84095C792817EC7800ADDF19 /* JsonManager.swift in Sources */,
 				840E386F2B88BD75003DFC9F /* ExperimentHelper.swift in Sources */,
 				84CDE3422812F454008B3E6F /* Experiment.swift in Sources */,
 				849952572ADD6D66003BBCF7 /* EventModel.swift in Sources */,
 				84CDE3432812F454008B3E6F /* Context.swift in Sources */,
-				84C55A322BCF08940058E669 /* RemoteEvalModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -41,11 +41,15 @@ class ExperimentEvaluator {
         var stickyBucketVersionIsBlocked = false
         
         if context.stickyBucketService != nil, !(experiment.disableStickyBucketing ?? true) {
-            let (variation, versionIsBlocked) = Utils.getStickyBucketVariation(context: context, 
-                                                                         experimentKey: experiment.key,
-                                                                         experimentBucketVersion: experiment.bucketVersion ?? 0,
-                                                                         minExperimentBucketVersion: experiment.minBucketVersion ?? 0,
-                                                                         meta: experiment.meta ?? [])
+            let (variation, versionIsBlocked) = Utils.getStickyBucketVariation(context: context,
+                                                                               experimentKey: experiment.key,
+                                                                               experimentBucketVersion: experiment.bucketVersion ?? 0,
+                                                                               minExperimentBucketVersion: experiment.minBucketVersion ?? 0,
+                                                                               meta: experiment.meta ?? [],
+                                                                               expFallBackAttribute: experiment.fallbackAttribute,
+                                                                               expHashAttribute: experiment.hashAttribute,
+                                                                               attributeOverrides: attributeOverrides)
+            
             foundStickyBucket = variation >= 0;
             assigned = variation
             stickyBucketVersionIsBlocked = versionIsBlocked ?? false

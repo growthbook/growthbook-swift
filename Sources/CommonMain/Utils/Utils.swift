@@ -133,7 +133,15 @@ public class Utils {
             parts = String(parts.prefix(upTo: range))
         }
         
-        var partArray = parts.components(separatedBy: [".", "-"])
+        let stringArray = parts.components(separatedBy: [".", "-"])
+        
+        var partArray: [String] = []
+        
+        for part in stringArray {
+            if part != "" {
+                partArray.append(part)
+            }
+        }
         
         if partArray.count == 3 {
             partArray.append("~")
@@ -168,7 +176,7 @@ public class Utils {
         }
         
         // if no match, try fallback
-        if hashValue.isEmpty, let fallback = fallback {
+        if let fallback = fallback {
             if attributeOverrides[fallback] != .null {
                 hashValue = attributeOverrides[fallback].stringValue
             } else if context.attributes[fallback] != .null {
@@ -180,16 +188,54 @@ public class Utils {
             }
         }
         
+        if let fallback = fallback, let fallbackAttributeValue = context.stickyBucketAssignmentDocs?["\(fallback)||\(attributeOverrides[fallback].stringValue)"]?.attributeValue,
+           fallbackAttributeValue != attributeOverrides[fallback].stringValue {
+            context.stickyBucketAssignmentDocs = [:]
+        }
+        
         return (hashAttribute, hashValue)
     }
     
     // Returns assignments for StickyAssignmentsDocuments
-    static func getStickyBucketAssignments(context: Context) -> [String: String] {
+    static func getStickyBucketAssignments(
+        context: Context,
+        expHashAttribute: String?,
+        expFallbackAttribute: String? = nil,
+        attributeOverrides: JSON
+    ) -> [String: String] {
+        
+        guard let stickyBucketAssignmentDocs = context.stickyBucketAssignmentDocs else {
+            return [:]
+        }
+        
+         let (hashAttribute, hashValue) = getHashAttribute(
+            context: context,
+            attr: expHashAttribute,
+            fallback: nil,
+            attributeOverrides: attributeOverrides
+        )
+        
+        let hashKey = "\(hashAttribute)||\(hashValue)"
+        
+        let (fallbackAttribute, fallbackValue) = getHashAttribute(
+            context: context,
+            attr: nil,
+            fallback: expFallbackAttribute,
+            attributeOverrides: attributeOverrides
+        )
+        
+        let fallbackKey = fallbackValue.isEmpty ? nil : "\(fallbackAttribute)||\(fallbackValue)"
+        
         var mergedAssignments: [String: String] = [:]
         
-        context.stickyBucketAssignmentDocs?.values.forEach({ doc in
-            mergedAssignments.merge(doc.assignments)
-        })
+        if let fallbackKey = fallbackKey, let fallbackAssignments = stickyBucketAssignmentDocs[fallbackKey] {
+            mergedAssignments.merge(fallbackAssignments.assignments) { (_, new) in new }
+        }
+        
+        if let hashAssignments = stickyBucketAssignmentDocs[hashKey] {
+            mergedAssignments.merge(hashAssignments.assignments) { (_, new) in new }
+        }
+        
         return mergedAssignments
     }
     
@@ -242,17 +288,25 @@ public class Utils {
     }
     
     // Get variation of sticky bucketing to use specific functionality
-    static func getStickyBucketVariation(context: Context,
+    static func getStickyBucketVariation(
+        context: Context,
         experimentKey: String,
         experimentBucketVersion: Int = 0,
         minExperimentBucketVersion: Int = 0,
-        meta: [VariationMeta] = []
+        meta: [VariationMeta] = [],
+        expFallBackAttribute: String? = nil,
+        expHashAttribute: String? = "id",
+        attributeOverrides: JSON
     ) -> (variation: Int, versionIsBlocked: Bool?) {
         
         let id = getStickyBucketExperimentKey(experimentKey, experimentBucketVersion)
-        let assignments = getStickyBucketAssignments(context: context)
+        let assignments = getStickyBucketAssignments(
+            context: context,
+            expHashAttribute: expHashAttribute,
+            expFallbackAttribute: expFallBackAttribute,
+            attributeOverrides: attributeOverrides
+        )
         
-        // users with any blocked bucket version (0 to minExperimentBucketVersion) are excluded from the test
         if minExperimentBucketVersion > 0 {
             for version in 0...minExperimentBucketVersion {
                 let blockedKey = getStickyBucketExperimentKey(experimentKey, version)
