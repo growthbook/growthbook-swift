@@ -151,7 +151,7 @@ class FeatureEvaluator {
                                          hashAttribute: rule.hashAttribute,
                                          fallBackAttribute: rule.fallbackAttribute,
                                          hashVersion: rule.hashVersion,
-                                         disableStickyBucketing: rule.disableStickyBucketing,
+                                         disableStickyBucketing: rule.disableStickyBucketing ?? false,
                                          bucketVersion: rule.bucketVersion,
                                          minBucketVersion: rule.minBucketVersion,
                                          weights: rule.weights,

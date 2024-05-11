@@ -65,7 +65,7 @@ public struct GrowthBookModel {
         return self
     }
     
-    public func setStickyBucketService(stickyBucketService: StickyBucketServiceProtocol? = nil) -> GrowthBookBuilder {
+    public func setStickyBucketService(stickyBucketService: StickyBucketServiceProtocol? = StickyBucketService()) -> GrowthBookBuilder {
         growthBookBuilderModel.stickyBucketService = stickyBucketService
         return self
     }

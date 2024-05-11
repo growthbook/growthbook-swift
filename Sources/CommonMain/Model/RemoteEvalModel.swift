@@ -1,6 +1,6 @@
 import Foundation
 
-struct RemoteEvalParams: Decodable {
+public struct RemoteEvalParams: Decodable {
     let attributes: JSON?
     let forcedFeatures: JSON?
     let forcedVariations: JSON?
