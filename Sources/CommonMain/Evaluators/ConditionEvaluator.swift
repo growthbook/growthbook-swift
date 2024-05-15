@@ -46,43 +46,30 @@ func getAttributeType(index: Int) -> String {
 
 /// Evaluator Class for Conditions
 class ConditionEvaluator {
-    /// This is the main function used to evaluate a condition.
+    /// This is the main function used to evaluate a condition. It loops through the condition key/value pairs and checks each entry:
     /// - attributes : User Attributes
     /// - condition : to be evaluated
     func isEvalCondition(attributes: JSON, conditionObj: JSON) -> Bool {
         if !conditionObj.arrayValue.isEmpty {
             return false
         }
-        // If conditionObj has a key $or, return evalOr(attributes, condition["$or"])
-        if let targetItems = conditionObj.dictionaryValue["$or"] {
-            return isEvalOr(attributes: attributes, conditionObjs: targetItems.arrayValue)
-        }
-
-        // If conditionObj has a key $nor, return !evalOr(attributes, condition["$nor"])
-        if let targetItems = conditionObj.dictionaryValue["$nor"] {
-            return !isEvalOr(attributes: attributes, conditionObjs: targetItems.arrayValue)
-        }
-
-        // If conditionObj has a key $and, return !evalAnd(attributes, condition["$and"])
-        if let targetItems = conditionObj.dictionaryValue["$and"] {
-            return isEvalAnd(attributes: attributes, conditionObjs: targetItems.arrayValue)
-        }
-
-        // If conditionObj has a key $not, return !evalCondition(attributes, condition["$not"])
-        if let targetItem = conditionObj.dictionaryValue["$not"] {
-            return !isEvalCondition(attributes: attributes, conditionObj: targetItem)
-        }
-
-        // Loop through the conditionObj key/value pairs
-        for key in conditionObj.dictionaryValue.keys {
-            let element = getPath(obj: attributes, key: key)
-            let value = conditionObj.dictionaryValue[key]
-            if let value = value, !isEvalConditionValue(conditionValue: value, attributeValue: element) {
-                // If evalConditionValue(value, getPath(attributes, key)) is false, break out of loop and return false
-                return false
+        // Condition is an object, keys are either specific operators or object paths values are either arguments for operators or conditions for paths
+        for (key, value) in conditionObj.dictionaryValue {
+            switch key {
+            case "$or":
+                guard isEvalOr(attributes: attributes, conditionObjs: value.arrayValue) else { return false }
+            case "$nor":
+                guard !isEvalOr(attributes: attributes, conditionObjs: value.arrayValue) else { return false }
+            case "$and":
+                guard isEvalAnd(attributes: attributes, conditionObjs: value.arrayValue) else { return false }
+            case "$not":
+                guard !isEvalCondition(attributes: attributes, conditionObj: value) else { return false }
+            default:
+                let element = getPath(obj: attributes, key: key)
+                guard isEvalConditionValue(conditionValue: value, attributeValue: element) else { return false }
             }
         }
-        // Return true
+        // If none of the entries failed their checks, `evalCondition` returns true
         return true
     }
 
