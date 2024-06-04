@@ -888,6 +888,12 @@
       false
     ],
     [
+          "$gt/$lt string - fail with null value",
+          {"word": {"$gt": "alphabet", "$lt": "zebra"}},
+          {"word": null},
+          false
+        ],
+    [
       "$gt/$lt strings - pass",
       {
         "word": {
@@ -1461,6 +1467,12 @@
         "age": 40
       },
       true
+    ],
+    [
+          "$nor - pass with null value for age",
+          {"$nor": [{"name": "john"}, {"age": {"$lt": 30}}]},
+          {"name": "jim", "age": null},
+          true
     ],
     [
       "$nor - fail both",

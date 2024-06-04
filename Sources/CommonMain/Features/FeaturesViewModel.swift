@@ -18,7 +18,7 @@ class FeaturesViewModel {
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource) {
         self.delegate = delegate
         self.dataSource = dataSource
-        self.fetchFeatures(apiUrl: nil)
+        self.fetchCachedFeatures()
     }
     
     func connectBackgroundSync(sseUrl: String) {
@@ -36,6 +36,21 @@ class FeaturesViewModel {
             }
         }
     }
+    
+    private func fetchCachedFeatures() {
+        // Check for cache data
+        if let json = manager.getData(fileName: Constants.featureCache) {
+            let decoder = JSONDecoder()
+            if let features = try? decoder.decode(Features.self, from: json) {
+                // Call Success Delegate with mention of data available but its not remote
+                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+            } else {
+                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+            }
+        } else {
+            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
+        }
+    }
 
     /// Fetch Features
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
@@ -51,7 +66,7 @@ class FeaturesViewModel {
             }
         } else {
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
-            logger.error("Failed load data from local storage or data is empty")
+            logger.info("Cache directory is empty. Nothing to fetch.")
         }
         
         if let apiUrl = apiUrl {
