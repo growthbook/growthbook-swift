@@ -57,11 +57,7 @@ public class CachingManager: CachingLayer {
             // Read File Contents
             if let jsonContents = fileManager.contents(atPath: filePath) {
                 return jsonContents
-            } else {
-                logger.error("Can't read file content")
             }
-        } else {
-            logger.error("File doesn't exist")
         }
 
         return nil
