@@ -25,7 +25,8 @@ class FeatureValueTests: XCTestCase {
                                     forcedVariations: testData.forcedVariations,
                                     isQaMode: false,
                                     trackingClosure: { _, _ in }, 
-                                    backgroundSync: false)
+                                    backgroundSync: false,
+                                    savedGroups: testData.savedGroups)
 
             if let features = testData.features {
                 gbContext.features = features

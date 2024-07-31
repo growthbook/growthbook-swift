@@ -176,7 +176,7 @@ public class Utils {
         }
         
         // if no match, try fallback
-        if let fallback = fallback {
+        if hashValue.isEmpty, let fallback = fallback {
             if attributeOverrides[fallback] != .null {
                 hashValue = attributeOverrides[fallback].stringValue
             } else if context.attributes[fallback] != .null {

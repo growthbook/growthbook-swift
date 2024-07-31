@@ -26,7 +26,8 @@ class ExperimentRunTests: XCTestCase {
                                     isQaMode: testContext.isQaMode,
                                     trackingClosure: { _, _ in }, 
                                     features: testContext.features,
-                                    backgroundSync: false)
+                                    backgroundSync: false,
+                                    savedGroups: testContext.savedGroups)
 
             let evaluator = ExperimentEvaluator(attributeOverrides: JSON())
             let result = evaluator.evaluateExperiment(context: gbContext, experiment: experiment)

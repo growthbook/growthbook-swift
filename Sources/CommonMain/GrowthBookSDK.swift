@@ -130,15 +130,18 @@ public struct GrowthBookModel {
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
     private var attributeOverrides: JSON = JSON()
+    private var savedGroupsValues: JSON?
 
     init(context: Context,
          refreshHandler: CacheRefreshHandler? = nil,
          logLevel: Level = .info,
          networkDispatcher: NetworkProtocol = CoreNetworkClient(),
-         features: Features? = nil) {
+         features: Features? = nil,
+         savedGroups: JSON? = nil) {
         gbContext = context
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
+        self.savedGroupsValues = savedGroups
         super.init()
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
         if let features = features {
@@ -146,6 +149,10 @@ public struct GrowthBookModel {
         } else {
             featureVM.encryptionKey = context.encryptionKey ?? ""
             refreshCache()
+        }
+        
+        if let savedGroups {
+            context.savedGroups = savedGroups
         }
                 
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
@@ -207,6 +214,15 @@ public struct GrowthBookModel {
         if isRemote {
             refreshHandler?(false)
         }
+    }
+    
+    public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
+        refreshHandler?(false)
+    }
+
+    public func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
+        gbContext.savedGroups = savedGroups
+        refreshHandler?(true)
     }
     
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation

@@ -56,10 +56,8 @@ class StickyBucketingFeatureTests: XCTestCase {
                     expectedStickyAssignmentDocs[key] == value
                 })) != nil) 
             {
-                print("PASSED: \(status)")
                 passedScenarios.append(status)
             } else {
-                print("FAILED: \(status)")
                 failedScenarios.append(status)
             }
 

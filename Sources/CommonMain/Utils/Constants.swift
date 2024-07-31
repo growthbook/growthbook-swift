@@ -66,6 +66,7 @@ public struct BucketRange: Codable {
     case failedParsedData = 1
     case failedMissingKey = 2
     case failedEncryptedFeatures = 3
+    case failedEncryptedSavedGroups = 4
 }
 
 /// Meta info about the variations

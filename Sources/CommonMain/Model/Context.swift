@@ -31,6 +31,8 @@ import Foundation
     // Keys are unique identifiers for the features and the values are Feature objects.
     // Feature definitions - To be pulled from API / Cache
     var features: Features
+    
+    public var savedGroups: JSON?
 
     init(apiHost: String?,
          clientKey: String?,
@@ -45,7 +47,8 @@ import Foundation
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:],
          backgroundSync: Bool = false,
-         remoteEval: Bool = false) {
+         remoteEval: Bool = false,
+         savedGroups: JSON? = nil) {
         self.apiHost = apiHost
         self.clientKey = clientKey
         self.encryptionKey = encryptionKey
@@ -60,6 +63,7 @@ import Foundation
         self.features = features
         self.backgroundSync = backgroundSync
         self.remoteEval = remoteEval
+        self.savedGroups = savedGroups
     }
     
     @objc public func getFeaturesURL() -> String? {
