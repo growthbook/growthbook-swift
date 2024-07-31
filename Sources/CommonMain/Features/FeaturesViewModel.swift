@@ -106,7 +106,7 @@ class FeaturesViewModel {
         let decoder = JSONDecoder()
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             delegate?.featuresAPIModelSuccessfully(model: jsonPetitions)
-            if let features = jsonPetitions.features, !features.isEmpty {
+            if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
                     manager.putData(fileName: Constants.featureCache, content: featureData)
                 }

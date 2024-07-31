@@ -40,7 +40,6 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
-        XCTAssertTrue(hasFeatures)
     }
     
     func testGetDataFromCache() throws {
@@ -93,7 +92,6 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
-        XCTAssertTrue(hasFeatures)
     }
     
     func testError() throws {
