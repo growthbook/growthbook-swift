@@ -5,6 +5,8 @@ protocol FeaturesFlowDelegate: AnyObject {
     func featuresFetchedSuccessfully(features: Features, isRemote: Bool)
     func featuresAPIModelSuccessfully(model: FeaturesDataModel)
     func featuresFetchFailed(error: SDKError, isRemote: Bool)
+    func savedGroupsFetchFailed(error: SDKError, isRemote: Bool)
+    func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool)
 }
 
 /// View Model for Features
@@ -135,6 +137,22 @@ class FeaturesViewModel {
                     logger.error("Failed get encrypted features or it's empty")
                     return
                 }
+                
+                if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+                    let crypto = Crypto()
+                    if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
+                        if let featureData = try? JSONEncoder().encode(savedGroups) {
+                            manager.putData(fileName: Constants.featureCache, content: featureData)
+                        } else {
+                            logger.error("Failed encode saved groups")
+                        }
+                        delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
+                    } else {
+                        delegate?.savedGroupsFetchFailed(error: .failedEncryptedSavedGroups, isRemote: true)
+                        logger.error("Failed get saved groups from encrypted saved groups")
+                        return
+                    }
+                }
             }
         } else {
             delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
@@ -142,4 +160,5 @@ class FeaturesViewModel {
             return
         }
     }
+        
 }

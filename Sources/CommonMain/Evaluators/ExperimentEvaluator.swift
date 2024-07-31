@@ -72,7 +72,7 @@ class ExperimentEvaluator {
             
             // If experiment.condition is set and the condition evaluates to false, return immediately (not in experiment, variationId 0)
             if let condition = experiment.condition {
-                if !ConditionEvaluator().isEvalCondition(attributes: context.attributes, conditionObj: condition) {
+                if !ConditionEvaluator().isEvalCondition(attributes: context.attributes, conditionObj: condition, savedGroups: context.savedGroups) {
                     return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false)
                 }
             }
@@ -90,7 +90,8 @@ class ExperimentEvaluator {
                     let evalObj = ["value": parentResult.value]
                     let evalCondition = ConditionEvaluator().isEvalCondition(
                         attributes: JSON(evalObj),
-                        conditionObj: parentCondition.condition
+                        conditionObj: parentCondition.condition, 
+                        savedGroups: context.savedGroups
                     )
                     
                     // blocking prerequisite eval failed: feature evaluation fails

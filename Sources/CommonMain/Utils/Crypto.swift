@@ -135,6 +135,24 @@ class Crypto: CryptoProtocol {
                 
         return features
     }
+    
+    func getSavedGroupsFromEncryptedFeatures(encryptedString: String, encryptionKey: String) -> JSON? {
+        let decoder = JSONDecoder()
+        let arrayEncryptedString = encryptedString.components(separatedBy: ".")
+        guard let iv = arrayEncryptedString.first,
+              let cipherText = arrayEncryptedString.last,
+              let keyBase64 = Data(base64Encoded: encryptionKey),
+              let ivBase64 = Data(base64Encoded: iv),
+              let cipherTextBase64 = Data(base64Encoded: cipherText),
+              let plainTextBuffer = try? decrypt(key: keyBase64.map{$0},
+                                                 iv: ivBase64.map{$0},
+                                                 cypherText: cipherTextBase64.map{$0}),
+              let savedGroups = try? decoder.decode(JSON.self, from: Data(plainTextBuffer))
+        else { return nil }
+                
+        return savedGroups
+    }
+    
 }
 
 struct CryptoError: Error {

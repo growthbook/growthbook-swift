@@ -56,7 +56,8 @@ class FeatureEvaluator {
                         
                         let evalCondition = ConditionEvaluator().isEvalCondition(
                             attributes: evalObjc,
-                            conditionObj: parentCondition.condition
+                            conditionObj: parentCondition.condition, 
+                            savedGroups: context.savedGroups
                         )
                         
                         // blocking prerequisite eval failed: feature evaluation fails
@@ -86,7 +87,9 @@ class FeatureEvaluator {
                 if let force = rule.force {
                     // If it's a conditional rule, skip if the condition doesn't pass
 
-                    if let condition = rule.condition, !ConditionEvaluator().isEvalCondition(attributes: getAttributes(), conditionObj: condition) {
+                    if let condition = rule.condition, !ConditionEvaluator().isEvalCondition(attributes: getAttributes(), 
+                                                                                             conditionObj: condition,
+                                                                                             savedGroups: context.savedGroups) {
                         print("Skip rule because of condition ff")
                         continue
                     }

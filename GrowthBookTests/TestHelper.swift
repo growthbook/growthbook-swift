@@ -82,6 +82,7 @@ struct ContextTest: Codable {
     var isQaMode: Bool = false
     var isEnabled: Bool = true
     var forcedVariations: JSON? = nil
+    var savedGroups: JSON? = nil
 
     init(json: [String: JSON]) {
         if let attributes = json["attributes"] {
@@ -101,6 +102,9 @@ struct ContextTest: Codable {
                 self.features = features
             }
         }
+        if let savedGroups = json["savedGroups"] {
+            self.savedGroups = savedGroups
+        }
     }
 }
 
@@ -108,6 +112,7 @@ struct FeaturesTest: Codable {
     var features: Features? = nil
     var attributes: JSON = JSON()
     var forcedVariations: JSON? = nil
+    var savedGroups: JSON?
     var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]? = nil
 
     init(json: [String: JSON], stickyBucketingJson: [JSON]? = nil) {
@@ -121,6 +126,10 @@ struct FeaturesTest: Codable {
         
         if let forcedVariations = json["forcedVariations"] {
             self.forcedVariations = forcedVariations
+        }
+        
+        if let savedGroups = json["savedGroups"] {
+            self.savedGroups = savedGroups
         }
         
         if let stickyBucketingJson = stickyBucketingJson {

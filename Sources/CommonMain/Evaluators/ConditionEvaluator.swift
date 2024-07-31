@@ -49,7 +49,7 @@ class ConditionEvaluator {
     /// This is the main function used to evaluate a condition. It loops through the condition key/value pairs and checks each entry:
     /// - attributes : User Attributes
     /// - condition : to be evaluated
-    func isEvalCondition(attributes: JSON, conditionObj: JSON) -> Bool {
+    func isEvalCondition(attributes: JSON, conditionObj: JSON, savedGroups: JSON? = nil) -> Bool {
         if !conditionObj.arrayValue.isEmpty {
             return false
         }
@@ -57,16 +57,16 @@ class ConditionEvaluator {
         for (key, value) in conditionObj.dictionaryValue {
             switch key {
             case "$or":
-                guard isEvalOr(attributes: attributes, conditionObjs: value.arrayValue) else { return false }
+                guard isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
             case "$nor":
-                guard !isEvalOr(attributes: attributes, conditionObjs: value.arrayValue) else { return false }
+                guard !isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
             case "$and":
-                guard isEvalAnd(attributes: attributes, conditionObjs: value.arrayValue) else { return false }
+                guard isEvalAnd(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
             case "$not":
-                guard !isEvalCondition(attributes: attributes, conditionObj: value) else { return false }
+                guard !isEvalCondition(attributes: attributes, conditionObj: value, savedGroups: savedGroups) else { return false }
             default:
                 let element = getPath(obj: attributes, key: key)
-                guard isEvalConditionValue(conditionValue: value, attributeValue: element) else { return false }
+                guard isEvalConditionValue(conditionValue: value, attributeValue: element, savedGroups: savedGroups) else { return false }
             }
         }
         // If none of the entries failed their checks, `evalCondition` returns true
@@ -74,7 +74,7 @@ class ConditionEvaluator {
     }
 
     /// Evaluate OR conditions against given attributes
-    func isEvalOr(attributes: JSON, conditionObjs: [JSON]) -> Bool {
+    func isEvalOr(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool {
         // If conditionObjs is empty, return true
         guard conditionObjs.isEmpty == false else {
             return true
@@ -82,7 +82,7 @@ class ConditionEvaluator {
         // Loop through the conditionObjects
         for item in conditionObjs {
             // If evalCondition(attributes, conditionObjs[i]) is true, break out of the loop and return true
-            if isEvalCondition(attributes: attributes, conditionObj: item) {
+            if isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups) {
                 return true
             }
         }
@@ -92,11 +92,11 @@ class ConditionEvaluator {
     }
 
     /// Evaluate AND conditions against given attributes
-    func isEvalAnd(attributes: JSON, conditionObjs: [JSON]) -> Bool {
+    func isEvalAnd(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool {
         // Loop through the conditionObjects
         for item in conditionObjs {
             // If evalCondition(attributes, conditionObjs[i]) is false, break out of the loop and return false
-            if !isEvalCondition(attributes: attributes, conditionObj: item) {
+            if !isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups) {
                 return false
             }
         }
@@ -153,7 +153,7 @@ class ConditionEvaluator {
     }
 
     /// Evaluates Condition Value against given condition & attributes
-    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?) -> Bool {
+    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil) -> Bool {
         // If conditionValue is a string, number, boolean, return true if it's "equal" to attributeValue and false if not.
         
         var unwrappedAttribute = attributeValue
@@ -190,7 +190,7 @@ class ConditionEvaluator {
             if isOperatorObject(obj: conditionValue) {
                 for key in conditionValue.dictionaryValue.keys {
                     // If evalOperatorCondition(key, attributeValue, value) is false, return false
-                    if let value = conditionValue.dictionaryValue[key], !isEvalOperatorCondition(operatorKey: key, attributeValue: attributeValue, conditionValue: value) {
+                    if let value = conditionValue.dictionaryValue[key], !isEvalOperatorCondition(operatorKey: key, attributeValue: attributeValue, conditionValue: value, savedGroups: savedGroups) {
                         return false
                     }
                 }
@@ -206,19 +206,19 @@ class ConditionEvaluator {
     }
 
     /// This checks if attributeValue is an array, and if so at least one of the array items must match the condition
-    func isElemMatch(attributeValue: [JSON], condition: JSON) -> Bool {
+    func isElemMatch(attributeValue: [JSON], condition: JSON, savedGroups: JSON?) -> Bool {
 
         // Loop through items in attributeValue
         for item in attributeValue {
             // If isOperatorObject(condition)
             if isOperatorObject(obj: condition) {
                 // If evalConditionValue(condition, item), break out of loop and return true
-                if isEvalConditionValue(conditionValue: condition, attributeValue: item) {
+                if isEvalConditionValue(conditionValue: condition, attributeValue: item, savedGroups: savedGroups) {
                     return true
                 }
             }
             // Else if evalCondition(item, condition), break out of loop and return true
-            else if isEvalCondition(attributes: item, conditionObj: condition) {
+            else if isEvalCondition(attributes: item, conditionObj: condition, savedGroups: savedGroups) {
                 return true
             }
         }
@@ -230,7 +230,7 @@ class ConditionEvaluator {
     /// This function is just a case statement that handles all the possible operators
     ///
     /// There are basic comparison operators in the form attributeValue {op} conditionValue
-    func isEvalOperatorCondition(operatorKey: String, attributeValue: JSON?, conditionValue: JSON) -> Bool {
+    func isEvalOperatorCondition(operatorKey: String, attributeValue: JSON?, conditionValue: JSON, savedGroups: JSON? = nil) -> Bool {
         let conditionJson = JSON(conditionValue)
         // Evaluate TYPE operator - whether both are of same type
         if operatorKey == "$type" {
@@ -239,7 +239,7 @@ class ConditionEvaluator {
 
         // Evaluate NOT operator - whether condition doesn't contain attribute
         if operatorKey == "$not" {
-            return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue)
+            return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups)
         }
 
         // Evaluate EXISTS operator - whether condition contains attribute
@@ -257,7 +257,7 @@ class ConditionEvaluator {
             return  getType(obj: attributeValue) == conditionJson.stringValue
         case "$not":
             if let conditionValue = conditionValue.dictionaryValue.values.first {
-                return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue)
+                return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups)
             }
         case "$exists":
             let targetPrimitiveValue = conditionJson.stringValue
@@ -283,7 +283,7 @@ class ConditionEvaluator {
                     for con in conditionValue {
                         var result = false
                         for attribute in attributeValue {
-                            if isEvalConditionValue(conditionValue: con, attributeValue: attribute) {
+                            if isEvalConditionValue(conditionValue: con, attributeValue: attribute, savedGroups: savedGroups) {
                                 result = true
                             }
                         }
@@ -302,10 +302,10 @@ class ConditionEvaluator {
             switch operatorKey {
             // Evaluate ELEMMATCH operator - whether condition matches attribute
             case "$elemMatch":
-                return  isElemMatch(attributeValue: attribute, condition: conditionValue)
+                return  isElemMatch(attributeValue: attribute, condition: conditionValue, savedGroups: savedGroups)
             // Evaluate SIE operator - whether condition size is same as that of attribute
             case "$size":
-                return isEvalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count))
+                return isEvalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count), savedGroups: savedGroups)
             default: break
             }
         } else {
@@ -335,6 +335,14 @@ class ConditionEvaluator {
             case "$vlte":
                 if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) <= Utils.paddedVersionString(input: conditionString)
+                }
+            case "$inGroup":
+                if let attributeString = attributeValue, let conditionString = conditionValue.string {
+                    return Common.isIn(actual: attributeString, expected: savedGroups?[conditionString].array ?? [] )
+                }
+            case "$notInGroup": 
+                if let attributeString = attributeValue, let conditionString = conditionValue.string {
+                    return !Common.isIn(actual: attributeString, expected: savedGroups?[conditionString].array ?? [])
                 }
             // Evaluate EQ operator - whether condition equals to attribute
             case "$eq":

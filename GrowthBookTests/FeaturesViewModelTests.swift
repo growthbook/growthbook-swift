@@ -3,6 +3,7 @@ import XCTest
 @testable import GrowthBook
 
 class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
+    
     var isSuccess: Bool = false
     var isError: Bool = false
     var hasFeatures: Bool = false
@@ -128,6 +129,16 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = false
         isError = true
         hasFeatures = false
+    }
+    
+    func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
+        isSuccess = false
+        isError = true
+    }
+    
+    func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
+        isSuccess = true
+        isError = false
     }
     
     func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
