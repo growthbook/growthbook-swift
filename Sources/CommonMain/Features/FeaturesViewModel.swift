@@ -106,53 +106,56 @@ class FeaturesViewModel {
         let decoder = JSONDecoder()
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             delegate?.featuresAPIModelSuccessfully(model: jsonPetitions)
-            if let features = jsonPetitions.features {
+            if let encryptedString = jsonPetitions.encryptedFeatures {
+                if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+                    let crypto: CryptoProtocol = Crypto()
+                    if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
+                        if let featureData = try? JSONEncoder().encode(features) {
+                            manager.putData(fileName: Constants.featureCache, content: featureData)
+                        } else {
+                            logger.error("Failed encode features")
+                        }
+                        delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
+                    } else {
+                        delegate?.featuresFetchFailed(error: .failedEncryptedFeatures, isRemote: true)
+                        logger.error("Failed get features from encrypted features")
+                        return
+                    }
+                } else {
+                    delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
+                    logger.error("Failed get encryption key or it's empty")
+                    return
+                }
+            } else if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
                     manager.putData(fileName: Constants.featureCache, content: featureData)
                 }
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
             } else {
-                if let encryptedString = jsonPetitions.encryptedFeatures, !encryptedString.isEmpty  {
-                    if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
-                        let crypto: CryptoProtocol = Crypto()
-                        if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                            if let featureData = try? JSONEncoder().encode(features) {
-                                manager.putData(fileName: Constants.featureCache, content: featureData)
-                            } else {
-                                logger.error("Failed encode features")
-                            }
-                            delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
-                        } else {
-                            delegate?.featuresFetchFailed(error: .failedEncryptedFeatures, isRemote: true)
-                            logger.error("Failed get features from encrypted features")
-                            return
-                        }
+                delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
+                logger.error("Failed get encrypted features or it's empty")
+                return
+            }
+            
+            if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+                let crypto = Crypto()
+                if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
+                    if let encryptedSavedGroups = try? JSONEncoder().encode(savedGroups) {
+                        manager.putData(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
                     } else {
-                        delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
-                        logger.error("Failed get encryption key or it's empty")
-                        return
+                        logger.error("Failed encode saved groups")
                     }
+                    delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
                 } else {
-                    delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
-                    logger.error("Failed get encrypted features or it's empty")
+                    delegate?.savedGroupsFetchFailed(error: .failedEncryptedSavedGroups, isRemote: true)
+                    logger.error("Failed get saved groups from encrypted saved groups")
                     return
                 }
-                
-                if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
-                    let crypto = Crypto()
-                    if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
-                        if let featureData = try? JSONEncoder().encode(savedGroups) {
-                            manager.putData(fileName: Constants.featureCache, content: featureData)
-                        } else {
-                            logger.error("Failed encode saved groups")
-                        }
-                        delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
-                    } else {
-                        delegate?.savedGroupsFetchFailed(error: .failedEncryptedSavedGroups, isRemote: true)
-                        logger.error("Failed get saved groups from encrypted saved groups")
-                        return
-                    }
+            } else if let savedGroups = jsonPetitions.savedGroups {
+                if let savedGroupsData = try? JSONEncoder().encode(savedGroups) {
+                    manager.putData(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
+                delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
             }
         } else {
             delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
