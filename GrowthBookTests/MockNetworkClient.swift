@@ -194,7 +194,8 @@ class MockResponse {
                     }
                 ]
             }
-        }
+        },
+        "savedGroups": {"group_id": ["4", "5", "6"]}
     }
     """.trimmingCharacters(in: .whitespaces)
     
