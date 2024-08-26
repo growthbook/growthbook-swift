@@ -13,11 +13,11 @@ class CoreNetworkClient: NetworkProtocol {
         guard let url = URL(string: url) else { return }
 
         let request = URLSession.shared.dataTask(with: url) {(data: Data?, response: URLResponse?, error: Error?) in
-            guard let data = data else { return }
             if let error = error {
                 errorResult(error)
             }
-            successResult(data)
+            guard let responseData = data else { return }
+            successResult(responseData)
         }
         request.resume()
     }
