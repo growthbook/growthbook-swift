@@ -36,6 +36,9 @@ public typealias CacheRefreshHandler = (Bool) -> Void
 /// Handler for experiment result
 public typealias TrackingCallback = (Experiment, ExperimentResult) -> Void
 
+/// Handler for subscribed experiment result
+public typealias ExperimentRunCallback = (Experiment, ExperimentResult) -> Void
+
 /// Triple Tuple for GrowthBook Namespaces
 ///
 /// It has ID, StartRange & EndRange
