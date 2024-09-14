@@ -125,6 +125,7 @@ public struct GrowthBookModel {
 /// It exposes two main methods: feature and run.
 @objc public class GrowthBookSDK: NSObject, FeaturesFlowDelegate {
     private var refreshHandler: CacheRefreshHandler?
+    private var subscriptions: [ExperimentRunCallback] = []
     private var networkDispatcher: NetworkProtocol
     public var gbContext: Context
     private var featureVM: FeaturesViewModel!
@@ -189,6 +190,14 @@ public struct GrowthBookModel {
     @objc public func getFeatures() -> [String: Feature] {
         return gbContext.features
     }
+    
+    public func subscribe(_ result: @escaping ExperimentRunCallback) {
+        self.subscriptions.append(result)
+    }
+    
+    public func clearSubscriptions() {
+        self.subscriptions.removeAll()
+    }
 
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
@@ -244,7 +253,13 @@ public struct GrowthBookModel {
 
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        return ExperimentEvaluator(attributeOverrides: attributeOverrides).evaluateExperiment(context: gbContext, experiment: experiment)
+        let result = ExperimentEvaluator(attributeOverrides: attributeOverrides).evaluateExperiment(context: gbContext, experiment: experiment)
+        
+        self.subscriptions.forEach { subscription in
+            subscription(experiment, result)
+        }
+        
+        return result
     }
     
     /// The setForcedFeatures method updates forced features
