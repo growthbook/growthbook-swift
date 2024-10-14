@@ -4,6 +4,8 @@
 ## Workaround available here: https://developer.apple.com/documentation/xcode-release-notes/xcode-15_2-release-notes
 ## This build script will fail unless workaround is applied.
 
+xcodebuild -downloadPlatform visionOS
+
 xcodebuild archive \
     -scheme GrowthBook \
     -archivePath "./build/ios.xcarchive" \

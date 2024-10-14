@@ -219,8 +219,8 @@ public class Utils {
         
         let (fallbackAttribute, fallbackValue) = getHashAttribute(
             context: context,
-            attr: nil,
-            fallback: expFallbackAttribute,
+            attr: expFallbackAttribute,
+            fallback: nil,
             attributeOverrides: attributeOverrides
         )
         
