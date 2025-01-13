@@ -68,7 +68,7 @@ public struct FeatureRule: Codable {
     /// The phase id of the experiment
     public let phase: String?
     /// Array of tracking calls to fire
-    public let tracks: [TrackData]?
+    public let tracks: [Track]?
 
     init(id: String? = nil, condition: Condition? = nil,
          coverage: Float? = nil,
@@ -91,7 +91,7 @@ public struct FeatureRule: Codable {
          seed: String? = nil,
          name: String? = nil,
          phase: String? = nil,
-         tracks: [TrackData]? = nil) {
+         tracks: [Track]? = nil) {
         self.id = id
         self.condition = condition
         self.coverage = coverage
@@ -183,7 +183,7 @@ public struct FeatureRule: Codable {
         phase = json["phase"]?.stringValue
         
         tracks = json["tracks"]?.map({ key, value in
-            TrackData(json: value.dictionaryValue)
+            Track(json: value.dictionaryValue)
         })
     }
 }
@@ -202,10 +202,12 @@ enum FeatureSource: String {
     case cyclicPrerequisite
     /// Prerequisite Value for the Feature is being processed
     case prerequisite
+    /// Override Value for the Feature is being processed
+    case override
 }
 
  /// Result for Feature
-@objc public class FeatureResult: NSObject, Decodable {
+@objc public class FeatureResult: NSObject, Codable {
     /// The assigned value of the feature
     public let value: JSON?
     /// The assigned value cast to a boolean
@@ -226,5 +228,42 @@ enum FeatureSource: String {
         self.source = source
         self.experiment = experiment
         self.experimentResult = result
+    }
+    
+    init(json: [String: JSON]) {
+        if let value = json["value"] {
+            self.value = value
+        } else {
+            self.value = JSON()
+        }
+        if let on = json["on"] {
+            self.isOn = on.boolValue
+        } else {
+            self.isOn = true
+        }
+        if let off = json["off"] {
+            self.isOff = off.boolValue
+        } else {
+            self.isOff = false
+        }
+        if let source = json["source"] {
+            self.source = source.stringValue
+        } else {
+            self.source = ""
+        }
+        if let experiment = json["experiment"] {
+            self.experiment = Experiment(json: experiment.dictionaryValue)
+        } else {
+            self.experiment = nil
+        }
+        if let experimentResult = json["experimentResult"] {
+            self.experimentResult = ExperimentResult(json: experimentResult.dictionaryValue)
+        } else {
+            self.experimentResult = nil
+        }
+    }
+    
+    enum CodingKeys: String, CodingKey {
+        case value, isOn = "on", isOff = "off", source, experiment, experimentResult
     }
 }

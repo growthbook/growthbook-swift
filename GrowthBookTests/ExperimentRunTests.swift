@@ -29,8 +29,8 @@ class ExperimentRunTests: XCTestCase {
                                     backgroundSync: false,
                                     savedGroups: testContext.savedGroups)
 
-            let evaluator = ExperimentEvaluator(attributeOverrides: JSON())
-            let result = evaluator.evaluateExperiment(context: gbContext, experiment: experiment)
+            let evaluator = ExperimentEvaluator()
+            let result = evaluator.evaluateExperiment(context: Utils.initializeEvalContext(context: gbContext), experiment: experiment)
 
             let status = item[0].stringValue + "\nExpected Result - " + item[3].stringValue + " & " + item[4].stringValue + "\nActual result - " + result.value.stringValue + " & " + String(result.inExperiment) + "\n\n"
 

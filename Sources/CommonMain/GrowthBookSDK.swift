@@ -132,6 +132,7 @@ public struct GrowthBookModel {
     private var forcedFeatures: JSON = JSON()
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
+    private var evalContext: EvalContext? = nil
 
     init(context: Context,
          refreshHandler: CacheRefreshHandler? = nil,
@@ -155,6 +156,7 @@ public struct GrowthBookModel {
         if let savedGroups {
             context.savedGroups = savedGroups
         }
+        self.evalContext = Utils.initializeEvalContext(context: context)
                 
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
         if let sseURL = context.getSSEUrl(), context.backgroundSync {
@@ -201,7 +203,7 @@ public struct GrowthBookModel {
 
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
-        return FeatureEvaluator(context: gbContext, featureKey: id, attributeOverrides: attributeOverrides).evaluateFeature().value ?? defaultValue
+        return FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: id).evaluateFeature().value ?? defaultValue
     }
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
@@ -243,7 +245,7 @@ public struct GrowthBookModel {
 
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
-        return FeatureEvaluator(context: gbContext, featureKey: id, attributeOverrides: attributeOverrides).evaluateFeature()
+        return FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: id).evaluateFeature()
     }
 
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
@@ -253,7 +255,7 @@ public struct GrowthBookModel {
 
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        let result = ExperimentEvaluator(attributeOverrides: attributeOverrides).evaluateExperiment(context: gbContext, experiment: experiment)
+        let result = ExperimentEvaluator().evaluateExperiment(context: Utils.initializeEvalContext(context: gbContext), experiment: experiment)
         
         self.subscriptions.forEach { subscription in
             subscription(experiment, result)
@@ -293,7 +295,7 @@ public struct GrowthBookModel {
     
     private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
         if (gbContext.stickyBucketService != nil) {
-            Utils.refreshStickyBuckets(context: gbContext, attributeOverrides: attributeOverrides, data: data)
+            Utils.refreshStickyBuckets(context: evalContext!, attributes: evalContext!.userContext.attributes, data: data)
         }
     }
 }

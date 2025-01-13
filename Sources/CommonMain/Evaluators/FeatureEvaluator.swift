@@ -7,34 +7,44 @@ import Foundation
 /// Returns Calculated Feature Result against that key
 class FeatureEvaluator {
 
-    var context: Context
-    var evalContext: FeatureEvalContext?
+    var context: EvalContext
     var featureKey: String
-    var attributeOverrides: JSON
     
-    init(context: Context, featureKey: String, attributeOverrides: JSON, evalContext: FeatureEvalContext? = nil) {
+    init(context: EvalContext, featureKey: String) {
         self.context = context
         self.featureKey = featureKey
-        self.attributeOverrides = attributeOverrides
-        self.evalContext = evalContext ?? FeatureEvalContext(evaluatedFeatures: Set<String>())
     }
     
     /// Takes Context and Feature Key
     ///
     /// Returns Calculated Feature Result against that key
     func evaluateFeature() -> FeatureResult {
+                
+        if context.userContext.forcedFeatureValues?.dictionaryValue[featureKey] != nil {
+            let value = context.userContext.forcedFeatureValues?[featureKey] ?? "nil"
+            logger.info("Global override for forced feature with key: \(featureKey) and value \(value)")
+            
+            return prepareResult(value: context.userContext.forcedFeatureValues?.dictionaryValue[featureKey], source: FeatureSource.override)
+        }
         
-        if (evalContext?.evaluatedFeatures.contains(featureKey) ?? false) {
-            return prepareResult(
+        if (context.stackContext.evaluatedFeatures.contains(featureKey)) {
+            logger.info("evaluateFeature: circular dependency detected:")
+            
+            let featureResultWhenCircularDependencyDetected = prepareResult(
                 value: .null,
                 source: FeatureSource.cyclicPrerequisite
             )
+                        
+            return featureResultWhenCircularDependencyDetected
         }
-        evalContext?.evaluatedFeatures.insert(featureKey)
-        evalContext?.id = featureKey
+        context.stackContext.evaluatedFeatures.insert(featureKey)
+        context.stackContext.id = featureKey
         
-        guard let targetFeature: Feature = context.features[featureKey] else {
-            return prepareResult(value: JSON.null, source: FeatureSource.unknownFeature)
+        guard let targetFeature: Feature = context.globalContext.features[featureKey] else {
+            
+            let emptyFeatureResult = prepareResult(value: JSON.null, source: FeatureSource.unknownFeature)
+            
+            return emptyFeatureResult
         }
 
         // Loop through the feature rules (if any)
@@ -44,12 +54,19 @@ class FeatureEvaluator {
                 
                 if let parentConditions = rule.parentConditions {
                     for parentCondition in parentConditions {
-                        let parentResult = FeatureEvaluator(context: context, featureKey: parentCondition.id, attributeOverrides: attributeOverrides, evalContext: evalContext).evaluateFeature()
+                        let parentResult = FeatureEvaluator(
+                            context: context,
+                            featureKey: parentCondition.id
+                        )
+                        .evaluateFeature()
+                        
                         if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
-                            return prepareResult(
+                            let featureResultWhenCircularDependencyDetected =  prepareResult(
                                 value: .null,
                                 source: FeatureSource.cyclicPrerequisite
                             )
+                                                        
+                            return featureResultWhenCircularDependencyDetected
                         }
                         
                         let evalObjc = JSON(["value": parentResult.value])
@@ -57,17 +74,19 @@ class FeatureEvaluator {
                         let evalCondition = ConditionEvaluator().isEvalCondition(
                             attributes: evalObjc,
                             conditionObj: parentCondition.condition, 
-                            savedGroups: context.savedGroups
+                            savedGroups: context.globalContext.savedGroups
                         )
                         
                         // blocking prerequisite eval failed: feature evaluation fails
                         if !evalCondition {
                             if let _ = parentCondition.gate {
-                                print("Feature blocked by prerequisite")
-                                return prepareResult(
+                                logger.info("Feature blocked by prerequisite")
+                                let featureResultWhenBlockedByPrerequisite =  prepareResult(
                                     value: .null,
                                     source: FeatureSource.prerequisite
                                 )
+                                                                
+                                return featureResultWhenBlockedByPrerequisite
                             }
                             // non-blocking prerequisite eval failed: break out of parentConditions loop, jump to the next rule
                             continue ruleLoop
@@ -77,8 +96,9 @@ class FeatureEvaluator {
                 
                 // If there are filters for who is included
                 if let filters = rule.filters {
-                    if Utils.isFilteredOut(filters: filters, context: context, attributeOverrides: attributeOverrides) {
-                        print("Skip rule because of filters")
+                    if Utils.isFilteredOut(filters: filters, attributes: context.userContext.attributes
+                    ) {
+                        logger.info("Skip rule because of filters")
                         continue
                     }
                 }
@@ -87,29 +107,31 @@ class FeatureEvaluator {
                 if let force = rule.force {
                     // If it's a conditional rule, skip if the condition doesn't pass
 
-                    if let condition = rule.condition, !ConditionEvaluator().isEvalCondition(attributes: getAttributes(), 
-                                                                                             conditionObj: condition,
-                                                                                             savedGroups: context.savedGroups) {
-                        print("Skip rule because of condition ff")
+                    if let condition = rule.condition, !ConditionEvaluator().isEvalCondition(
+                        attributes: context.userContext.attributes,
+                        conditionObj: condition,
+                        savedGroups: context.globalContext.savedGroups
+                    ) {
                         continue
                     }
                     
-                    
-                    
-                    if !isIncludedInRollout(seed: rule.seed ?? featureKey,
-                                            hashAttribute: rule.hashAttribute,
-                                            fallbackAttribute: (context.stickyBucketService != nil && !(rule.disableStickyBucketing ?? true)) ? rule.fallbackAttribute : nil,
-                                            range: rule.range,
-                                            coverage: rule.coverage,
-                                            hashVersion: rule.hashVersion) {
-                        print("Skip rule because user not included in rollout")
+                    if !Utils.isIncludedInRollout(
+                        attributes: context.userContext.attributes,
+                        seed: rule.seed ?? featureKey,
+                        hashAttribute: rule.hashAttribute,
+                        fallbackAttribute: (context.options.stickyBucketService != nil && !(rule.disableStickyBucketing ?? true)) ? rule.fallbackAttribute : nil,
+                        range: rule.range,
+                        coverage: rule.coverage,
+                        hashVersion: rule.hashVersion
+                    ) {
+                        logger.info("Skip rule because user not included in rollout")
                         continue
                     }
                     
                     if let tracks = rule.tracks {
                         tracks.forEach { track in
-                            if !ExperimentHelper.shared.isTracked(track.experiment, track.result) {
-                                context.trackingClosure(track.experiment, track.result)
+                            if let experiment = track.result?.experiment, let result = track.result?.experimentResult, !ExperimentHelper.shared.isTracked(experiment, result) {
+                                context.options.trackingClosure(experiment, result)
                             }
                         }
                     }
@@ -121,7 +143,7 @@ class FeatureEvaluator {
                             
                             let key = rule.hashAttribute ?? Constants.idAttributeKey
                             // Get the user hash value (context.attributes[rule.hashAttribute || "id"]) and if empty, skip the rule
-                            guard let attributeValue = context.attributes.dictionaryValue[key]?.stringValue,
+                            guard let attributeValue = context.userContext.attributes.dictionaryValue[key]?.stringValue,
                                   attributeValue.isEmpty == false
                             else {
                                 continue
@@ -139,7 +161,9 @@ class FeatureEvaluator {
 
                     // Return (value = forced value, source = force)
                     
-                    return prepareResult(value: force, source: FeatureSource.force)
+                    let forcedFeatureResult = prepareResult(value: force, source: FeatureSource.force)
+                                        
+                    return forcedFeatureResult
                 } else {
                     
                     guard let variations = rule.variations else {
@@ -168,10 +192,12 @@ class FeatureEvaluator {
                                          )
                     
                     // Run the experiment.
-                    let result = ExperimentEvaluator(attributeOverrides: attributeOverrides).evaluateExperiment(context: context, experiment: exp)
+                    let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: exp, featureId: featureKey)
                     if result.inExperiment && !(result.passthrough ?? false) {
                         // If result.inExperiment is false, skip this rule and continue to the next one.
-                        return prepareResult(value: result.value, source: FeatureSource.experiment, experiment: exp, result: result)
+                        let experimentFeatureResult =  prepareResult(value: result.value, source: FeatureSource.experiment, experiment: exp, result: result)
+                                                
+                        return experimentFeatureResult
                     }
                 }
             }
@@ -179,32 +205,9 @@ class FeatureEvaluator {
 
         // Return (value = defaultValue or null, source = defaultValue)
         let defaultValue = targetFeature.defaultValue ?? .null
-        return prepareResult(value: defaultValue, source: FeatureSource.defaultValue)
-    }    
-    
-    ///Determines if the user is part of a gradual feature rollout.
-    private func isIncludedInRollout(seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?) -> Bool {
-        if range == nil, coverage == nil {
-            return true
-        }
-        
-        if range == nil, coverage == 0 {
-            return false
-        }
-        
-        let hashValue = Utils.getHashAttribute(context: context, attr: hashAttribute, fallback: fallbackAttribute, attributeOverrides: attributeOverrides).hashValue
-        
-        let hash = Utils.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
-        
-        guard let hash = hash else { return false }
-        
-        if let range = range {
-            return Utils.inRange(n: hash, range: range)
-        } else if let coverage = coverage {
-            return hash <= coverage
-        } else {
-            return true
-        }
+        let defaultFeatureResult = prepareResult(value: defaultValue, source: FeatureSource.defaultValue)
+                
+        return defaultFeatureResult
     }
     
     /// This is a helper method to create a FeatureResult object.
@@ -216,10 +219,6 @@ class FeatureEvaluator {
             isFalse = value.stringValue == "false" || value.stringValue == "0" || (value.stringValue.isEmpty && value.dictionary == nil && value.array == nil)
         }
         return FeatureResult(value: value, isOn: !isFalse, source: source.rawValue, experiment: experiment, result: result)
-    }
-    
-    private func getAttributes() -> JSON {
-        return (try? context.attributes.merged(with: attributeOverrides)) ?? JSON()
     }
 }
 

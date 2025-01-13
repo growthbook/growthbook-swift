@@ -44,7 +44,7 @@ class StickyBucketingFeatureTests: XCTestCase {
                                     backgroundSync: false)
             
             let expectedResult = ExperimentResultTest(json: item[4].dictionaryValue)
-            let evaluator = FeatureEvaluator(context: gbContext, featureKey: item[3].stringValue, attributeOverrides: attributes)
+            let evaluator = FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: item[3].stringValue)
             let result = evaluator.evaluateFeature().experimentResult
             
             let status = "\(item[0].stringValue) \nExpected Result - \(expectedResult.variationId?.description) \(expectedResult.hashValue) \(expectedResult.inExperiment?.description) \(expectedResult.value?.stringValue) \(expectedResult.hashAttribute ?? "") & \(item[4].stringValue) \(expectedResult.hashUsed?.description) \nActual result - \(result?.variationId.description ?? "") \(result?.valueHash ?? "") \(result?.inExperiment.description ?? "") \(result?.value.stringValue ?? "") \(result?.hashAttribute ?? "") \(result?.hashUsed?.description) \n\n"
