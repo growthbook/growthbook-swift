@@ -31,8 +31,8 @@ class FeatureValueTests: XCTestCase {
             if let features = testData.features {
                 gbContext.features = features
             }
-
-            let evaluator = FeatureEvaluator(context: gbContext, featureKey: item[2].stringValue, attributeOverrides: JSON())
+            
+            let evaluator = FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: item[2].stringValue)
             let result = evaluator.evaluateFeature()
 
             let expectedResult = FeatureResultTest(json: item[3].dictionaryValue)

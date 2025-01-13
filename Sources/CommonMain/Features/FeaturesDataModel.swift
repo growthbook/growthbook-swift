@@ -7,4 +7,6 @@ struct FeaturesDataModel: Codable {
     var dateUpdated: String?
     var savedGroups: JSON?
     var encryptedSavedGroups: String?
+    var experiments: [Experiment]?
+    var encryptedExperiments: String?
 }

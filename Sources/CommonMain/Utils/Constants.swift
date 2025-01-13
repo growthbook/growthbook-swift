@@ -90,6 +90,16 @@ public struct VariationMeta: Codable {
     }
 }
 
+public struct Track: Codable {
+    public let experiment: Experiment?
+    public let result: FeatureResult?
+    
+    init(json: [String: JSON]) {
+        experiment = Experiment(json: json["experiment"]?.dictionaryValue ?? [:])
+        result = FeatureResult(json: json["result"]?.dictionaryValue ?? [:])
+    }
+}
+
 ///Used for remote feature evaluation to trigger the `TrackingCallback`
 public struct TrackData: Codable {
     let experiment: Experiment

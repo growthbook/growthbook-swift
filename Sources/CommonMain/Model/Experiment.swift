@@ -25,7 +25,7 @@ import Foundation
     /// How to weight traffic between variations. Must add to 1.
     public var weights: [Float]?
     /// If set to false, always return the control (first variation)
-    public var isActive: Bool
+    public var isActive: Bool?
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
     public var coverage: Float?
     /// Optional targeting condition
@@ -174,9 +174,7 @@ import Foundation
 
         force = json["force"]?.intValue
         
-        if json["filters"] != nil {
-            print("")
-        }
+        if json["filters"] != nil { }
         
         ranges = json["ranges"]?.map({ key, value in
             BucketRange(json: value)

@@ -34,9 +34,9 @@ public class Utils {
     }
     
     ///This is a helper method to evaluate `filters` for both feature flags and experiments.
-    static func isFilteredOut(filters: [Filter], context: Context, attributeOverrides: JSON) -> Bool {
+    static func isFilteredOut(filters: [Filter], attributes: JSON) -> Bool {
         return filters.contains { filter in
-            let hashAttribute = Utils.getHashAttribute(context: context, attr: filter.attribute, attributeOverrides: attributeOverrides)
+            let hashAttribute = Utils.getHashAttribute(attr: filter.attribute, attributes: attributes)
             let hashValue = hashAttribute.hashValue
             
             let hash = hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
@@ -45,6 +45,31 @@ public class Utils {
             return !filter.ranges.contains { range in
                 return inRange(n: hashValue, range: range)
             }
+        }
+    }
+    
+    ///Determines if the user is part of a gradual feature rollout.
+    static func isIncludedInRollout(attributes: JSON, seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?) -> Bool {
+        if range == nil, coverage == nil {
+            return true
+        }
+        
+        if range == nil, coverage == 0 {
+            return false
+        }
+        
+        let hashValue = Utils.getHashAttribute(attr: hashAttribute, fallback: fallbackAttribute, attributes: attributes).hashValue
+        
+        let hash = Utils.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
+        
+        guard let hash = hash else { return false }
+        
+        if let range = range {
+            return Utils.inRange(n: hash, range: range)
+        } else if let coverage = coverage {
+            return hash <= coverage
+        } else {
+            return true
         }
     }
 
@@ -165,22 +190,18 @@ public class Utils {
     }
     
     ///Returns tuple out of 2 elements: the attribute itself an its hash value
-    static func getHashAttribute(context: Context, attr: String?, fallback: String? = nil, attributeOverrides: JSON) -> (hashAttribute: String, hashValue: String) {
+    static func getHashAttribute(attr: String?, fallback: String? = nil, attributes: JSON) -> (hashAttribute: String, hashValue: String) {
         var hashAttribute = attr ?? "id"
         var hashValue = ""
         
-        if attributeOverrides[hashAttribute] != .null {
-            hashValue = attributeOverrides[hashAttribute].stringValue
-        } else if context.attributes[hashAttribute] != .null {
-            hashValue = context.attributes[hashAttribute].stringValue
+        if attributes[hashAttribute] != .null {
+            hashValue = attributes[hashAttribute].stringValue
         }
         
         // if no match, try fallback
         if hashValue.isEmpty, let fallback = fallback {
-            if attributeOverrides[fallback] != .null {
-                hashValue = attributeOverrides[fallback].stringValue
-            } else if context.attributes[fallback] != .null {
-                hashValue = context.attributes[fallback].stringValue
+            if attributes[fallback] != .null {
+                hashValue = attributes[fallback].stringValue
             }
             
             if !hashValue.isEmpty {
@@ -188,44 +209,44 @@ public class Utils {
             }
         }
         
-        if let fallback = fallback, let fallbackAttributeValue = context.stickyBucketAssignmentDocs?["\(fallback)||\(attributeOverrides[fallback].stringValue)"]?.attributeValue,
-           fallbackAttributeValue != attributeOverrides[fallback].stringValue {
-            context.stickyBucketAssignmentDocs = [:]
-        }
-        
         return (hashAttribute, hashValue)
     }
     
     // Returns assignments for StickyAssignmentsDocuments
     static func getStickyBucketAssignments(
-        context: Context,
+        context: EvalContext,
         expHashAttribute: String?,
-        expFallbackAttribute: String? = nil,
-        attributeOverrides: JSON
+        expFallbackAttribute: String? = nil
     ) -> [String: String] {
         
-        guard let stickyBucketAssignmentDocs = context.stickyBucketAssignmentDocs else {
+        guard let stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs else {
             return [:]
         }
         
          let (hashAttribute, hashValue) = getHashAttribute(
-            context: context,
             attr: expHashAttribute,
             fallback: nil,
-            attributeOverrides: attributeOverrides
+            attributes: context.userContext.attributes
         )
         
         let hashKey = "\(hashAttribute)||\(hashValue)"
         
         let (fallbackAttribute, fallbackValue) = getHashAttribute(
-            context: context,
             attr: expFallbackAttribute,
             fallback: nil,
-            attributeOverrides: attributeOverrides
+            attributes: context.userContext.attributes
         )
         
         let fallbackKey = fallbackValue.isEmpty ? nil : "\(fallbackAttribute)||\(fallbackValue)"
         
+        let key = "\(expFallbackAttribute ?? "" )||\(context.userContext.attributes[expFallbackAttribute ?? ""].stringValue)"
+        let leftOperand = stickyBucketAssignmentDocs[key]?.attributeValue
+        
+        if (leftOperand != context.userContext.attributes[expFallbackAttribute ?? ""].stringValue) {
+            context.userContext.stickyBucketAssignmentDocs = [:]
+            
+        }
+
         var mergedAssignments: [String: String] = [:]
         
         if let fallbackKey = fallbackKey, let fallbackAssignments = stickyBucketAssignmentDocs[fallbackKey] {
@@ -240,36 +261,35 @@ public class Utils {
     }
     
     // Update sticky bucketing configuration
-    static func refreshStickyBuckets(context: Context, attributeOverrides: JSON, data: FeaturesDataModel?) {
-        guard let stickyBucketService = context.stickyBucketService else {
+    static func refreshStickyBuckets(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) {
+        guard let stickyBucketService = context.options.stickyBucketService else {
             return
         }
         
-        let attributes = getStickyBucketAttributes(context: context, attributeOverrides: attributeOverrides, data: data);
-        context.stickyBucketAssignmentDocs = stickyBucketService.getAllAssignments(attributes: attributes)
+        let allAttributes = getStickyBucketAttributes(context: context, attributes: attributes, data: data);
+        context.options.stickyBucketAssignmentDocs = stickyBucketService.getAllAssignments(attributes: allAttributes)
     }
     
     // Returns hash value for every attribute
-    static func getStickyBucketAttributes(context: Context, attributeOverrides: JSON, data: FeaturesDataModel?) -> [String: String] {
+    static func getStickyBucketAttributes(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) -> [String: String] {
         
-        var attributes: [String: String] = [:]
-        context.stickyBucketIdentifierAttributes = context.stickyBucketIdentifierAttributes != nil
-        ? deriveStickyBucketIdentifierAttributes(context: context, data: data)
-        : context.stickyBucketIdentifierAttributes
+        var attributesResult: [String: String] = [:]
+        let stickyBucketIdentifierAttributes = deriveStickyBucketIdentifierAttributes(context: context, data: data)
         
-        context.stickyBucketIdentifierAttributes?.forEach { attr in
-            let hashValue = Utils.getHashAttribute(context: context, attr: attr, attributeOverrides: attributeOverrides)
-            attributes[attr] = hashValue.hashValue
+        stickyBucketIdentifierAttributes.forEach { attr in
+            let hashValue = Utils.getHashAttribute(attr: attr, attributes: attributes)
+            attributesResult[attr] = hashValue.hashValue
         }
-        return attributes
+        return attributesResult
     }
     
     // Returns fallback attributes for features that have variations
-    static func deriveStickyBucketIdentifierAttributes(context: Context, data: FeaturesDataModel?) -> [String] {
+    static func deriveStickyBucketIdentifierAttributes(context: EvalContext, data: FeaturesDataModel?) -> [String] {
         
         var attributes: Set<String> = []
         
-        let features = data?.features ?? context.features
+        let features = data?.features ?? context.globalContext.features
+        let experiments = data?.experiments ?? context.globalContext.experiments
             
         features.keys.forEach({ id in
             let feature = features[id]
@@ -284,27 +304,32 @@ public class Utils {
                 }
             }
         })
+        
+        experiments?.forEach({ experiment in
+            attributes.insert(experiment.hashAttribute ?? "id")
+            if let fallbackAttribute = experiment.fallbackAttribute {
+                    attributes.insert(fallbackAttribute)
+                }
+        })
         return Array(attributes)
     }
     
     // Get variation of sticky bucketing to use specific functionality
     static func getStickyBucketVariation(
-        context: Context,
+        context: EvalContext,
         experimentKey: String,
         experimentBucketVersion: Int = 0,
         minExperimentBucketVersion: Int = 0,
         meta: [VariationMeta] = [],
         expFallBackAttribute: String? = nil,
-        expHashAttribute: String? = "id",
-        attributeOverrides: JSON
+        expHashAttribute: String? = "id"
     ) -> (variation: Int, versionIsBlocked: Bool?) {
         
         let id = getStickyBucketExperimentKey(experimentKey, experimentBucketVersion)
         let assignments = getStickyBucketAssignments(
             context: context,
             expHashAttribute: expHashAttribute,
-            expFallbackAttribute: expFallBackAttribute,
-            attributeOverrides: attributeOverrides
+            expFallbackAttribute: expFallBackAttribute
         )
         
         if minExperimentBucketVersion > 0 {
@@ -332,11 +357,11 @@ public class Utils {
     }
     
     // Create assignment document
-    static func generateStickyBucketAssignmentDoc(context: Context, attributeName: String,
+    static func generateStickyBucketAssignmentDoc(context: EvalContext, attributeName: String,
                                            attributeValue: String,
                                            assignments: [String: String]) -> (key: String, doc: StickyAssignmentsDocument, changed: Bool) {
         let key = "\(attributeName)||\(attributeValue)"
-            let existingAssignments: [String: String] = (context.stickyBucketAssignmentDocs?[key]?.assignments) ?? [:]
+        let existingAssignments: [String: String] = (context.userContext.stickyBucketAssignmentDocs?[key]?.assignments) ?? [:]
             var newAssignments = existingAssignments
             assignments.forEach { newAssignments[$0] = $1 }
         
@@ -351,6 +376,21 @@ public class Utils {
                 ),
                 changed: changed
             )
+    }
+    
+    static func initializeEvalContext(context: Context) -> EvalContext {
+        let options = MultiUserOptions(apiHost: context.apiHost, clientKey: context.clientKey, encryptionKey: context.encryptionKey, isEnabled: context.isEnabled, attributes: context.attributes, forcedVariations: context.forcedVariations, isQaMode: context.isQaMode, trackingClosure: context.trackingClosure
+        )
+        
+        let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
+        
+        
+        // should create manual force features
+        let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: nil)
+        
+        let evalContext = EvalContext(globalContext: globalContext, userContext: userContext, stackContext: StackContext(), options: options)
+        return evalContext
+        
     }
     
 }
