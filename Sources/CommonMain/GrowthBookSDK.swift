@@ -93,7 +93,7 @@ public struct GrowthBookModel {
         return self
     }
     
-    @objc public func setCacheDirectory(_ directory: CacheDirectory) -> GrowthBookBuilder {
+    public func setCacheDirectory(_ directory: CacheDirectory) -> GrowthBookBuilder {
         CachingManager.shared.updateCacheDirectory(directory)
         return self
     }
@@ -112,6 +112,11 @@ public struct GrowthBookModel {
             backgroundSync: growthBookBuilderModel.backgroundSync,
             remoteEval: growthBookBuilderModel.remoteEval
         )
+        
+        if let clientKey = growthBookBuilderModel.clientKey {
+            CachingManager.shared.setCacheKey(clientKey)
+        }
+        
         if let features = growthBookBuilderModel.features {
             CachingManager.shared.saveContent(fileName: Constants.featureCache, content: features)
         }

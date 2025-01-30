@@ -382,7 +382,7 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>
     }, remoteEval: true)
     .initializer()
 
-:::note
+**note**
 
 If you would like to implement Sticky Bucketing while using Remote Evaluation, you must configure your remote evaluation backend to support Sticky Bucketing. You will not need to provide a StickyBucketService instance to the client side SDK.
 
