@@ -1,7 +1,7 @@
 import Foundation
 
 // MARK: - Error
-public enum SwiftyJSONError: Int, Swift.Error {
+public enum SwiftyJSONError: Int, Swift.Error, Sendable {
     case unsupportedType = 999
     case indexOutOfBounds = 900
     case elementTooDeep = 902
@@ -38,7 +38,7 @@ extension SwiftyJSONError: CustomNSError {
 }
 
 // MARK: - JSON Type
-public enum Type: Int {
+public enum Type: Int, Sendable {
     case number
     case string
     case bool
@@ -312,7 +312,7 @@ extension JSON: Swift.Collection {
 /**
  *  To mark both String and Int can be used in subscript.
  */
-public enum JSONKey {
+public enum JSONKey: Sendable {
     case index(Int)
     case key(String)
 }
@@ -538,9 +538,9 @@ extension JSON: Swift.RawRepresentable {
         }
     }
 
-    public func rawString(_ options: [writingOptionsKeys: Any]) -> String? {
+    public func rawString(_ options: [WritingOptionsKeys: Any]) -> String? {
         let encoding = options[.encoding] as? String.Encoding ?? String.Encoding.utf8
-        let maxObjectDepth = options[.maxObjextDepth] as? Int ?? 10
+        let maxObjectDepth = options[.maxObjectDepth] as? Int ?? 10
         do {
             return try _rawString(encoding, options: options, maxObjectDepth: maxObjectDepth)
         } catch {
@@ -549,7 +549,7 @@ extension JSON: Swift.RawRepresentable {
         }
     }
 
-    fileprivate func _rawString(_ encoding: String.Encoding = .utf8, options: [writingOptionsKeys: Any], maxObjectDepth: Int = 10) throws -> String? {
+    fileprivate func _rawString(_ encoding: String.Encoding = .utf8, options: [WritingOptionsKeys: Any], maxObjectDepth: Int = 10) throws -> String? {
         guard maxObjectDepth > 0 else { throw SwiftyJSONError.invalidJSON }
         switch type {
         case .dictionary:
@@ -1253,11 +1253,17 @@ func >= (lhs: NSNumber, rhs: NSNumber) -> Bool {
     }
 }
 
-public enum writingOptionsKeys {
+@available(*, deprecated, renamed: "WritingOptionsKeys", message: "Use WritingOptionsKeys instead")
+public typealias writingOptionsKeys = WritingOptionsKeys
+
+public enum WritingOptionsKeys: Sendable {
     case jsonSerialization
     case castNilToNSNull
-    case maxObjextDepth
+    case maxObjectDepth
     case encoding
+
+    @available(*, deprecated, renamed: "maxObjectDepth", message: "Use .maxObjectDepth instead")
+    public static var maxObjextDepth: Self { .maxObjectDepth }
 }
 
 // MARK: - JSON: Codable

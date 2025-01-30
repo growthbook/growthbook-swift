@@ -173,7 +173,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
 
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
-            .setCacheDirectory(.documents)
+            .setCacheDirectoryURL(CacheDirectory.documents.url)
             .initializer()
         
         let fileName = "gb-features.txt"

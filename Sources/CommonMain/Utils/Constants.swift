@@ -11,7 +11,7 @@ public enum Constants {
 }
 
 /// Type Alias for Feature in GrowthBook
-typealias Features = [String: Feature]
+public typealias Features = [String: Feature]
 
 /// Type Alias for Condition Element in GrowthBook Rules
 typealias Condition = JSON
@@ -45,7 +45,7 @@ public typealias ExperimentRunCallback = (Experiment, ExperimentResult) -> Void
 typealias NameSpace = (String, Float, Float)
 
 /// Double Struct for GrowthBook Ranges
-public struct BucketRange: Codable {
+public struct BucketRange: Codable, Sendable {
     let number1: Float
     let number2: Float
     
@@ -66,7 +66,7 @@ public struct BucketRange: Codable {
 }
 
 /// GrowthBook Error Class to handle any error / exception scenario
-@objc public enum SDKError: NSInteger, Error {
+@objc public enum SDKError: NSInteger, Error, Sendable {
     case failedToLoadData = 0
     case failedParsedData = 1
     case failedMissingKey = 2
@@ -75,7 +75,7 @@ public struct BucketRange: Codable {
 }
 
 /// Meta info about the variations
-public struct VariationMeta: Codable {
+public struct VariationMeta: Codable, Sendable {
     /// Used to implement holdout groups
     let passthrough: Bool?
     /// A unique key for this variation

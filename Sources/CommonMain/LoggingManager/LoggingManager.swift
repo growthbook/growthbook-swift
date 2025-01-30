@@ -7,7 +7,7 @@
 
 import Foundation
 
-public enum Level: Int {
+public enum Level: Int, Sendable {
     case trace, debug, info, warning, error
 
     var description: String {

@@ -9,9 +9,13 @@ public protocol CachingLayer: AnyObject {
 /// This is actual implementation of Caching Layer in iOS
 public class CachingManager: CachingLayer {
     public static let shared = CachingManager()
-    
-    private var cacheDirectory = CacheDirectory.applicationSupport
-    
+
+    private var cacheDirectoryURL: URL
+
+    init(cacheDirectoryURL: URL = CacheDirectory.applicationSupport.url) {
+        self.cacheDirectoryURL = cacheDirectoryURL
+    }
+
     func getData(fileName: String) -> Data? {
         return getContent(fileName: fileName)
     }
@@ -21,9 +25,13 @@ public class CachingManager: CachingLayer {
     }
 
     func updateCacheDirectory(_ directory: CacheDirectory) {
-        cacheDirectory = directory
+        cacheDirectoryURL = directory.url
     }
-    
+
+    func updateCacheDirectoryURL(_ directoryURL: URL) {
+        cacheDirectoryURL = directoryURL
+    }
+
     /// Save content in cache
     public func saveContent(fileName: String, content: Data) {
         let fileManager = FileManager.default
@@ -66,7 +74,7 @@ public class CachingManager: CachingLayer {
     /// Get Target File Path in internal memory
     func getTargetFile(fileName: String) -> String {
         // Get Documents Directory Path
-        guard let directoryPath = cacheDirectory.path else { return "" }
+        let directoryPath = cacheDirectoryURL.path
         // Append Folder name
         let targetFolderPath = directoryPath + "/GrowthBook-Cache"
 
@@ -88,17 +96,14 @@ public class CachingManager: CachingLayer {
         // Create complete filePath for targetFileName & internal Memory Folder
         return "\(targetFolderPath)/\(file).txt"
     }
-    
+
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
     public func clearCache() {
-        guard let directoryPath = cacheDirectory.path else {
-            logger.error("Failed to retrieve directory path.")
-            return
-        }
-        
+        let directoryPath = cacheDirectoryURL.path
+
         let targetFolderPath = directoryPath + "/GrowthBook-Cache"
         let fileManager = FileManager.default
-        
+
         // Check if folder exists
         if fileManager.fileExists(atPath: targetFolderPath) {
             do {
@@ -113,12 +118,12 @@ public class CachingManager: CachingLayer {
 }
 
 /// This enumeration provides a convenient way to interact with various cache directories, simplifying the process of accessing and managing them using the FileManager API.
-@objc public enum CacheDirectory: Int {
+@objc public enum CacheDirectory: Int, Sendable {
     case applicationSupport
     case caches
     case documents
     case library
-    
+
     /// Converts the enumeration case into the corresponding `FileManager.SearchPathDirectory` value.
     var searchPathDirectory: FileManager.SearchPathDirectory {
         switch self {
@@ -132,7 +137,7 @@ public class CachingManager: CachingLayer {
             return .libraryDirectory
         }
     }
-    
+
     /// Retrieves the path to the cache directory represented by the enumeration case.
     var path: String? {
         return NSSearchPathForDirectoriesInDomains(
@@ -140,5 +145,9 @@ public class CachingManager: CachingLayer {
             .userDomainMask,
             true
         ).first
+    }
+
+    var url: URL {
+        URL(fileURLWithPath: "\(path ?? "")", isDirectory: true)
     }
 }

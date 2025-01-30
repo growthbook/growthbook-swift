@@ -54,7 +54,12 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         self.onConnect = onConnect
     }
 
+    @available(*, deprecated, renamed: "onDisconnect", message: "Use `onDisconnect` instead")
     public func onDissconnect(onDisconnect: @escaping ((Int?, Bool?, NSError?) -> ())) {
+        self.onDisconnect(onDisconnect: onDisconnect)
+    }
+
+    public func onDisconnect(onDisconnect: @escaping ((Int?, Bool?, NSError?) -> ())) {
         self.onDisconnect = onDisconnect
     }
 
@@ -160,9 +165,7 @@ extension SSEHandler {
     
     private func shouldReconnect(statusCode: Int) -> Bool {
         switch statusCode {
-        case 200:
-            return true
-        case _ where statusCode > 200 && statusCode < 300:
+        case 200..<300:
             return true
         default:
             return false

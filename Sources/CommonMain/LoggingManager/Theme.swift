@@ -49,11 +49,14 @@ open class Theme: Themes {
      - returns: A string representation of the hex color.
      */
     private static func formatHex(_ hex: String) -> String {
+        let allowedHexCount = hex.hasPrefix("#") ? 7 : 6
+        assert(hex.count == allowedHexCount, "Invalid hex color format: \(hex)")
+
         let scanner = Scanner(string: hex)
-        var hex: UInt32 = 0
+        var hex: UInt64 = 0
 
         scanner.charactersToBeSkipped = CharacterSet(charactersIn: "#")
-        scanner.scanHexInt32(&hex)
+        scanner.scanHexInt64(&hex)
 
         let r = (hex & 0xFF0000) >> 16
         let g = (hex & 0xFF00) >> 8

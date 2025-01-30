@@ -1,9 +1,9 @@
 import Foundation
 
-public struct StickyAssignmentsDocument: Codable, Equatable {
-    var attributeName: String
-    var attributeValue: String
-    var assignments: [String: String]
+public struct StickyAssignmentsDocument: Codable, Equatable, Sendable {
+    public var attributeName: String
+    public var attributeValue: String
+    public var assignments: [String: String]
     
     init(attributeName: String, attributeValue: String, assignments: [String : String]) {
         self.attributeName = attributeName

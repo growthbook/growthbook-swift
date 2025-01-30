@@ -4,7 +4,7 @@ import Foundation
 // GrowthBook default logger
 var logger = Logger()
 
-@objc public enum LoggerLevel: NSInteger {
+@objc public enum LoggerLevel: NSInteger, Sendable {
     case trace = 0
     case debug = 1
     case info = 2
