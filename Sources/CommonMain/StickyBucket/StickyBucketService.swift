@@ -15,7 +15,7 @@ public class StickyBucketService: StickyBucketServiceProtocol {
     private let prefix: String
     let cache: StickyBucketCacheInterface?
 
-    @available(*, deprecated, message: "Use init(prefix:cacheStorage:) instead")
+    @available(*, deprecated, message: "Use init(prefix:cache:) instead")
     public init(prefix: String = "gbStickyBuckets__", localStorage: CachingLayer? = nil) {
         self.prefix = prefix
         self.cache = localStorage.map(CachingLayerWrapper.init(_:))
@@ -91,8 +91,7 @@ extension CachingLayerWrapper: StickyBucketCacheInterface {
     }
 
     func clearCache() {
-        let url = CacheDirectory.applicationSupport.url.appendingPathComponent("GrowthBook-Cache")
-        try? FileManager.default.removeItem(atPath: url.path)
+        (cachingLayer as? CachingManager)?.clearCache()
     }
 }
 
