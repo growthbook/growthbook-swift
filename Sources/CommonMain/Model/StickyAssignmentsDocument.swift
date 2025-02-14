@@ -1,6 +1,6 @@
 import Foundation
 
-public struct StickyAssignmentsDocument: Codable, Equatable {
+@objc public class StickyAssignmentsDocument: NSObject, Codable {
     var attributeName: String
     var attributeValue: String
     var assignments: [String: String]

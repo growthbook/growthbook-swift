@@ -65,7 +65,7 @@ public struct GrowthBookModel {
         return self
     }
     
-    public func setStickyBucketService(stickyBucketService: StickyBucketServiceProtocol? = StickyBucketService()) -> GrowthBookBuilder {
+    @objc public func setStickyBucketService(stickyBucketService: StickyBucketServiceProtocol? = StickyBucketService()) -> GrowthBookBuilder {
         growthBookBuilderModel.stickyBucketService = stickyBucketService
         return self
     }
@@ -93,8 +93,13 @@ public struct GrowthBookModel {
         return self
     }
     
-    public func setCacheDirectory(_ directory: CacheDirectory) -> GrowthBookBuilder {
-        CachingManager.shared.updateCacheDirectory(directory)
+    @objc public func setSystemCacheDirectory(_ systemDirectory: CacheDirectory) -> GrowthBookBuilder {
+        CachingManager.shared.setSystemCacheDirectory(systemDirectory)
+        return self
+    }
+    
+    @objc public func setCustomCacheDirectory(_ customDirectory: String) -> GrowthBookBuilder {
+        CachingManager.shared.setCustomCachePath(customDirectory)
         return self
     }
 
@@ -198,11 +203,11 @@ public struct GrowthBookModel {
         return gbContext.features
     }
     
-    public func subscribe(_ result: @escaping ExperimentRunCallback) {
+    @objc public func subscribe(_ result: @escaping ExperimentRunCallback) {
         self.subscriptions.append(result)
     }
     
-    public func clearSubscriptions() {
+    @objc public func clearSubscriptions() {
         self.subscriptions.removeAll()
     }
 
@@ -232,7 +237,7 @@ public struct GrowthBookModel {
         }
     }
     
-    public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
+    @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
         refreshHandler?(false)
     }
 
@@ -294,11 +299,11 @@ public struct GrowthBookModel {
         refreshForRemoteEval()
     }
     
-    func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
+    @objc func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
         refreshStickyBucketService(model)
     }
     
-    private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
+    @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
         if (gbContext.stickyBucketService != nil) {
             Utils.refreshStickyBuckets(context: evalContext!, attributes: evalContext!.userContext.attributes, data: data)
         }
