@@ -1,12 +1,12 @@
 import Foundation
 
-public protocol StickyBucketServiceProtocol {
+@objc public protocol StickyBucketServiceProtocol {
     func getAssignments(attributeName: String, attributeValue: String) -> StickyAssignmentsDocument?
     func saveAssignments(doc: StickyAssignmentsDocument)
     func getAllAssignments(attributes: [String: String]) -> [String: StickyAssignmentsDocument]
 }
 
-public class StickyBucketService: StickyBucketServiceProtocol {
+@objc public class StickyBucketService: NSObject, StickyBucketServiceProtocol {
     private let prefix: String
     private let localStorage: CachingLayer?
     

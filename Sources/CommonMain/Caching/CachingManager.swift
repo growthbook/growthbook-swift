@@ -9,7 +9,7 @@ public protocol CachingLayer: AnyObject {
 }
 
 /// This is actual implementation of Caching Layer in iOS
-public class CachingManager: CachingLayer {
+@objc public class CachingManager: NSObject, CachingLayer {
     
     public static let shared = CachingManager()
     
@@ -20,7 +20,7 @@ public class CachingManager: CachingLayer {
     public func setCacheKey(_ key: String) {
         self.cacheKey = sha256Hash(key)
     }
-
+    
     func sha256Hash(_ input: String) -> String {
         guard let data = input.data(using: .utf8) else { return "" }
         var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
@@ -31,20 +31,26 @@ public class CachingManager: CachingLayer {
         return String(key.prefix(5))
     }
     
-    func getData(fileName: String) -> Data? {
+    @objc func getData(fileName: String) -> Data? {
         return getContent(fileName: fileName)
     }
 
-    func putData(fileName: String, content: Data) {
+    @objc func putData(fileName: String, content: Data) {
         saveContent(fileName: fileName, content: content)
     }
 
-    func updateCacheDirectory(_ directory: CacheDirectory) {
+    /// Set a custom cache saving directory
+    @objc public func setCustomCachePath(_ path: String) {
+        self.customCachePath = path
+    }
+    
+    @objc public func setSystemCacheDirectory(_ directory: CacheDirectory) {
         cacheDirectory = directory
+        self.customCachePath = nil
     }
     
     /// Save content in cache
-    public func saveContent(fileName: String, content: Data) {
+    @objc public func saveContent(fileName: String, content: Data) {
         let fileManager = FileManager.default
 
         // Get File Path
@@ -65,7 +71,7 @@ public class CachingManager: CachingLayer {
     }
 
     /// Get Content from cache
-    public func getContent(fileName: String) -> Data? {
+    @objc public func getContent(fileName: String) -> Data? {
         let fileManager = FileManager.default
 
         // Get File Path
@@ -78,14 +84,13 @@ public class CachingManager: CachingLayer {
                 return jsonContents
             }
         }
-
         return nil
     }
 
     /// Get Target File Path in internal memory
-    func getTargetFile(fileName: String) -> String {
+    @objc func getTargetFile(fileName: String) -> String {
         // Get Documents Directory Path
-        guard let directoryPath = cacheDirectory.path else { return "" }
+        guard let directoryPath = customCachePath ?? cacheDirectory.path else { return "" }
         // Append Folder name
         let targetFolderPath = directoryPath + "/GrowthBook-Cache-\(cacheKey)"
 
@@ -109,8 +114,9 @@ public class CachingManager: CachingLayer {
     }
     
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
-    public func clearCache() {
-        guard let directoryPath = cacheDirectory.path else {
+    @objc public func clearCache() {
+                
+        guard let directoryPath = self.customCachePath ?? cacheDirectory.path else {
             logger.error("Failed to retrieve directory path.")
             return
         }
@@ -132,13 +138,12 @@ public class CachingManager: CachingLayer {
 }
 
 /// This enumeration provides a convenient way to interact with various cache directories, simplifying the process of accessing and managing them using the FileManager API.
-public enum CacheDirectory {
+@objc public enum CacheDirectory: Int {
     case applicationSupport
     case caches
     case documents
     case library
     case developerLibrary
-    case customPath(String)
     
     /// Converts the enumeration case into the corresponding `FileManager.SearchPathDirectory` value, if applicable.
     var searchPathDirectory: FileManager.SearchPathDirectory? {
@@ -153,8 +158,6 @@ public enum CacheDirectory {
             return .libraryDirectory
         case .developerLibrary:
             return .developerDirectory
-        case .customPath(_):
-            return nil
         }
     }
     
@@ -167,8 +170,6 @@ public enum CacheDirectory {
                 .userDomainMask,
                 true
             ).first
-        case .customPath(let customPath):
-            return customPath
         }
     }
 }

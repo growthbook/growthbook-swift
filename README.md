@@ -362,12 +362,12 @@ public struct TrackData {
 
 To enable streaming updates set backgroundSync variable to "true"
 
+```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>, clientKey: <GrowthBook/ClientKey>, attributes: <[String: Any]>, trackingCallback: { experiment, experimentResult in 
     }, refreshHandler: { isRefreshed in
     }, backgroundSync: true)
     .initializer()
-    
-
+```
 
 ## Remote Evaluation
 
@@ -377,10 +377,12 @@ You must enable Remote Evaluation in your SDK Connection settings. Cloud custome
 
 To use Remote Evaluation, add the `remoteEval: true` property to your SDK instance. A new evaluation API call will be made any time a user attribute or other dependency changes. You may optionally limit these API calls to specific attribute changes by setting the `cacheKeyAttributes` property (an array of attribute names that, when changed, trigger a new evaluation call).
 
+```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>, clientKey: <GrowthBook/ClientKey>, attributes: <[String: Any]>, trackingCallback: { experiment, experimentResult in 
     }, refreshHandler: { isRefreshed in
     }, remoteEval: true)
     .initializer()
+```
 
 **note**
 
