@@ -37,20 +37,25 @@ public struct GrowthBookModel {
 
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
+    
+    private var cachingManager: CachingManager
 
     @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false) {
         growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
+        self.cachingManager = CachingManager(apiKey: clientKey)
     }
 
     @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool, remoteEval: Bool = false) {
         growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
+        self.cachingManager = CachingManager()
     }
 
     init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool, remoteEval: Bool = false) {
         growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
+        self.cachingManager = CachingManager(apiKey: clientKey)
     }
 
     /// Set Refresh Handler - Will be called when cache is refreshed
@@ -94,12 +99,12 @@ public struct GrowthBookModel {
     }
     
     @objc public func setSystemCacheDirectory(_ systemDirectory: CacheDirectory) -> GrowthBookBuilder {
-        CachingManager.shared.setSystemCacheDirectory(systemDirectory)
+        cachingManager.setSystemCacheDirectory(systemDirectory)
         return self
     }
     
     @objc public func setCustomCacheDirectory(_ customDirectory: String) -> GrowthBookBuilder {
-        CachingManager.shared.setCustomCachePath(customDirectory)
+        cachingManager.setCustomCachePath(customDirectory)
         return self
     }
 
@@ -119,14 +124,14 @@ public struct GrowthBookModel {
         )
         
         if let clientKey = growthBookBuilderModel.clientKey {
-            CachingManager.shared.setCacheKey(clientKey)
+            cachingManager.setCacheKey(clientKey)
         }
         
         if let features = growthBookBuilderModel.features {
-            CachingManager.shared.saveContent(fileName: Constants.featureCache, content: features)
+            cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
 
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher)
+        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
     }
 }
 
@@ -143,19 +148,22 @@ public struct GrowthBookModel {
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext? = nil
+    var cachingManager: CachingManager
 
     init(context: Context,
          refreshHandler: CacheRefreshHandler? = nil,
          logLevel: Level = .info,
          networkDispatcher: NetworkProtocol = CoreNetworkClient(),
          features: Features? = nil,
-         savedGroups: JSON? = nil) {
+         savedGroups: JSON? = nil,
+         cachingManager: CachingManager) {
         gbContext = context
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
         self.savedGroupsValues = savedGroups
+        self.cachingManager = cachingManager
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher))
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager)
         if let features = features {
             gbContext.features = features
         } else {
@@ -190,7 +198,7 @@ public struct GrowthBookModel {
     
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
     @objc public func clearCache() {
-        CachingManager.shared.clearCache()
+        cachingManager.clearCache()
     }
 
     /// Get Context - Holding the complete data regarding cached features & attributes etc.

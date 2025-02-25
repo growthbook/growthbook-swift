@@ -11,11 +11,16 @@ public protocol CachingLayer: AnyObject {
 /// This is actual implementation of Caching Layer in iOS
 @objc public class CachingManager: NSObject, CachingLayer {
     
-    public static let shared = CachingManager()
-    
     private var cacheDirectory = CacheDirectory.applicationSupport
     private var customCachePath: String?
     private var cacheKey: String = ""
+    
+    init(apiKey: String? = nil) {
+        super.init()
+        if let apiKey {
+            self.setCacheKey(apiKey)
+        }
+    }
     
     public func setCacheKey(_ key: String) {
         self.cacheKey = sha256Hash(key)

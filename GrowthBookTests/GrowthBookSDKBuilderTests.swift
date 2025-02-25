@@ -9,6 +9,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     let testAttributes: JSON = JSON()
     let testKeyString = "Ns04T5n9+59rl2x3SlNHtQ=="
     
+    let cachingManager = CachingManager(apiKey: "4r23r324f23")
+    
     func testSDKInitializationDefault() throws {
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
@@ -173,18 +175,18 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
 
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
-            .setSystemCacheDirectory(.documents)
+            .setSystemCacheDirectory(.applicationSupport)
             .initializer()
         
         let fileName = "gb-features.txt"
 
         do {
             let data = try JSON(["GrowthBook": "GrowthBook"]).rawData()
-            CachingManager.shared.saveContent(fileName: fileName, content: data)
+            cachingManager.saveContent(fileName: fileName, content: data)
 
             sdkInstance.clearCache()
 
-            XCTAssertTrue(CachingManager.shared.getContent(fileName: fileName) == nil)
+            XCTAssertTrue(cachingManager.getContent(fileName: fileName) == nil)
         } catch {
             XCTFail()
             logger.error("Failed get raw data or parse json error: \(error.localizedDescription)")

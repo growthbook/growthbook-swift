@@ -15,11 +15,12 @@ class FeaturesViewModel {
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
     /// Caching Manager
-    let manager = CachingManager.shared
+    let manager: CachingManager
         
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager) {
         self.delegate = delegate
         self.dataSource = dataSource
+        self.manager = cachingManager
         self.fetchCachedFeatures()
     }
     
