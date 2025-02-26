@@ -5,9 +5,6 @@ public protocol StickyBucketServiceProtocol {
     func saveAssignments(doc: StickyAssignmentsDocument)
     func getAllAssignments(attributes: [String: String]) -> [String: StickyAssignmentsDocument]
     func clearCache() throws
-}
-
-public protocol StickyBucketServiceWithFileCacheProtocol: StickyBucketCacheInterface {
     func updateCacheDirectoryURL(_ directoryURL: URL)
 }
 
@@ -59,7 +56,9 @@ public class StickyBucketService: StickyBucketServiceProtocol {
 
 extension StickyBucketService {
     public func updateCacheDirectoryURL(_ directoryURL: URL) {
-        (cache as? StickyBucketFileStorageCacheInterface)?.updateCacheDirectoryURL(directoryURL)
+        if let cache = cache as? StickyBucketFileStorageCacheInterface {
+            cache.updateCacheDirectoryURL(directoryURL)
+        }
     }
 }
 
