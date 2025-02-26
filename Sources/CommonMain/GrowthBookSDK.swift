@@ -137,8 +137,8 @@ struct GrowthBookCacheOptions {
     }
 
     @objc public func setCacheDirectoryURL(_ directoryURL: URL) -> GrowthBookBuilder {
-        cacheOptions = cacheOptions.settingDirectoryURL(directoryURL)
-        (growthBookBuilderModel.stickyBucketService as? StickyBucketFileStorageCacheInterface)?.updateCacheDirectoryURL(directoryURL)
+        self.cacheOptions = cacheOptions.settingDirectoryURL(directoryURL)
+        growthBookBuilderModel.stickyBucketService?.updateCacheDirectoryURL(directoryURL)
         return self
     }
 
@@ -163,10 +163,15 @@ struct GrowthBookCacheOptions {
             let lastPathComponent: String = cacheOptions.directoryURL.lastPathComponent
             let hashedClientKey: String = CachingManager.keyHash(clientKey)
             cacheDirectoryURL = cacheOptions.directoryURL
-                .deletingLastPathComponent()
-                .appendingPathComponent("\(lastPathComponent)-\(hashedClientKey)")
+                .appendingPathComponent("\(hashedClientKey)")
         } else {
             cacheDirectoryURL = cacheOptions.directoryURL
+        }
+
+        if let stickyBucketService = growthBookBuilderModel.stickyBucketService {
+            stickyBucketService.updateCacheDirectoryURL(
+                cacheDirectoryURL.appendingPathComponent("sticky_bucket", isDirectory: true)
+            )
         }
 
         let cachingManager: GrowthBookSDKCachingManagerInterface = GrowthBookSDKCachingManager.withFileStorage(
@@ -365,6 +370,7 @@ struct GrowthBookCacheOptions {
     private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
         if (gbContext.stickyBucketService != nil) {
             Utils.refreshStickyBuckets(context: evalContext!, attributes: evalContext!.userContext.attributes, data: data)
+            gbContext.stickyBucketAssignmentDocs = evalContext?.options.stickyBucketAssignmentDocs
         }
     }
 }
