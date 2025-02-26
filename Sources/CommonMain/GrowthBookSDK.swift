@@ -370,6 +370,7 @@ struct GrowthBookCacheOptions {
     private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
         if (gbContext.stickyBucketService != nil) {
             Utils.refreshStickyBuckets(context: evalContext!, attributes: evalContext!.userContext.attributes, data: data)
+            gbContext.stickyBucketAssignmentDocs = evalContext?.options.stickyBucketAssignmentDocs
         }
     }
 }

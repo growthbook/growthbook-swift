@@ -218,7 +218,7 @@ public class Utils {
         expHashAttribute: String?,
         expFallbackAttribute: String? = nil
     ) -> [String: String] {
-        
+
         guard let stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs else {
             return [:]
         }
@@ -379,11 +379,21 @@ public class Utils {
     }
     
     static func initializeEvalContext(context: Context) -> EvalContext {
-        let options = MultiUserOptions(apiHost: context.apiHost, clientKey: context.clientKey, encryptionKey: context.encryptionKey, isEnabled: context.isEnabled, attributes: context.attributes, forcedVariations: context.forcedVariations, isQaMode: context.isQaMode, trackingClosure: context.trackingClosure
+        let options = MultiUserOptions(
+            apiHost: context.apiHost,
+            clientKey: context.clientKey,
+            encryptionKey: context.encryptionKey,
+            isEnabled: context.isEnabled,
+            attributes: context.attributes,
+            forcedVariations: context.forcedVariations,
+            stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs,
+            stickyBucketIdentifierAttributes: context.stickyBucketIdentifierAttributes,
+            stickyBucketService: context.stickyBucketService,
+            isQaMode: context.isQaMode,
+            trackingClosure: context.trackingClosure
         )
-        
+
         let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
-        
         
         // should create manual force features
         let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: nil)
