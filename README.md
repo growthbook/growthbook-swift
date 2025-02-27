@@ -75,7 +75,7 @@ var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_HOST
     attributes: <[String: Any]>,
     trackingCallback: { experiment, experimentResult in 
 
-    }, backroundSync: Bool?).initializer()
+    }, backgroundSync: Bool?).initializer()
 ```
 You must also provide the encryption key if you intend to use data encryption.
 
