@@ -31,7 +31,7 @@ public struct ParentConditionInterface: Codable {
 /// Handler for Refresh Cache Request
 /// 
 /// It updates back whether cache was refreshed or not
-public typealias CacheRefreshHandler = (Bool) -> Void
+public typealias CacheRefreshHandler = @Sendable (Bool) -> Void
 
 /// Handler for experiment result
 public typealias TrackingCallback = (Experiment, ExperimentResult) -> Void

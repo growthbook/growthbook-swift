@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Feature object consists of possible values plus rules for how to assign values to users.
-@objc public class Feature: NSObject, Codable {
+@objc public class Feature: NSObject, Codable, Sendable {
     /// The default value (should use null if not specified)
     public let defaultValue: JSON?
     /// Array of Rule objects that determine when and how the defaultValue gets overridden
@@ -22,7 +22,7 @@ import Foundation
 }
 
 /// Rule object consists of various definitions to apply to calculate feature value
-public struct FeatureRule: Codable {
+public struct FeatureRule: Codable, Sendable {
     /// Unique feature rule id
     public let id: String?
     /// Optional targeting condition
