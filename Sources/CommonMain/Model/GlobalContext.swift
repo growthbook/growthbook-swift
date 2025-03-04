@@ -132,9 +132,9 @@ import Foundation
 
 @objc public class EvalContext : NSObject {
     public var globalContext: GlobalContext
-    public  var userContext: UserContext
-    public  var stackContext: StackContext
-    public  var options: MultiUserOptions
+    public var userContext: UserContext
+    public var stackContext: StackContext
+    public var options: MultiUserOptions
 
     init(globalContext: GlobalContext, userContext: UserContext, stackContext: StackContext, options: MultiUserOptions) {
         self.globalContext = globalContext

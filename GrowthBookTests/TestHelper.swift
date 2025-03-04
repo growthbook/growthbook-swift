@@ -146,7 +146,7 @@ struct FeaturesTest: Codable {
                 newDict[key] = value
             }
             
-            self.stickyBucketAssignmentDocs = newDict == [:] ? nil : newDict
+            self.stickyBucketAssignmentDocs = newDict
         }
     }
 }
