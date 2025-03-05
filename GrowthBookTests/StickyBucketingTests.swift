@@ -69,4 +69,61 @@ class StickyBucketingFeatureTests: XCTestCase {
 
         XCTAssertTrue(failedScenarios.count == 0)
     }
+
+    func testWillStoreDataInCache() {
+        // GIVEN
+        let cacheMock: StickyBucketCacheInterfaceMock = .init()
+        let assignments: [String : String] = ["a": "1", "b": "2"]
+        let cacheKeyPrefix: String = "_"
+        let attributeName: String = "id"
+        let attributeValue: String = "some-id"
+        let hash = "\(attributeName)||\(attributeValue)"
+        let cacheKey: String = "\(cacheKeyPrefix)\(hash)"
+
+        let doc: StickyAssignmentsDocument = .init(attributeName: attributeName, attributeValue: attributeValue, assignments: assignments)
+
+        let service: StickyBucketService = .init(prefix: cacheKeyPrefix, cache: cacheMock)
+
+        // WHEN
+        service.saveAssignments(doc: doc)
+        let fetchedDoc = service.getAssignments(attributeName: attributeName, attributeValue: attributeValue)
+
+        // THEN
+        XCTAssertEqual(doc, cacheMock.docs[cacheKey])
+        XCTAssertEqual(fetchedDoc, doc)
+    }
+
+    func testMergeAssignmentsOnSave() {
+        // GIVEN
+        let cacheMock: StickyBucketCacheInterfaceMock = .init()
+        let initialAssignments: [String : String] = ["a": "1", "b": "2"]
+        let cacheKeyPrefix: String = "_"
+        let attributeName: String = "id"
+        let attributeValue: String = "some-id"
+        let hash = "\(attributeName)||\(attributeValue)"
+        let cacheKey: String = "\(cacheKeyPrefix)\(hash)"
+
+        let initialService: StickyBucketService = .init(prefix: cacheKeyPrefix, cache: cacheMock)
+        let initialDoc: StickyAssignmentsDocument = .init(attributeName: attributeName, attributeValue: attributeValue, assignments: initialAssignments)
+        initialService.saveAssignments(doc: initialDoc)
+
+        let newService = StickyBucketService(prefix: cacheKeyPrefix, cache: cacheMock)
+        XCTAssertEqual(newService.getAssignments(attributeName: attributeName, attributeValue: attributeValue), initialDoc)
+
+        let newAssignments: [String : String] = ["b": "3", "c": "2"]
+        let newDoc: StickyAssignmentsDocument = .init(attributeName: attributeName, attributeValue: attributeValue, assignments: newAssignments)
+
+        // WHEN
+        newService.saveAssignments(doc: newDoc)
+        let fetchedDoc = newService.getAssignments(attributeName: attributeName, attributeValue: attributeValue)
+        
+        // THEN
+        // ["b": "3"] - Will override the previous assignment if there were changes in GB.
+        // This is "kinda" valid because we can start a new phase.
+        // But for new phase there will be a new bucket version suffix for the assignment keys.
+        let expectedAssignments: [String : String] = ["a": "1", "b": "3", "c": "2"]
+        let expectedDoc: StickyAssignmentsDocument = .init(attributeName: attributeName, attributeValue: attributeValue, assignments: expectedAssignments)
+        XCTAssertEqual(expectedDoc, fetchedDoc)
+        XCTAssertEqual(expectedDoc, cacheMock.docs[cacheKey])
+    }
 }
