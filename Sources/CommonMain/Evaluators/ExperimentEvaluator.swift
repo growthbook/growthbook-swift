@@ -142,6 +142,9 @@ class ExperimentEvaluator {
                                                                         assignments: [Utils.getStickyBucketExperimentKey(experiment.key,
                                                                                                                    experiment.bucketVersion ?? 0): result.key])
             if changed {
+                // User context is created for each evaluation.
+                // Changes here don't propagate to the Sticky bucket storage.
+                // There is an extra logic in the StickyBucketService to merge new value with the old ones.
                 context.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs ?? [:]
                 context.userContext.stickyBucketAssignmentDocs?[key] = doc
                 context.options.stickyBucketService?.saveAssignments(doc: doc)
