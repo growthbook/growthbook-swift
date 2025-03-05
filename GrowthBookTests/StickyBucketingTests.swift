@@ -77,7 +77,7 @@ class StickyBucketingFeatureTests: XCTestCase {
         let cacheKeyPrefix: String = "_"
         let attributeName: String = "id"
         let attributeValue: String = "some-id"
-        let hash = "\(attributeName)||\(attributeValue)"
+        let hash = "\(attributeName)||\(attributeValue)".sha256HashString
         let cacheKey: String = "\(cacheKeyPrefix)\(hash)"
 
         let doc: StickyAssignmentsDocument = .init(attributeName: attributeName, attributeValue: attributeValue, assignments: assignments)
@@ -100,7 +100,7 @@ class StickyBucketingFeatureTests: XCTestCase {
         let cacheKeyPrefix: String = "_"
         let attributeName: String = "id"
         let attributeValue: String = "some-id"
-        let hash = "\(attributeName)||\(attributeValue)"
+        let hash = "\(attributeName)||\(attributeValue)".sha256HashString
         let cacheKey: String = "\(cacheKeyPrefix)\(hash)"
 
         let initialService: StickyBucketService = .init(prefix: cacheKeyPrefix, cache: cacheMock)

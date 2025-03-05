@@ -15,13 +15,7 @@ public class CachingManager: CachingLayer {
     public static let shared = CachingManager()
 
     static func keyHash(_ input: String) -> String {
-        guard let data = input.data(using: .utf8) else { return "" }
-        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
-        data.withUnsafeBytes {
-            _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &hash)
-        }
-        let key = hash.map { String(format: "%02x", $0) }.joined()
-        return String(key.prefix(5))
+        String(input.sha256HashString.prefix(5))
     }
 
     private var cacheDirectoryURL: URL

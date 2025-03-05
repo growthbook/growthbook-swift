@@ -23,24 +23,29 @@ public class StickyBucketService: StickyBucketServiceProtocol {
         self.cache = cache
     }
 
-    public func getAssignments(attributeName: String, attributeValue: String) -> StickyAssignmentsDocument? {
-        let key = "\(attributeName)||\(attributeValue)"
+    private func cacheKey(for attributeName: String, attributeValue: String) -> String {
+        let hash = "\(attributeName)||\(attributeValue)".sha256HashString
+        return "\(prefix)\(hash)"
+    }
 
-        return try? cache?.stickyAssignment(for: prefix + key)
+    public func getAssignments(attributeName: String, attributeValue: String) -> StickyAssignmentsDocument? {
+        let cacheKey = cacheKey(for: attributeName, attributeValue: attributeValue)
+
+        return try? cache?.stickyAssignment(for: cacheKey)
     }
     
     public func saveAssignments(doc: StickyAssignmentsDocument) {
-        let key = "\(doc.attributeName)||\(doc.attributeValue)"
+        let cacheKey = cacheKey(for: doc.attributeName, attributeValue: doc.attributeValue)
         // While we have multi-context SDK need to fetch assigned assignments and merge.
         // When there will be a singe-context SDK we can put merge logic to the User Context.
 
         var newDoc = doc
 
-        if let previousDoc = try? cache?.stickyAssignment(for: prefix + key) {
+        if let previousDoc = try? cache?.stickyAssignment(for: cacheKey) {
             newDoc.assignments = previousDoc.assignments.merging(newDoc.assignments) { (_, new) in new }
         }
 
-        try? cache?.updateStickyAssignment(newDoc, for: prefix + key)
+        try? cache?.updateStickyAssignment(newDoc, for: cacheKey)
     }
     
     public func getAllAssignments(attributes: [String : String]) -> [String : StickyAssignmentsDocument] {
