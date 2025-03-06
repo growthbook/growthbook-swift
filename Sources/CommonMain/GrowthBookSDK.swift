@@ -139,7 +139,7 @@ public struct GrowthBookModel {
 ///
 /// It exposes two main methods: feature and run.
 @objc public class GrowthBookSDK: NSObject, FeaturesFlowDelegate {
-    private var refreshHandler: CacheRefreshHandler?
+    var refreshHandler: CacheRefreshHandler?
     private var subscriptions: [ExperimentRunCallback] = []
     private var networkDispatcher: NetworkProtocol
     public var gbContext: Context

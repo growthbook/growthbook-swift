@@ -11,6 +11,28 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     
     let cachingManager = CachingManager(apiKey: "4r23r324f23")
     
+    final class RefreshFlag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _isRefreshed = false
+        
+        var isRefreshed: Bool {
+            get {
+                lock.lock()
+                defer { lock.unlock() }
+                return _isRefreshed
+            }
+            set {
+                lock.lock()
+                defer { lock.unlock() }
+                _isRefreshed = newValue
+            }
+        }
+        
+        func reset() {
+            isRefreshed = false
+        }
+    }
+    
     func testSDKInitializationDefault() throws {
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
@@ -86,30 +108,44 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     }
     
     func testSDKRefreshHandler() throws {
+        let refreshFlag = RefreshFlag()
+        let expectation = XCTestExpectation(description: "First refresh handler")
         
-        var isRefreshed = false
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil,
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
-            isRefreshed = true
+            DispatchQueue.main.async {
+                refreshFlag.isRefreshed = true
+                expectation.fulfill()
+            }
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
-
-        XCTAssertTrue(isRefreshed)
         
-        isRefreshed = false
+        wait(for: [expectation], timeout: 1.0)
+        XCTAssertTrue(refreshFlag.isRefreshed)
+        
+        refreshFlag.reset()
+        
+        let refreshExpectation = XCTestExpectation(description: "Second refresh handler")
+        
+        sdkInstance.refreshHandler = { _ in
+            DispatchQueue.main.async {
+                refreshFlag.isRefreshed = true
+                refreshExpectation.fulfill()
+            }
+        }
         
         sdkInstance.refreshCache()
         
-        XCTAssertTrue(isRefreshed)
-        
+        wait(for: [refreshExpectation], timeout: 1.0)
+        XCTAssertTrue(refreshFlag.isRefreshed)
     }
     
     func testSDKFeaturesData() throws {
-        
-        var isRefreshed = false
+        let refreshFlag = RefreshFlag()
+        let expectation = XCTestExpectation(description: "Features loaded")
 
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
@@ -117,13 +153,18 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil,
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
-            isRefreshed = true
+            DispatchQueue.main.async {
+                refreshFlag.isRefreshed = true
+                expectation.fulfill()
+            }
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
         
-        XCTAssertTrue(isRefreshed)
+        wait(for: [expectation], timeout: 1.0)
+        XCTAssertTrue(refreshFlag.isRefreshed)
         
         XCTAssertTrue(sdkInstance.getFeatures().contains(where: {$0.key == "onboarding"}))
         XCTAssertFalse(sdkInstance.getFeatures().contains(where: {$0.key == "fwrfewrfe"}))
+            
     }
     
     func testSDKRunMethods() throws {
