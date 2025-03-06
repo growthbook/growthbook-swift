@@ -43,6 +43,7 @@ class FeatureValueTests: XCTestCase {
                 result.isOn == expectedResult.isOn &&
                 result.isOff == expectedResult.isOff &&
                 result.source == expectedResult.source &&
+                result.ruleId == expectedResult.ruleId &&
                 result.experiment?.key == expectedResult.experiment?.key &&
                 result.experimentResult?.variationId == expectedResult.experimentResult?.variationId {
                 passedScenarios.append(status)

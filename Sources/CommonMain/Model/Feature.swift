@@ -220,14 +220,17 @@ enum FeatureSource: String {
     public let experiment: Experiment?
     /// When source is "experiment", this will be an ExperimentResult object
     public let experimentResult: ExperimentResult?
+    /// Unique identifier of rule
+    public let ruleId: String?
 
-    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, result: ExperimentResult? = nil) {
+    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = nil) {
         self.isOn = isOn
         self.isOff = !isOn
         self.value = value
         self.source = source
         self.experiment = experiment
         self.experimentResult = result
+        self.ruleId = ruleId
     }
     
     init(json: [String: JSON]) {
@@ -261,9 +264,14 @@ enum FeatureSource: String {
         } else {
             self.experimentResult = nil
         }
+        if let ruleId = json["ruleId"] {
+            self.ruleId = ruleId.stringValue
+        } else {
+            self.ruleId = ""
+        }
     }
     
     enum CodingKeys: String, CodingKey {
-        case value, isOn = "on", isOff = "off", source, experiment, experimentResult
+        case value, isOn = "on", isOff = "off", source, experiment, experimentResult, ruleId
     }
 }
