@@ -26,7 +26,7 @@ class ExperimentEvaluator {
         }
         
         var fallback: String? = nil
-        if (isStickyBucketetingEnabledForExperimet(context: context, experiment: experiment)) {
+        if (isStickyBucketingEnabledForExperiment(context: context, experiment: experiment)) {
             fallback = experiment.fallbackAttribute
         }
         
@@ -40,7 +40,7 @@ class ExperimentEvaluator {
         var foundStickyBucket = false
         var stickyBucketVersionIsBlocked = false
         
-        if isStickyBucketetingEnabledForExperimet(context: context, experiment: experiment) {
+        if isStickyBucketingEnabledForExperiment(context: context, experiment: experiment) {
             let (variation, versionIsBlocked) = Utils.getStickyBucketVariation(context: context,
                                                                                experimentKey: experiment.key,
                                                                                experimentBucketVersion: experiment.bucketVersion ?? 0,
@@ -51,7 +51,7 @@ class ExperimentEvaluator {
             
             foundStickyBucket = variation >= 0;
             assigned = variation
-            stickyBucketVersionIsBlocked = versionIsBlocked ?? false
+            stickyBucketVersionIsBlocked = versionIsBlocked == true
         }
         
         // Some checks are not needed if we already have a sticky bucket
@@ -76,7 +76,10 @@ class ExperimentEvaluator {
             }
             
             if let parentConditions = experiment.parentConditions {
+                let originalEvaluatedFeatures = Set(context.stackContext.evaluatedFeatures)
+
                 for parentCondition in parentConditions {
+                    context.stackContext.evaluatedFeatures = Set(originalEvaluatedFeatures)
                     
                     // TODO: option is to not pass attributeOverrides
                     let parentResult = FeatureEvaluator(context: context, featureKey: parentCondition.id).evaluateFeature()
@@ -135,12 +138,13 @@ class ExperimentEvaluator {
         
         let result = getExperimentResult(gbContext: context, experiment: experiment, variationIndex: assigned, hashUsed: true, featureId: featureId, bucket: hash, stickyBucketUsed: foundStickyBucket)
         logger.info("ExperimentResult: \(result)")
-        if isStickyBucketetingEnabledForExperimet(context: context, experiment: experiment) {
+        if isStickyBucketingEnabledForExperiment(context: context, experiment: experiment) {
             let (key, doc, changed) = Utils.generateStickyBucketAssignmentDoc(context: context,
-                                                                        attributeName: hashAttribute,
-                                                                        attributeValue: hashValue,
-                                                                        assignments: [Utils.getStickyBucketExperimentKey(experiment.key,
-                                                                                                                   experiment.bucketVersion ?? 0): result.key])
+                                                                              attributeName: hashAttribute,
+                                                                              attributeValue: hashValue,
+                                                                              assignments: [Utils.getStickyBucketExperimentKey(
+                                                                                experiment.key,
+                                                                                experiment.bucketVersion ?? 0): result.key])
             if changed {
                 context.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs ?? [:]
                 context.userContext.stickyBucketAssignmentDocs?[key] = doc
@@ -168,7 +172,7 @@ class ExperimentEvaluator {
         }
         
         var fallback: String? = nil
-        if (isStickyBucketetingEnabledForExperimet(context: gbContext, experiment: experiment)) {
+        if (isStickyBucketingEnabledForExperiment(context: gbContext, experiment: experiment)) {
             fallback = experiment.fallbackAttribute
         }
         
@@ -202,7 +206,7 @@ class ExperimentEvaluator {
         return result
     }
     
-    private func isStickyBucketetingEnabledForExperimet(context: EvalContext, experiment: Experiment) -> Bool {
+    private func isStickyBucketingEnabledForExperiment(context: EvalContext, experiment: Experiment) -> Bool {
         return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? true))
     }
 }

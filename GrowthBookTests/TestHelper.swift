@@ -158,14 +158,16 @@ class FeatureResultTest {
     let source: String
     var experiment: Experiment? = nil
     var experimentResult: ExperimentResultTest? = nil
+    let ruleId: String?
 
-    init(value: JSON, isOn: Bool, isOff: Bool, source: String, experiment: Experiment? = nil, experimentResult: ExperimentResultTest? = nil) {
+    init(value: JSON, isOn: Bool, isOff: Bool, source: String, experiment: Experiment? = nil, experimentResult: ExperimentResultTest? = nil, ruleId: String? = nil) {
         self.value = value
         self.isOn = isOn
         self.isOff = isOff
         self.source = source
         self.experiment = experiment
         self.experimentResult = experimentResult
+        self.ruleId = ruleId
     }
 
     init(json: [String: JSON]) {
@@ -194,6 +196,11 @@ class FeatureResultTest {
         }
         if let experimentResult = json["experimentResult"] {
             self.experimentResult = ExperimentResultTest(json: experimentResult.dictionaryValue)
+        }
+        if let ruleId = json["ruleId"] {
+            self.ruleId = ruleId.stringValue
+        } else {
+            self.ruleId = ""
         }
     }
 }

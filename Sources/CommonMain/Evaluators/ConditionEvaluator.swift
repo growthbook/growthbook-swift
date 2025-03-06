@@ -154,28 +154,42 @@ class ConditionEvaluator {
 
     /// Evaluates Condition Value against given condition & attributes
     func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil) -> Bool {
-        // If conditionValue is a string, number, boolean, return true if it's "equal" to attributeValue and false if not.
-        
-        var unwrappedAttribute = attributeValue
-        
-        if attributeValue == nil {
-            unwrappedAttribute = .null
+        // Processing null values - handling this case separately
+        if conditionValue.type == .null {
+            return attributeValue == nil || attributeValue?.type == .null
         }
         
-        if let unwrappedAttribute = unwrappedAttribute {
-            if isPrimitive(value: conditionValue) && isPrimitive(value: unwrappedAttribute) {
-                return conditionValue == unwrappedAttribute
-            }
-        } else if isPrimitive(value: conditionValue) {
-            return false
+        // Protection from nil values
+        let unwrappedAttribute = attributeValue ?? .null
+        
+        // String comparison
+        if conditionValue.type == .string && unwrappedAttribute.type == .string {
+            return conditionValue.stringValue == unwrappedAttribute.stringValue
         }
-
-        // If conditionValue is array, return true if it's "equal" - "equal" should do a deep comparison for arrays.
-        if let conditionValue = conditionValue.array {
-
-            if let attributeValue = attributeValue?.array {
-                if conditionValue.count == attributeValue.count {
-                    return conditionValue == attributeValue
+        
+        // Number comparison
+        if conditionValue.type == .number && unwrappedAttribute.type == .number {
+            return conditionValue.doubleValue == unwrappedAttribute.doubleValue
+        }
+        
+        // Boolean comparison
+        if conditionValue.type == .bool && unwrappedAttribute.type == .bool {
+            return conditionValue.boolValue == unwrappedAttribute.boolValue
+        }
+        
+        // Array comparison - more detailed with deep equality check
+        if let conditionArray = conditionValue.array {
+            if let attributeArray = unwrappedAttribute.array {
+                if conditionArray.count == attributeArray.count {
+                    // Compare each array element to check for deep equality
+                    for i in 0..<conditionArray.count {
+                        if !isEvalConditionValue(conditionValue: conditionArray[i],
+                                               attributeValue: attributeArray[i],
+                                               savedGroups: savedGroups) {
+                            return false
+                        }
+                    }
+                    return true
                 } else {
                     return false
                 }
@@ -183,26 +197,31 @@ class ConditionEvaluator {
                 return false
             }
         }
-
-        // If conditionValue is an object, loop over each key/value pair:
+        
+        // Processing condition objects
         if let _ = conditionValue.dictionary {
-
             if isOperatorObject(obj: conditionValue) {
                 for key in conditionValue.dictionaryValue.keys {
-                    // If evalOperatorCondition(key, attributeValue, value) is false, return false
-                    if let value = conditionValue.dictionaryValue[key], !isEvalOperatorCondition(operatorKey: key, attributeValue: attributeValue, conditionValue: value, savedGroups: savedGroups) {
+                    if let value = conditionValue.dictionaryValue[key],
+                       !isEvalOperatorCondition(operatorKey: key,
+                                               attributeValue: unwrappedAttribute,
+                                               conditionValue: value,
+                                               savedGroups: savedGroups) {
                         return false
                     }
                 }
-            } else if attributeValue != nil {
-                return Common.isEqual(conditionValue, attributeValue)  //conditionValue.equals(attributeValue)
+                return true
+            } else if let _ = unwrappedAttribute.dictionary {
+                // For regular objects, perform deep comparison
+                // (assuming that Common.isEqual() already performs deep comparison)
+                return Common.isEqual(conditionValue, unwrappedAttribute)
             } else {
                 return false
             }
         }
-
-        // Return true
-        return true
+        
+        // If nothing worked, return to simple comparison
+        return conditionValue == unwrappedAttribute
     }
 
     /// This checks if attributeValue is an array, and if so at least one of the array items must match the condition
