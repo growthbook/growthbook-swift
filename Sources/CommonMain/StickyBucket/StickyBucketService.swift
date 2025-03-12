@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol StickyBucketServiceProtocol {
+public protocol StickyBucketServiceProtocol: Sendable {
     func getAssignments(attributeName: String, attributeValue: String) -> StickyAssignmentsDocument?
     func saveAssignments(doc: StickyAssignmentsDocument)
     func getAllAssignments(attributes: [String: String]) -> [String: StickyAssignmentsDocument]
@@ -8,7 +8,7 @@ public protocol StickyBucketServiceProtocol {
     func updateCacheDirectoryURL(_ directoryURL: URL)
 }
 
-public class StickyBucketService: StickyBucketServiceProtocol {
+public final class StickyBucketService: StickyBucketServiceProtocol {
     private let prefix: String
     let cache: StickyBucketCacheInterface?
 

@@ -1,28 +1,22 @@
 import Foundation
 @testable import GrowthBook
 
-class MockNetworkClient: NetworkProtocol {
+class MockNetworkClient: NetworkProtocol, @unchecked Sendable {
+
     var successResponse: String?
     var error: Error?
+
     
     init(successResponse: String?, error: SDKError?) {
         self.successResponse = successResponse
         self.error = error
     }
-    
-    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+
+    func consumeRequest(urlRequest: URLRequest, completion: @escaping @Sendable (Result<GrowthBook.GrowthBookNetworkResponse, any Error>) -> Void) {
         if let successResponse = successResponse {
-            successResult(successResponse.data(using: .utf8) ?? Data())
+            completion(.success(.init(httpURLResponse: .init(url: urlRequest.url!, statusCode: 200, httpVersion: "1.0", headerFields: .none)!, data: successResponse.data(using: .utf8) ?? Data())))
         } else if let error = error {
-            errorResult(error)
-        }
-    }
-    
-    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (any Error) -> Void) {
-        if let successResponse = successResponse {
-            successResult(successResponse.data(using: .utf8) ?? Data())
-        } else if let error = error {
-            errorResult(error)
+            completion(.failure(error))
         }
     }
 }

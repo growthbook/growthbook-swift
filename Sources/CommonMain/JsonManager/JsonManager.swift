@@ -50,7 +50,7 @@ public enum Type: Int, Sendable {
 
 // MARK: - JSON Base
 
-public struct JSON {
+public struct JSON: Sendable {
 
     /**
      Creates a JSON using the data.
@@ -166,8 +166,8 @@ public struct JSON {
     }
 
     /// Private object
-    fileprivate var rawArray: [Any] = []
-    fileprivate var rawDictionary: [String: Any] = [:]
+    fileprivate nonisolated(unsafe) var rawArray: [Any] = []
+    fileprivate nonisolated(unsafe) var rawDictionary: [String: Any] = [:]
     fileprivate var rawString: String = ""
     fileprivate var rawNumber: NSNumber = 0
     fileprivate var rawNull: NSNull = NSNull()

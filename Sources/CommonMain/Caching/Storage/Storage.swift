@@ -8,7 +8,7 @@
 import Foundation
 
 /// Interface for storing values.
-public protocol StorageInterface: AnyObject {
+public protocol StorageInterface: AnyObject, Sendable {
     /// Associated value type.
     associatedtype Value
 
@@ -23,9 +23,9 @@ public protocol StorageInterface: AnyObject {
     func reset() throws
 }
 
-class StorageBox<Value> {
+final class StorageBox<Value> {
     private let storage: any StorageInterface
-    private let updateValueClosure: (_ value: Value?) throws -> Void
+    private let updateValueClosure: @Sendable (_ value: Value?) throws -> Void
 
     init<Storage: StorageInterface>(_ storage: Storage) where Storage.Value == Value {
         self.storage = storage

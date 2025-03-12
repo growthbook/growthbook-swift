@@ -17,7 +17,19 @@ fileprivate struct StoredValue: Codable, Equatable {
     }
 }
 
+fileprivate class StoredValueClass: Codable, Equatable {
+    static func == (lhs: StoredValueClass, rhs: StoredValueClass) -> Bool {
+        lhs.value == rhs.value
+    }
+    
+    var value: Int
+    init(value: Int = 42) {
+        self.value = value
+    }
+}
+
 class FileStorageTests: XCTestCase {
+    typealias SUT = FileStorage
     let fileURL: URL = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("\(UUID().uuidString).json")
 
     override func setUp() {
@@ -33,7 +45,7 @@ class FileStorageTests: XCTestCase {
     func testUpdateValue() throws {
         let storedValue: StoredValue = .init()
 
-        let sut = FileStorage<StoredValue>(fileURL: fileURL)
+        let sut: SUT<StoredValue> = SUT<StoredValue>(fileURL: fileURL)
 
         try XCTAssertNil(sut.value())
 
@@ -47,7 +59,7 @@ class FileStorageTests: XCTestCase {
         let storedData: Data = try JSONEncoder().encode(storedValue)
         try storedData.write(to: fileURL)
 
-        let sut = FileStorage<StoredValue>(fileURL: fileURL)
+        let sut: SUT<StoredValue> = SUT<StoredValue>(fileURL: fileURL)
 
         try XCTAssertEqual(sut.value(), storedValue)
     }
@@ -56,7 +68,7 @@ class FileStorageTests: XCTestCase {
         let storedData: Data = try JSONEncoder().encode(["storedValue"])
         try storedData.write(to: fileURL)
 
-        let sut = FileStorage<StoredValue>(fileURL: fileURL)
+        let sut: SUT<StoredValue> = SUT<StoredValue>(fileURL: fileURL)
 
         try XCTAssertNil(sut.value())
         XCTAssertNil(try? sut.getRawData())
@@ -67,7 +79,7 @@ class FileStorageTests: XCTestCase {
         let storedData: Data = try JSONEncoder().encode(storedValue)
         try storedData.write(to: fileURL)
 
-        let sut = FileStorage<StoredValue>(fileURL: fileURL)
+        let sut: SUT<StoredValue> = SUT<StoredValue>(fileURL: fileURL)
         try XCTAssertNotNil(sut.value())
         try XCTAssertNotNil(sut.getRawData())
 
@@ -89,7 +101,7 @@ class FileStorageTests: XCTestCase {
         let storedValue: StoredValue = .init()
         let storedData: Data = try JSONEncoder().encode(storedValue)
 
-        let sut = FileStorage<StoredValue>(fileURL: fileURL)
+        let sut: SUT<StoredValue> = SUT<StoredValue>(fileURL: fileURL)
         try XCTAssertNil(sut.value())
         XCTAssertNil(try? sut.getRawData())
 
@@ -104,8 +116,26 @@ class FileStorageTests: XCTestCase {
         let storedData: Data = try JSONEncoder().encode(storedValue)
         try storedData.write(to: fileURL)
 
-        let sut = FileStorage<StoredValue>(fileURL: fileURL)
+        let sut: SUT<StoredValue> = SUT<StoredValue>(fileURL: fileURL)
 
         try XCTAssertEqual(sut.getRawData(), storedData)
+    }
+
+    func testDeinit() throws {
+        let storedValue: WeakChecker<StoredValueClass> = WeakChecker(StoredValueClass())
+
+        let sut: WeakChecker<SUT<StoredValueClass>> = WeakChecker(SUT(fileURL: fileURL))
+
+        try sut.object.updateValue(storedValue.object)
+
+        // WHEN
+        storedValue.removeLink()
+        storedValue.assertNotNil()
+        
+        sut.removeLink()
+
+        // THEN
+        sut.assertNil()
+        storedValue.assertNil()
     }
 }

@@ -8,7 +8,7 @@
 import Foundation
 
 /// A thread-safe file storage for codable values.
-class FileStorage<Value: Codable> {
+final class FileStorage<Value: Codable> {
     /// An URL to file where encoded value is stored.
     private let fileURL: URL
 
@@ -20,12 +20,12 @@ class FileStorage<Value: Codable> {
     private let storedValue: Protected<Value?>
 
     /// Encoding closure.
-    private let encode: (Value) throws -> Data
+    private let encode: @Sendable (Value) throws -> Data
 
     /// Decoding closure.
-    private let decode: (Data) throws -> Value
+    private let decode: @Sendable (Data) throws -> Value
 
-    private let fileManager: FileManager
+    private nonisolated(unsafe) let fileManager: FileManager
 
     init<Encoder: TopLevelEncoder, Decoder: TopLevelDecoder>(
         fileURL: URL,

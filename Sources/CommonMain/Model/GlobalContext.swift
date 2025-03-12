@@ -1,14 +1,14 @@
 import Foundation
 
 @objc public class GlobalContext: NSObject {
-    var features: Features
-    public var experiments: [Experiment]?
-    public var savedGroups: JSON?
+    let features: Features
+    public let experiments: [Experiment]?
+    public let savedGroups: JSON?
 
     init(
-        features: Features = [:],
-        experiments: [Experiment]? = nil,
-        savedGroups: JSON? = nil
+        features: Features,
+        experiments: [Experiment]?,
+        savedGroups: JSON?
     ) {
         self.features = features
         self.experiments = experiments
@@ -17,12 +17,12 @@ import Foundation
 }
 
 @objc public class MultiUserOptions: NSObject {
-    /// your api host
-    public let apiHost: String?
-    /// unique client key
-    public let clientKey: String?
-    /// Encryption key for encrypted features.
-    public let encryptionKey: String?
+//    /// your api host
+//    public let apiHost: String?
+//    /// unique client key
+//    public let clientKey: String?
+//    /// Encryption key for encrypted features.
+//    public let encryptionKey: String?
     /// Switch to globally disable all experiments. Default true.
     public let isEnabled: Bool
     /// Map of user attributes that are used to assign variations
@@ -41,17 +41,18 @@ import Foundation
     public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
     /// Features that uses sticky bucketing
     public var stickyBucketIdentifierAttributes: [String]?
-    /// Enable to use remote evaluation
-    public let remoteEval: Bool
+//    /// Enable to use remote evaluation
+//    public let remoteEval: Bool
     // Keys are unique identifiers for the features and the values are Feature objects.
     // Feature definitions - To be pulled from API / Cache
     var features: Features
 
     public var savedGroups: JSON?
 
-    init(apiHost: String?,
-         clientKey: String?,
-         encryptionKey: String?,
+    init(
+//        apiHost: String?,
+//         clientKey: String?,
+//         encryptionKey: String?,
          isEnabled: Bool,
          attributes: JSON,
          forcedVariations: JSON?,
@@ -62,11 +63,11 @@ import Foundation
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
          features: Features = [:],
          backgroundSync: Bool = false,
-         remoteEval: Bool = false,
+//         remoteEval: Bool = false,
          savedGroups: JSON? = nil) {
-        self.apiHost = apiHost
-        self.clientKey = clientKey
-        self.encryptionKey = encryptionKey
+//        self.apiHost = apiHost
+//        self.clientKey = clientKey
+//        self.encryptionKey = encryptionKey
         self.isEnabled = isEnabled
         self.attributes = attributes
         self.forcedVariations = forcedVariations
@@ -77,46 +78,63 @@ import Foundation
         self.trackingClosure = trackingClosure
         self.features = features
         self.backgroundSync = backgroundSync
-        self.remoteEval = remoteEval
+//        self.remoteEval = remoteEval
         self.savedGroups = savedGroups
     }
 
-    @objc public func getFeaturesURL() -> String? {
-        if let apiHost = apiHost, let clientKey = clientKey {
-            return "\(apiHost)/api/features/\(clientKey)"
-        } else {
-            return nil
-        }
-    }
-
-    @objc public func getRemoteEvalUrl() -> String? {
-        if let apiHost = apiHost, let clientKey = clientKey {
-            return  "\(apiHost)/api/eval/\(clientKey)"
-        } else {
-            return nil
-        }
-    }
-
-    @objc public func getSSEUrl() -> String? {
-        if let apiHost = apiHost, let clientKey = clientKey {
-            return "\(apiHost)/sub/\(clientKey)"
-        } else {
-            return nil
-        }
-    }
+//    @objc public func getFeaturesURL() -> String? {
+//        if let apiHost = apiHost, let clientKey = clientKey {
+//            return "\(apiHost)/api/features/\(clientKey)"
+//        } else {
+//            return nil
+//        }
+//    }
+//
+//    @objc public func getRemoteEvalUrl() -> String? {
+//        if let apiHost = apiHost, let clientKey = clientKey {
+//            return  "\(apiHost)/api/eval/\(clientKey)"
+//        } else {
+//            return nil
+//        }
+//    }
+//
+//    @objc public func getSSEUrl() -> String? {
+//        if let apiHost = apiHost, let clientKey = clientKey {
+//            return "\(apiHost)/sub/\(clientKey)"
+//        } else {
+//            return nil
+//        }
+//    }
 }
 
 @objc public class UserContext: NSObject {
     public let attributes: JSON
     public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
-    public var forcedVariations: JSON?
-    public var forcedFeatureValues: JSON?
+    public let forcedVariations: JSON?
+    public let forcedFeatureValues: JSON?
 
-    init(attributes: JSON, stickyBucketAssignmentDocs: [String : StickyAssignmentsDocument]? = nil, forcedVariations: JSON? = nil, forcedFeatureValues: JSON? = nil) {
+    init(
+        attributes: JSON,
+        stickyBucketAssignmentDocs: [String : StickyAssignmentsDocument]?,
+        forcedVariations: JSON?,
+        forcedFeatureValues: JSON?
+    )
+    {
         self.attributes = attributes
         self.stickyBucketAssignmentDocs = stickyBucketAssignmentDocs
         self.forcedVariations = forcedVariations
         self.forcedFeatureValues = forcedFeatureValues
+    }
+
+    public override var description: String {
+        return """
+        UserContext(
+          attributes: \(attributes),
+          stickyBucketAssignmentDocs: \(String(describing: stickyBucketAssignmentDocs)),
+          forcedVariations: \(String(describing: forcedVariations)),
+          forcedFeatureValues: \(String(describing: forcedFeatureValues))
+        )
+        """
     }
 }
 
@@ -130,11 +148,11 @@ import Foundation
     }
 }
 
-@objc public class EvalContext : NSObject {
-    public var globalContext: GlobalContext
-    public  var userContext: UserContext
-    public  var stackContext: StackContext
-    public  var options: MultiUserOptions
+public struct EvalContext {
+    public let globalContext: GlobalContext
+    public let userContext: UserContext
+    public let stackContext: StackContext
+    public let options: MultiUserOptions
 
     init(globalContext: GlobalContext, userContext: UserContext, stackContext: StackContext, options: MultiUserOptions) {
         self.globalContext = globalContext

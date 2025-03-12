@@ -8,7 +8,7 @@
 import Foundation
 
 /// Multi-key interface for storing values.
-public protocol KeyedStorageInterface: AnyObject {
+public protocol KeyedStorageInterface: AnyObject, Sendable {
     /// Associated value type.
     associatedtype Value
 
@@ -26,10 +26,10 @@ public protocol KeyedStorageInterface: AnyObject {
     func reset() throws
 }
 
-class KeyedStorageBox<Value> {
+final class KeyedStorageBox<Value>: Sendable {
     private let storage: any KeyedStorageInterface
-    private let getValueClosure: (_ key: String) throws -> Value?
-    private let updateValueClosure: (_ value: Value?, _ key: String) throws -> Void
+    private let getValueClosure: @Sendable (_ key: String) throws -> Value?
+    private let updateValueClosure: @Sendable (_ value: Value?, _ key: String) throws -> Void
 
     init<Storage: KeyedStorageInterface>(_ storage: Storage) where Storage.Value == Value {
         self.storage = storage
@@ -53,7 +53,7 @@ extension KeyedStorageBox: KeyedStorageInterface {
 }
 
 /// File storage for codable values.
-class KeyedStorageCache<Value: Codable> {
+final class KeyedStorageCache<Value: Codable> {
     /// Stored value.
     ///
     /// Storing a copy in memory to reduce file read and decoding operations.
@@ -61,14 +61,14 @@ class KeyedStorageCache<Value: Codable> {
     /// The value is not read until first access. This allows to handle load and parse errors on first access.
     private let storedValue: Protected<[String: StorageBox<Value>]> = .init([:])
 
-    private let storageBoxBuilder: (_ key: String) -> StorageBox<Value>
+    private let storageBoxBuilder: @Sendable (_ key: String) -> StorageBox<Value>
 
-    init(storageBoxBuilder: @escaping (_ key: String) -> StorageBox<Value>) {
+    init(storageBoxBuilder: @escaping @Sendable (_ key: String) -> StorageBox<Value>) {
         self.storageBoxBuilder = storageBoxBuilder
     }
 
     convenience init<Storage: StorageInterface>(
-        storageBuilder: @escaping (_ key: String) -> Storage
+        storageBuilder: @escaping @Sendable (_ key: String) -> Storage
     ) where Storage.Value == Value {
         self.init(storageBoxBuilder: { .init(storageBuilder($0)) })
     }

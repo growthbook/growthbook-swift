@@ -3,15 +3,16 @@ import CommonCrypto
 import CryptoKit
 
 /// Interface for Caching Layer
-public protocol CachingLayer: AnyObject {
+public protocol CachingLayer: AnyObject, Sendable {
     func saveContent(fileName: String, content: Data)
     func getContent(fileName: String) -> Data?
     func setCacheKey(_ key: String)
 }
 
 /// This is actual implementation of Caching Layer in iOS
-public class CachingManager: CachingLayer {
-    
+public class CachingManager: CachingLayer, @unchecked Sendable {
+    // Old CachingManager. Mostly not used, setting @unchecked Sendable
+
     public static let shared = CachingManager()
 
     static func keyHash(_ input: String) -> String {

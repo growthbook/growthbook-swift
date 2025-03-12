@@ -8,7 +8,7 @@
 import Foundation
 
 /// Saved groups cache interface.
-protocol SavedGroupsCacheInterface: AnyObject {
+protocol SavedGroupsCacheInterface: AnyObject, Sendable {
     /// Returns cached saved groups.
     func savedGroups() throws -> JSON?
     /// Updates cached groups with a given `value`.

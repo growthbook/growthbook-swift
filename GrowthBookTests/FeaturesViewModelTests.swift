@@ -47,6 +47,18 @@ class SavedGroupsCacheInterfaceMock: SavedGroupsCacheInterface {
 
 
 class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
+    func featuresAPIModelSuccessfully(model: GrowthBook.DecryptedFeaturesDataModel, fetchType: GrowthBook.GrowthBookFeaturesFetchResult.FetchType) {
+        isSuccess = true
+        isError = false
+        hasFeatures = !model.features.isEmpty
+    }
+    
+    func featuresFetchFailed(error: any Error, fetchType: GrowthBook.GrowthBookFeaturesFetchResult.FetchType) {
+        isSuccess = false
+        isError = true
+        hasFeatures = false
+    }
+    
     
     var isSuccess: Bool = false
     var isError: Bool = false
@@ -64,7 +76,13 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = false
         isError = true
 
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), featuresCache: FeaturesCacheInterfaceMock(), savedGroupsCache: SavedGroupsCacheInterfaceMock())
+        let viewModel = FeaturesViewModel(
+            delegate: self,
+            featuresCache: FeaturesCacheInterfaceMock(),
+            savedGroupsCache: SavedGroupsCacheInterfaceMock(),
+            featuresModelProvider: .none,
+            featuresModelFetcher: .none
+        )
 
         viewModel.fetchFeatures(apiUrl: "")
 

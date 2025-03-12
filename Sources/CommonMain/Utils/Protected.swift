@@ -15,7 +15,7 @@ final class Protected<Value> {
     private var value: Value
     #endif
 
-    private let lock: NSLock = .init()
+    private let lock: NSRecursiveLock = .init()
 
     init(_ value: Value) {
         self.value = value
@@ -47,6 +47,22 @@ final class Protected<Value> {
     @discardableResult
     func write<U>(_ closure: (inout Value) throws -> U) rethrows -> U {
         try lock.write { try closure(&self.value) }
+    }
+
+    /// Assigns a new value to a given key-path. Returns an old value.
+    ///
+    /// - Parameters:
+    ///   - keyPath: A writable keyPath where to store new value.
+    ///   - newPropertyValue: A new property value to assign.
+    ///
+    /// - Returns: previously assigned value.
+    @discardableResult
+    func write<U>(_ keyPath: WritableKeyPath<Value, U>, _ newPropertyValue: U) -> U {
+        lock.write {
+            let oldValue = value[keyPath: keyPath]
+            value[keyPath: keyPath] = newPropertyValue
+            return oldValue
+        }
     }
 
     /// Synchronously update the protected value.

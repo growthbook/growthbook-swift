@@ -8,7 +8,7 @@
 import Foundation
 
 /// `Features` cache interface.
-protocol FeaturesCacheInterface: AnyObject {
+protocol FeaturesCacheInterface: AnyObject, Sendable {
     /// Returns cached `Features`.
     func features() throws -> Features?
     /// Updates stored `Features`.

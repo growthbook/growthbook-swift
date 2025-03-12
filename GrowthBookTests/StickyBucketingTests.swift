@@ -8,7 +8,7 @@ class StickyBucketingFeatureTests: XCTestCase {
 
     override func setUp() {
         evalConditions = TestHelper().getStickyBucketingData()
-        service = StickyBucketService()
+        service = StickyBucketService(cache: .none)
     }
 
     func testEvaluateFeatureWithStickyBucketingFeature() {

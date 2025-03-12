@@ -38,11 +38,13 @@ class StorageInterfaceMock<Value>: StorageInterface {
 }
 
 class StorageBoxTests: XCTestCase {
+    typealias SUT = StorageBox
+
     func testUpdateValue() throws {
         let storageMock: StorageInterfaceMock<Int> = .init()
         let newValue: Int = 42
 
-        let sut = StorageBox(storageMock)
+        let sut: SUT = .init(storageMock)
 
         try sut.updateValue(newValue)
 
@@ -55,7 +57,7 @@ class StorageBoxTests: XCTestCase {
         let value: Int = 42
         let storageMock: StorageInterfaceMock<Int> = .init(value)
 
-        let sut = StorageBox(storageMock)
+        let sut: SUT = .init(storageMock)
 
         try XCTAssertEqual(sut.value(), value)
         XCTAssertTrue(storageMock.didCallValue)
@@ -65,12 +67,29 @@ class StorageBoxTests: XCTestCase {
         let value: Int = 42
         let storageMock: StorageInterfaceMock<Int> = .init(value)
 
-        let sut = StorageBox(storageMock)
+        let sut: SUT = .init(storageMock)
         XCTAssertNotNil(storageMock.underlyingValue)
 
         try sut.reset()
 
         XCTAssertNil(storageMock.underlyingValue)
         XCTAssertTrue(storageMock.didCallReset)
+    }
+
+    func testDeinit() throws {
+        // GIVEN
+        let storageMock = WeakChecker(StorageInterfaceMock<Int>(1))
+
+
+        let sut: WeakChecker<SUT> = WeakChecker(.init(storageMock.object))
+        try sut.object.updateValue(2)
+
+        // WHEN
+        sut.removeLink()
+        storageMock.removeLink()
+
+        // THEN
+        sut.assertNil()
+        storageMock.assertNil()
     }
 }

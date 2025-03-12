@@ -1,50 +1,88 @@
 import Foundation
 
+public struct GrowthBookNetworkResponse: Sendable {
+    var httpURLResponse: HTTPURLResponse
+    var data: Data
+}
+
 /// Network Dispatcher Protocol for API Consumption
 ///
 /// Implement this protocol to define specific implementation for Network Calls - to be made by SDK
-@objc public protocol NetworkProtocol: AnyObject {
-    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void)
-    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void)
+public protocol GrowthBookNetworkProtocol: AnyObject, Sendable {
+    func consumeRequest(urlRequest: URLRequest, completion: @escaping @Sendable (Result<GrowthBookNetworkResponse, Swift.Error>) -> Void)
 }
 
-class CoreNetworkClient: NetworkProtocol {
-    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
-        guard let url = URL(string: url) else { return }
 
-        let request = URLSession.shared.dataTask(with: url) {(data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                errorResult(error)
-            }
-            guard let responseData = data else { return }
-            successResult(responseData)
-        }
-        request.resume()
+public final class GrowthBookNetworkClient: GrowthBookNetworkProtocol {
+
+    private let urlSession: URLSession
+
+    public init(urlSession: URLSession = .shared) {
+        self.urlSession = urlSession
     }
-    
-    func consumePOSTRequest(url: String, params: [String: Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
-        guard let url = URL(string: url) else { return }
-        
-        let session = URLSession.shared
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("application/json", forHTTPHeaderField: "Accept")
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: params, options: .prettyPrinted)
-        } catch let error {
-            errorResult(error)
-        }
-        
-        let task = session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                errorResult(error)
+
+    public func consumeRequest(urlRequest: URLRequest, completion: @escaping @Sendable (Result<GrowthBookNetworkResponse, Swift.Error>) -> Void) {
+        let dataTask = urlSession.dataTask(with: urlRequest) { (data: Data?, urlResponse: URLResponse?, error: Swift.Error?) in
+            guard error == nil else {
+                return completion(.failure(ResponseError.urlRequestError(error!, response: urlResponse, payload: data)))
             }
-            guard let responseData = data else { return }
-            successResult(responseData)
+
+            guard let data else {
+                return completion(.failure(ResponseError.noData(response: urlResponse)))
+            }
+
+            guard let httpURLResponse = urlResponse as? HTTPURLResponse else {
+                return completion(.failure(ResponseError.responseInNotHTTPURLResponse(response: urlResponse, payload: data)))
+            }
+
+            guard 200..<300 ~= httpURLResponse.statusCode else {
+                return completion(.failure(ResponseError.invalidResponseStatusCode(code: httpURLResponse.statusCode, response: httpURLResponse, payload: data)))
+            }
+
+            completion(.success(.init(httpURLResponse: httpURLResponse, data: data)))
         }
-        task.resume()
+
+        dataTask.resume()
+    }
+
+}
+
+extension GrowthBookNetworkClient {
+    struct ResponseError: Swift.Error, Sendable {
+        enum ErrorType: Sendable {
+            case urlRequestError(Swift.Error)
+            case noData
+            case responseInNotHTTPURLResponse
+            case invalidResponseStatusCode(code: Int)
+        }
+
+        let type: ErrorType
+        let response: URLResponse?
+        let payload: Data?
+
+        var underlyingError: Swift.Error? {
+            switch type {
+            case .urlRequestError(let error):
+                return error
+            case .noData, .responseInNotHTTPURLResponse, .invalidResponseStatusCode:
+                return .none
+            }
+        }
+
+        static func urlRequestError(_ error: Swift.Error, response: URLResponse?, payload: Data?) -> ResponseError {
+            .init(type: .urlRequestError(error), response: response, payload: payload)
+        }
+
+        static func noData(response: URLResponse?) -> ResponseError {
+            .init(type: .noData, response: response, payload: nil)
+        }
+
+        static func responseInNotHTTPURLResponse(response: URLResponse?, payload: Data?) -> ResponseError {
+            .init(type: .responseInNotHTTPURLResponse, response: response, payload: payload)
+        }
+
+        static func invalidResponseStatusCode(code: Int, response: HTTPURLResponse, payload: Data?) -> ResponseError {
+            .init(type: .invalidResponseStatusCode(code: code), response: response, payload: payload)
+        }
     }
 }

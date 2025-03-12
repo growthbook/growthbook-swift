@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Feature object consists of possible values plus rules for how to assign values to users.
-@objc public class Feature: NSObject, Codable {
+@objc public final class Feature: NSObject, Codable, Sendable {
     /// The default value (should use null if not specified)
     public let defaultValue: JSON?
     /// Array of Rule objects that determine when and how the defaultValue gets overridden
@@ -22,7 +22,7 @@ import Foundation
 }
 
 /// Rule object consists of various definitions to apply to calculate feature value
-public struct FeatureRule: Codable {
+public struct FeatureRule: Codable, Sendable {
     /// Unique feature rule id
     public let id: String?
     /// Optional targeting condition
@@ -207,7 +207,7 @@ enum FeatureSource: String {
 }
 
  /// Result for Feature
-@objc public class FeatureResult: NSObject, Codable {
+@objc public final class FeatureResult: NSObject, Codable, Sendable {
     /// The assigned value of the feature
     public let value: JSON?
     /// The assigned value cast to a boolean
@@ -220,14 +220,17 @@ enum FeatureSource: String {
     public let experiment: Experiment?
     /// When source is "experiment", this will be an ExperimentResult object
     public let experimentResult: ExperimentResult?
+    /// Unique identifier of rule
+    public let ruleId: String?
 
-    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, result: ExperimentResult? = nil) {
+    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = nil) {
         self.isOn = isOn
         self.isOff = !isOn
         self.value = value
         self.source = source
         self.experiment = experiment
         self.experimentResult = result
+        self.ruleId = ruleId
     }
     
     init(json: [String: JSON]) {
@@ -261,9 +264,14 @@ enum FeatureSource: String {
         } else {
             self.experimentResult = nil
         }
+        if let ruleId = json["ruleId"] {
+            self.ruleId = ruleId.stringValue
+        } else {
+            self.ruleId = ""
+        }
     }
     
     enum CodingKeys: String, CodingKey {
-        case value, isOn = "on", isOff = "off", source, experiment, experimentResult
+        case value, isOn = "on", isOff = "off", source, experiment, experimentResult, ruleId
     }
 }

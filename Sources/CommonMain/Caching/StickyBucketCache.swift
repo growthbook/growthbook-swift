@@ -9,7 +9,7 @@ import Foundation
 import Combine
 
 /// Sticky bucket cache interface.
-public protocol StickyBucketCacheInterface {
+public protocol StickyBucketCacheInterface: Sendable {
     /// Returns stored `StickyAssignmentsDocument` for a given key.
     /// - Parameter key: A key to return value for.
     func stickyAssignment(for key: String) throws -> StickyAssignmentsDocument?
@@ -31,21 +31,20 @@ public protocol StickyBucketFileStorageCacheInterface: StickyBucketCacheInterfac
 
 /// Default implementation of the `StickyBucketFileStorageCacheInterface`.
 final public class StickyBucketFileStorageCache {
-    struct MutableState {
+    private struct MutableState {
         var directoryURL: URL
+        let fileManager: FileManager
         var storage: KeyedStorageBox<StickyAssignmentsDocument>
     }
 
     private let mutableState: Protected<MutableState>
-    private let fileManager: FileManager
 
     private init(
         directoryURL: URL,
         storageBox: KeyedStorageBox<StickyAssignmentsDocument>,
         fileManager: FileManager = .default
     ) {
-        self.mutableState = .init(.init(directoryURL: directoryURL, storage: storageBox))
-        self.fileManager = fileManager
+        self.mutableState = .init(.init(directoryURL: directoryURL, fileManager: fileManager, storage: storageBox))
     }
     
     /// Creates a new `StickyBucketFileStorageCache` with a given params.
@@ -106,8 +105,8 @@ extension StickyBucketFileStorageCache: StickyBucketCacheInterface {
     public func clearCache() throws {
         try mutableState.read {
             try $0.storage.reset()
-            if fileManager.fileExists(atPath: $0.directoryURL.path) {
-                try fileManager.removeItem(at: $0.directoryURL)
+            if $0.fileManager.fileExists(atPath: $0.directoryURL.path) {
+                try $0.fileManager.removeItem(at: $0.directoryURL)
             }
         }
     }
@@ -115,9 +114,10 @@ extension StickyBucketFileStorageCache: StickyBucketCacheInterface {
 
 extension StickyBucketFileStorageCache: StickyBucketFileStorageCacheInterface {
     public func updateCacheDirectoryURL(_ directoryURL: URL) {
-        mutableState.write {
-            $0.directoryURL = directoryURL
-            $0.storage = KeyedStorageBox<StickyAssignmentsDocument>(KeyedStorageCache { Self.fileStorageBuilder(fileManager: self.fileManager)(directoryURL, $0) })
+        mutableState.write { mutableState in
+            mutableState.directoryURL = directoryURL
+            let protectedFileManager: Protected<FileManager> = Protected<FileManager>.init(mutableState.fileManager)
+            mutableState.storage = KeyedStorageBox<StickyAssignmentsDocument>(KeyedStorageCache { Self.fileStorageBuilder(fileManager: protectedFileManager.read())(directoryURL, $0) })
         }
     }
 }

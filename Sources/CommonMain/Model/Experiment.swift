@@ -1,7 +1,7 @@
 import Foundation
 
 /// Defines a single experiment
-@objc public class Experiment: NSObject, Codable {
+@objc public final class Experiment: NSObject, Codable, Sendable {
     /// The globally unique tracking key for the experiment
     public let key: String
     /// The different variations to choose between
@@ -23,15 +23,15 @@ import Foundation
     /// Any users with a sticky bucket version less than this will be excluded from the experiment
     public let minBucketVersion: Int?
     /// How to weight traffic between variations. Must add to 1.
-    public var weights: [Float]?
+    public let weights: [Float]?
     /// If set to false, always return the control (first variation)
-    public var isActive: Bool?
+    public let isActive: Bool?
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
-    public var coverage: Float?
+    public let coverage: Float?
     /// Optional targeting condition
-    public var condition: JSON?
+    public let condition: JSON?
     /// All users included in the experiment will be forced into the specific variation index
-    public var force: Int?
+    public let force: Int?
     /// Array of ranges, one per variation
     public let ranges: [BucketRange]?
     /// Meta info about the variations
@@ -85,6 +85,8 @@ import Foundation
         self.coverage = coverage
         if let condition = condition {
             self.condition = JSON(condition)
+        } else {
+            self.condition = nil
         }
         self.force = force
         self.ranges = ranges
@@ -166,6 +168,8 @@ import Foundation
 
         if let weights = json["weights"] {
             self.weights = JSON.convertToArrayFloat(jsonArray: weights.arrayValue)
+        } else {
+            self.weights = nil
         }
 
         coverage = json["coverage"]?.floatValue
@@ -198,7 +202,7 @@ import Foundation
 }
 
 /// The result of running an Experiment given a specific Context
-@objc public class ExperimentResult: NSObject, Codable {
+@objc public final class ExperimentResult: NSObject, Codable, Sendable {
     /// Whether or not the user is part of the experiment
     public let inExperiment: Bool
     /// The array index of the assigned variation
@@ -212,11 +216,11 @@ import Foundation
     /// The unique key for the assigned variation
     public let key: String
     /// The human-readable name of the assigned variation
-    public var name: String?
+    public let name: String?
     /// The hash value used to assign a variation (float from `0` to `1`)
-    public var bucket: Float?
+    public let bucket: Float?
     /// Used for holdout groups
-    public var passthrough: Bool?
+    public let passthrough: Bool?
     /// If a hash was used to assign a variation
     public let hashUsed: Bool?
     /// The id of the feature (if any) that the experiment came from

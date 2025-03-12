@@ -17,12 +17,28 @@ protocol DataStorageInterface: StorageInterface {
     func getRawData() throws -> Data?
 }
 
-class DataStorageBox<Value>: StorageBox<Value> {
+
+final class DataStorageBox<Value>: Sendable {
     private let storage: any DataStorageInterface
+    private let updateValueClosure: @Sendable (_ value: Value?) throws -> Void
 
     init<Storage: DataStorageInterface>(_ storage: Storage) where Storage.Value == Value {
         self.storage = storage
-        super.init(storage)
+        self.updateValueClosure = { try storage.updateValue($0) }
+    }
+}
+
+extension DataStorageBox: StorageInterface {
+    func value() throws -> Value? {
+        try storage.value() as! Value?
+    }
+
+    func updateValue(_ value: Value?) throws {
+        try updateValueClosure(value)
+    }
+
+    func reset() throws {
+        try storage.reset()
     }
 }
 

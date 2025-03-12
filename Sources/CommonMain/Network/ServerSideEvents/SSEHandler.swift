@@ -15,13 +15,14 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     public var connectionStatus: SSEConnectionStatus
 
     private var onConnect: (() -> Void)?
-    private var onDisconnect: ((Int?, Bool?, NSError?) -> Void)?
+    private var onComplete: ((_ statusCode: Int?, _ shouldReconnect: Bool?, _ error: NSError?) -> Void)?
     private var eventListeners: [String: (_ id: String?, _ event: String?, _ data: String?) -> Void] = [:]
     private var eventHandler: EventHandler?
     private var operationQueue: OperationQueue
     private var mainQueue = DispatchQueue.main
     private var urlSession: URLSession?
-
+    private var task: URLSessionDataTask?
+    
     public init(
         url: URL,
         headers: [String: String] = [:]
@@ -36,17 +37,27 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         super.init()
     }
 
+    deinit {
+        disconnect()
+    }
+
     public func connect(lastEventId: String? = nil) {
         eventHandler = EventHandler()
         connectionStatus = .connecting
 
         let configuration = sessionConfiguration(lastEventId: lastEventId)
-        urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: operationQueue)
-        urlSession?.dataTask(with: url).resume()
+        let urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: operationQueue)
+        var request = URLRequest(url: url)
+        request.timeoutInterval = TimeInterval(INT_MAX)
+        let task = urlSession.dataTask(with: request)
+        task.resume()
+        self.urlSession = urlSession
+        self.task = task
     }
 
     public func disconnect() {
         connectionStatus = .disconnected
+        task?.cancel()
         urlSession?.invalidateAndCancel()
     }
 
@@ -54,13 +65,26 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         self.onConnect = onConnect
     }
 
-    @available(*, deprecated, renamed: "onDisconnect", message: "Use `onDisconnect` instead")
+    @available(*, deprecated, renamed: "onDisconnect", message: "Use `onComplete` instead")
     public func onDissconnect(onDisconnect: @escaping ((Int?, Bool?, NSError?) -> ())) {
-        self.onDisconnect(onDisconnect: onDisconnect)
+        self.onComplete(onComplete: onDisconnect)
     }
 
+    @available(*, deprecated, renamed: "onDisconnect", message: "Use `onComplete` instead")
     public func onDisconnect(onDisconnect: @escaping ((Int?, Bool?, NSError?) -> ())) {
-        self.onDisconnect = onDisconnect
+        self.onComplete(onComplete: onDisconnect)
+    }
+
+    /// Callback called once EventSource has disconnected from server. This can happen for multiple reasons.
+    /// The server could have requested the disconnection or maybe a network layer error, wrong URL or any other
+    /// error.
+    /// The callback receives as parameters the status code of the disconnection, if we should reconnect or not
+    /// following event source rules and finally the network layer error if any.
+    /// All this information is more than enough for you to take a decision if you should reconnect or not.
+    ///
+    /// - Parameter onComplete: callback
+    public func onComplete(onComplete: @escaping ((_ statusCode: Int?, _ shouldReconnect: Bool?, _ error: NSError?) -> ())) {
+        self.onComplete = onComplete
     }
 
     public func addEventListener(event: String,
@@ -100,12 +124,12 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
                          didCompleteWithError error: Error?) {
 
         guard let responseStatusCode = (task.response as? HTTPURLResponse)?.statusCode else {
-            mainQueue.async { [weak self] in self?.onDisconnect?(nil, nil, error as NSError?) }
+            mainQueue.async { [weak self] in self?.onComplete?(nil, nil, error as NSError?) }
             return
         }
 
         let reconnect = shouldReconnect(statusCode: responseStatusCode)
-        mainQueue.async { [weak self] in self?.onDisconnect?(responseStatusCode, reconnect, nil) }
+        mainQueue.async { [weak self] in self?.onComplete?(responseStatusCode, reconnect, nil) }
     }
 
     open func urlSession(_ session: URLSession,
@@ -128,7 +152,6 @@ extension SSEHandler {
         if let eventID = lastEventId {
             additionalHeaders["Last-Event-Id"] = eventID
         }
-        additionalHeaders["Accept"] = "application/json; q=0.5"
         additionalHeaders["Accept"] = "text/event-stream"
         additionalHeaders["Cache-Control"] = "no-cache"
 
@@ -165,7 +188,9 @@ extension SSEHandler {
     
     private func shouldReconnect(statusCode: Int) -> Bool {
         switch statusCode {
-        case 200..<300:
+        case 200:
+            return false
+        case 201..<300:
             return true
         default:
             return false

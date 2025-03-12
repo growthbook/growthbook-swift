@@ -12,9 +12,9 @@ var logger = Logger()
     case error = 4
 }
 
-extension Logger {
-    static func getLoggingLevel(from level: LoggerLevel) -> Level {
-        switch level {
+extension LoggerLevel {
+    public var loggingLevel: Level {
+        switch self {
         case .trace:
             return .trace
         case .info:
@@ -26,6 +26,12 @@ extension Logger {
         case .error:
             return .error
         }
+    }
+}
+
+extension Logger {
+    static func getLoggingLevel(from level: LoggerLevel) -> Level {
+        level.loggingLevel
     }
 }
 

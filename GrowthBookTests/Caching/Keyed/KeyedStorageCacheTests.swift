@@ -40,13 +40,14 @@ class KeyedStorageInterfaceMock<Value>: KeyedStorageInterface {
 }
 
 class KeyedStorageCacheTests: XCTestCase {
+    typealias SUT = KeyedStorageCache
 
     func testUpdateValueSet() throws {
         let newValue: Int = 42
         let key1: String = "key1"
         let storage1: StorageInterfaceMock<Int> = .init()
 
-        let sut: KeyedStorageCache<Int> = KeyedStorageCache { key in
+        let sut: SUT<Int> = .init { key in
             switch key {
             case key1:
                 return StorageBox(storage1)
@@ -68,7 +69,7 @@ class KeyedStorageCacheTests: XCTestCase {
         let key1: String = "key1"
         let storage1: StorageInterfaceMock<Int> = .init(newValue + 1)
 
-        let sut: KeyedStorageCache<Int> = KeyedStorageCache { key in
+        let sut: SUT<Int> = .init { key in
             switch key {
             case key1:
                 return StorageBox(storage1)
@@ -90,7 +91,7 @@ class KeyedStorageCacheTests: XCTestCase {
         let key1: String = "key1"
         let storage1: StorageInterfaceMock<Int> = .init(newValue)
 
-        let sut: KeyedStorageCache<Int> = KeyedStorageCache { key in
+        let sut: SUT<Int> = .init { key in
             switch key {
             case key1:
                 return StorageBox(storage1)
@@ -110,7 +111,7 @@ class KeyedStorageCacheTests: XCTestCase {
         let key1: String = "key1"
         let storage1: StorageInterfaceMock<Int> = .init()
 
-        let sut: KeyedStorageCache<Int> = KeyedStorageCache { key in
+        let sut: SUT<Int> = .init { key in
             switch key {
             case key1:
                 return StorageBox(storage1)
@@ -132,7 +133,7 @@ class KeyedStorageCacheTests: XCTestCase {
         let storage1: StorageInterfaceMock<Int> = .init()
         let storage2: StorageInterfaceMock<Int> = .init()
 
-        let sut: KeyedStorageCache<Int> = KeyedStorageCache { key in
+        let sut: SUT<Int> = .init { key in
             switch key {
             case key1:
                 return StorageBox(storage1)
@@ -153,5 +154,41 @@ class KeyedStorageCacheTests: XCTestCase {
         // Calls reset for all known keys.
         XCTAssertTrue(storage1.didCallReset)
         XCTAssertTrue(storage2.didCallReset)
+    }
+
+    func testDeinit() throws {
+        // GIVEN
+        let key1: String = "key1"
+        let key2: String = "key2"
+        let storageMock1: WeakChecker<StorageInterfaceMock<Int>> = .init(.init())
+        let storageMock2: WeakChecker<StorageInterfaceMock<Int>> = .init(.init())
+
+        let sut: WeakChecker<SUT<Int>> = .init(
+            .init { key in
+                switch key {
+                case key1:
+                    return StorageBox(storageMock1.object)
+                case key2:
+                    return StorageBox(storageMock2.object)
+                default:
+                    XCTFail("Should never happen")
+                    return StorageBox(StorageInterfaceMock())
+                }
+            }
+        )
+
+        // Register storages.
+        _ = try sut.object.updateValue(42, for: key1)
+        _ = try sut.object.updateValue(42, for: key2)
+
+        // WHEN
+        sut.removeLink()
+        storageMock1.removeLink()
+        storageMock2.removeLink()
+
+        // THEN
+        sut.assertNil()
+        storageMock1.assertNil()
+        storageMock2.assertNil()
     }
 }

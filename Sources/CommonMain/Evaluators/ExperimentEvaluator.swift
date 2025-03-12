@@ -186,21 +186,12 @@ class ExperimentEvaluator {
                                       hashAttribute: hastAttribute,
                                       hashValue: hashValue,
                                       key: meta?.key ?? "\(variationIndex)",
+                                      name: meta?.name,
+                                      bucket: bucket,
+                                      passthrough: meta?.passthrough,
                                       hashUsed: hashUsed,
                                       featureId: featureId,
                                       stickyBucketUsed: stickyBucketUsed ?? false)
-        
-        if let name = meta?.name {
-            result.name = name
-        }
-        
-        if let bucket = bucket {
-            result.bucket = bucket
-        }
-        
-        if let passthrough = meta?.passthrough {
-            result.passthrough = passthrough
-        }
         
         return result
     }

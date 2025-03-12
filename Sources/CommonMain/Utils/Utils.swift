@@ -261,7 +261,7 @@ public class Utils {
     }
     
     // Update sticky bucketing configuration
-    static func refreshStickyBuckets(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) {
+    static func refreshStickyBuckets(context: EvalContext, attributes: JSON, data: DecryptedFeaturesDataModel?) {
         guard let stickyBucketService = context.options.stickyBucketService else {
             return
         }
@@ -271,7 +271,7 @@ public class Utils {
     }
     
     // Returns hash value for every attribute
-    static func getStickyBucketAttributes(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) -> [String: String] {
+    static func getStickyBucketAttributes(context: EvalContext, attributes: JSON, data: DecryptedFeaturesDataModel?) -> [String: String] {
         
         var attributesResult: [String: String] = [:]
         let stickyBucketIdentifierAttributes = deriveStickyBucketIdentifierAttributes(context: context, data: data)
@@ -284,8 +284,8 @@ public class Utils {
     }
     
     // Returns fallback attributes for features that have variations
-    static func deriveStickyBucketIdentifierAttributes(context: EvalContext, data: FeaturesDataModel?) -> [String] {
-        
+    static func deriveStickyBucketIdentifierAttributes(context: EvalContext, data: DecryptedFeaturesDataModel?) -> [String] {
+
         var attributes: Set<String> = []
         
         let features = data?.features ?? context.globalContext.features
@@ -380,9 +380,9 @@ public class Utils {
     
     static func initializeEvalContext(context: Context) -> EvalContext {
         let options = MultiUserOptions(
-            apiHost: context.apiHost,
-            clientKey: context.clientKey,
-            encryptionKey: context.encryptionKey,
+//            apiHost: context.apiHost,
+//            clientKey: context.clientKey,
+//            encryptionKey: context.encryptionKey,
             isEnabled: context.isEnabled,
             attributes: context.attributes,
             forcedVariations: context.forcedVariations,
@@ -393,7 +393,7 @@ public class Utils {
             trackingClosure: context.trackingClosure
         )
 
-        let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
+        let globalContext = GlobalContext(features: context.features, experiments: .none, savedGroups: context.savedGroups)
         
         // should create manual force features
         let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: nil)
