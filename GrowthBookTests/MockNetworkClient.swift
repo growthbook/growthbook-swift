@@ -1,7 +1,7 @@
 import Foundation
 @testable import GrowthBook
 
-class MockNetworkClient: NetworkProtocol, @unchecked Sendable {
+class MockNetworkClient: GrowthBookNetworkProtocol, @unchecked Sendable {
 
     var successResponse: String?
     var error: Error?

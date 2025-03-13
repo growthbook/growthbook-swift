@@ -30,18 +30,14 @@ class StickyBucketingFeatureTests: XCTestCase {
                 expectedStickyAssignmentDocs[key] = StickyAssignmentsDocument(attributeName: value.dictionaryValue["attributeName"]?.stringValue ?? "", attributeValue: value.dictionaryValue["attributeValue"]?.stringValue ?? "", assignments: value.dictionaryValue["assignments"]?.dictionaryValue ?? [:])
             }
             
-            let gbContext = Context(apiHost: nil,
-                                    clientKey: nil,
-                                    encryptionKey: nil,
-                                    isEnabled: true,
+            let gbContext = Context(isEnabled: true,
                                     attributes: attributes,
                                     forcedVariations: forcedVariations,
                                     stickyBucketAssignmentDocs: stickyBucketAssignmentDocs,
                                     stickyBucketService: service,
                                     isQaMode: false,
                                     trackingClosure: { _, _ in },
-                                    features: features ?? [:],
-                                    backgroundSync: false)
+                                    features: features ?? [:])
             
             let expectedResult = ExperimentResultTest(json: item[4].dictionaryValue)
             let evaluator = FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: item[3].stringValue)

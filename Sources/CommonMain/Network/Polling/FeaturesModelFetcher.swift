@@ -121,9 +121,9 @@ extension HTTPURLResponse {
         return Int(expiresHeaderValue()?.timeIntervalSinceNow ?? 0.0)
     }
 
-    private func _value(forHTTPHeaderField: String) -> String? {
+    private func _value(forHTTPHeaderField field: String) -> String? {
         if #available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, visionOS 1.0, *) {
-            value(forHTTPHeaderField: "Age")
+            value(forHTTPHeaderField: field)
         } else {
             allHeaderFields["Age"] as? String
         }

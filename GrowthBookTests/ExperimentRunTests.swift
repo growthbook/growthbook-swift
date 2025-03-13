@@ -17,16 +17,12 @@ class ExperimentRunTests: XCTestCase {
             let testContext = ContextTest(json: item[1].dictionaryValue)
             let experiment = Experiment(json: item[2].dictionaryValue)
 
-            let gbContext = Context(apiHost: nil,
-                                    clientKey: nil,
-                                    encryptionKey: nil,
-                                    isEnabled: testContext.isEnabled,
+            let gbContext = Context(isEnabled: testContext.isEnabled,
                                     attributes: testContext.attributes,
                                     forcedVariations: testContext.forcedVariations,
                                     isQaMode: testContext.isQaMode,
                                     trackingClosure: { _, _ in }, 
                                     features: testContext.features,
-                                    backgroundSync: false,
                                     savedGroups: testContext.savedGroups)
 
             let evaluator = ExperimentEvaluator()

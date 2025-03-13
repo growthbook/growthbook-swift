@@ -16,7 +16,6 @@ final class FeaturesModelPollingProvider {
     private class MutableState {
         var isEnabled: Bool = false
         var timer: TimerInterface?
-        var featuresResponseStaleInSeconds: Int?
         weak var delegate: FeaturesModelProviderDelegate?
 
         deinit {

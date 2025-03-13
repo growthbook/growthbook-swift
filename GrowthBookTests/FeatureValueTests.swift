@@ -17,15 +17,11 @@ class FeatureValueTests: XCTestCase {
         for item in evalConditions {
             let testData = FeaturesTest(json: item[1].dictionaryValue)
 
-            let gbContext = Context(apiHost: nil,
-                                    clientKey: nil,
-                                    encryptionKey: nil,
-                                    isEnabled: true,
+            let gbContext = Context(isEnabled: true,
                                     attributes: testData.attributes,
                                     forcedVariations: testData.forcedVariations,
                                     isQaMode: false,
                                     trackingClosure: { _, _ in }, 
-                                    backgroundSync: false,
                                     savedGroups: testData.savedGroups)
 
             if let features = testData.features {

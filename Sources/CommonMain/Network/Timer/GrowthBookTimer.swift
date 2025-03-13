@@ -17,11 +17,13 @@ final class CrossPlatformTimer: Sendable {
         var isEnabled: Bool = false
         var timer: DispatchSourceTimer?
         var lastExecutionTime: Date?
+        var nextExecutionTime: Date?
         var runNotEarlierThan: Date?
 
-        init(timer: DispatchSourceTimer? = nil, lastExecutionTime: Date? = nil, runNotEarlierThan: Date? = nil) {
+        init(timer: DispatchSourceTimer? = nil, lastExecutionTime: Date? = nil, nextExecutionTime: Date? = nil, runNotEarlierThan: Date? = nil) {
             self.timer = timer
             self.lastExecutionTime = lastExecutionTime
+            self.nextExecutionTime = nextExecutionTime
             self.runNotEarlierThan = runNotEarlierThan
         }
 
@@ -58,26 +60,12 @@ final class CrossPlatformTimer: Sendable {
         stopTimer()
     }
 
-    // Start the timer
-    private func scheduleTimer() {
-        // Create a DispatchSourceTimer
-        let timer: DispatchSourceTimer?
-        let lastExecutionTime: Date?
-        let runNotEarlierThan: Date?
-
-        stopTimer()
-
-        (timer, lastExecutionTime, runNotEarlierThan) = mutableState.write { mutableState in
-
-            guard mutableState.isEnabled else { return (.none, .none, .none) }
-
-            let timer: DispatchSourceTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
-            mutableState.timer = timer
-            return (timer, mutableState.lastExecutionTime, mutableState.runNotEarlierThan)
-        }
-
-        guard let timer else { return }
-
+    private func nextExecutionTime(
+        timeInterval: TimeInterval,
+        lastExecutionTime: Date?,
+        runNotEarlierThan: Date?
+    ) -> TimeInterval
+    {
         let nowDate: Date = Date()
         let leftTimeInterval: TimeInterval = max(
             // Time interval reduced by time since the last fetch.
@@ -91,13 +79,42 @@ final class CrossPlatformTimer: Sendable {
             0.0
         )
 
-        logger.trace("Scheduling timer in \(leftTimeInterval) seconds")
+        return leftTimeInterval.rounded(.up)
+    }
 
-        timer.schedule(deadline: .now() + leftTimeInterval, repeating: timerInterval)
+    // Start the timer
+    private func scheduleTimer() {
+        // Create a DispatchSourceTimer
+        let timer: DispatchSourceTimer?
+        let fireTimerInSeconds: TimeInterval?
+
+        stopTimer()
+
+        (timer, fireTimerInSeconds) = mutableState.write { mutableState in
+
+            guard mutableState.isEnabled else { return (.none, .none) }
+
+            let timer: DispatchSourceTimer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .utility))
+            mutableState.timer = timer
+            let fireTimerInSeconds: TimeInterval = nextExecutionTime(
+                timeInterval: timerInterval,
+                lastExecutionTime: mutableState.lastExecutionTime,
+                runNotEarlierThan: mutableState.runNotEarlierThan
+            )
+            mutableState.nextExecutionTime = Date().addingTimeInterval(fireTimerInSeconds)
+            return (timer, fireTimerInSeconds)
+        }
+
+        guard let timer, let fireTimerInSeconds else { return }
+
+        logger.trace("Scheduling timer in \(fireTimerInSeconds) seconds")
+
+        timer.schedule(deadline: .now() + fireTimerInSeconds, repeating: timerInterval)
 
         // Handle the timer firing
         timer.setEventHandler { [weak self] in
             guard let self else { return }
+            self.mutableState.write(\.nextExecutionTime, Date().addingTimeInterval(timerInterval))
             self.timerAction()
             self.mutableState.write(\.lastExecutionTime, Date())
         }
@@ -127,8 +144,11 @@ extension CrossPlatformTimer: SystemStateObserverForTimerDelegate {
 
 extension CrossPlatformTimer: TimerInterface {
     func rescheduleNotEarlierThan(in seconds: Int) {
-        mutableState.write(\.runNotEarlierThan,  Date(timeIntervalSinceNow: TimeInterval(seconds)))
-        scheduleTimer()
+        let seconds = TimeInterval(seconds)
+        if (mutableState.read(\.nextExecutionTime)?.timeIntervalSinceNow ?? 0.0) < seconds {
+            mutableState.write(\.runNotEarlierThan,  Date(timeIntervalSinceNow: TimeInterval(seconds)))
+            scheduleTimer()
+        }
     }
 
     func enable() {

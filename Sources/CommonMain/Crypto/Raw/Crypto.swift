@@ -19,50 +19,7 @@ protocol CryptoProtocol: AnyObject, Sendable {
 }
 
 final class Crypto: CryptoProtocol {
-    private func encrypt(key: [UInt8], iv: [UInt8], plainText: [UInt8]) throws -> [UInt8] {
-        /// The key size must be 128, 192, or 256.
-        ///
-        /// The IV size must match the block size.
 
-        guard
-            [kCCKeySizeAES128, kCCKeySizeAES192, kCCKeySizeAES256].contains(key.count),
-            iv.count == kCCBlockSizeAES128
-        else {
-            throw CryptoError(code: kCCParamError)
-        }
-
-        /// Padding can expand the data, so we have to allocate space for that.  The
-        /// rule for block cyphers, like AES, is that the padding only adds space on
-        /// encryption (on decryption it can reduce space, obviously, but we don't
-        /// need to account for that) and it will only add at most one block size
-        /// worth of space.
-
-        var cypherText = [UInt8](repeating: 0, count: plainText.count + kCCBlockSizeAES128)
-        var cypherTextCount = 0
-        let err = CCCrypt(
-            CCOperation(kCCEncrypt),
-            CCAlgorithm(kCCAlgorithmAES),
-            CCOptions(kCCOptionPKCS7Padding),
-            key, key.count,
-            iv,
-            plainText, plainText.count,
-            &cypherText, cypherText.count,
-            &cypherTextCount
-        )
-        guard err == kCCSuccess else {
-            throw CryptoError(code: err)
-        }
-        
-        /// The cypherText can expand by up to one block but it doesn’t always use the full block,
-        /// so trim off any unused bytes.
-        
-        assert(cypherTextCount <= cypherText.count)
-        cypherText.removeLast(cypherText.count - cypherTextCount)
-        assert(cypherText.count.isMultiple(of: kCCBlockSizeAES128))
-
-        return cypherText
-    }
-    
     /// Decrypts data that was encrypted using AES with PKCS#7 padding in CBC mode.
     ///
     /// - note: PKCS#7 padding is also known as PKCS#5 padding.
@@ -70,11 +27,11 @@ final class Crypto: CryptoProtocol {
     /// - Parameters:
     ///   - key: The key to encrypt with; must be a supported size (128, 192, 256).
     ///   - iv: The initialisation vector; must be of size 16.
-    ///   - cypherText: The encrypted data; it’s length must be an even multiple of
+    ///   - cipherText: The encrypted data; it’s length must be an even multiple of
     ///     16.
     /// - Returns: The decrypted data.
     
-    private func decrypt(key: [UInt8], iv: [UInt8], cypherText: [UInt8]) throws -> [UInt8] {
+    private func decrypt(encryptionKeyBytes: [UInt8], initialVectorBytes: [UInt8], cipherBytes: [UInt8]) throws -> [UInt8] {
         /// The key size must be 128, 192, or 256.
         ///
         /// The IV size must match the block size.
@@ -82,9 +39,9 @@ final class Crypto: CryptoProtocol {
         /// The cipherText must be a multiple of the block size.
 
         guard
-            [kCCKeySizeAES128, kCCKeySizeAES192, kCCKeySizeAES256].contains(key.count),
-            iv.count == kCCBlockSizeAES128,
-            cypherText.count.isMultiple(of: kCCBlockSizeAES128)
+            [kCCKeySizeAES128, kCCKeySizeAES192, kCCKeySizeAES256].contains(encryptionKeyBytes.count),
+            initialVectorBytes.count == kCCBlockSizeAES128,
+            cipherBytes.count.isMultiple(of: kCCBlockSizeAES128)
         else {
             throw CryptoError(code: kCCParamError)
         }
@@ -92,15 +49,15 @@ final class Crypto: CryptoProtocol {
         /// Padding can expand the data on encryption, but on decryption the data can
         /// only shrink so we use the cypherText size as our plaintext size.
 
-        var plaintext = [UInt8](repeating: 0, count: cypherText.count)
+        var plaintext = [UInt8](repeating: 0, count: cipherBytes.count)
         var plaintextCount = 0
         let err = CCCrypt(
             CCOperation(kCCDecrypt),
             CCAlgorithm(kCCAlgorithmAES),
             CCOptions(kCCOptionPKCS7Padding),
-            key, key.count,
-            iv,
-            cypherText, cypherText.count,
+            encryptionKeyBytes, encryptionKeyBytes.count,
+            initialVectorBytes,
+            cipherBytes, cipherBytes.count,
             &plaintext, plaintext.count,
             &plaintextCount
         )
@@ -143,46 +100,46 @@ final class Crypto: CryptoProtocol {
 
         /// Invalid cipher text size.
         ///
-        /// Cipher text size length must be multiple of 128 bits.
-        case invalidCipherTextSize
+        /// Cipher data size length must be multiple of 128 bits.
+        case invalidCipherDataSize
     }
 
-    private func decryptData(from encryptedString: String, using encryptionKey: String) throws -> Data {
+    private func decryptData(from encryptedString: String, using encryptionKeyBase64EncodedString: String) throws -> Data {
         let arrayEncryptedString = encryptedString.components(separatedBy: ".")
         guard arrayEncryptedString.count >= 2 else {
             throw DecryptionError.invalidEncryptedString
         }
 
-        let iv = arrayEncryptedString[0]
-        let cipherText = arrayEncryptedString[1]
+        let ivBase64EncodedString = arrayEncryptedString[0]
+        let cipherTextBase64EncodedString = arrayEncryptedString[1]
 
-        guard let encryptionKeyBase64 = Data(base64Encoded: encryptionKey) else {
+        guard let encryptionKeyData = Data(base64Encoded: encryptionKeyBase64EncodedString) else {
             throw DecryptionError.encryptionKeyIsNotValidBase64EncodedString
         }
 
-        guard let ivBase64 = Data(base64Encoded: iv) else {
-            throw DecryptionError.encryptionKeyIsNotValidBase64EncodedString
+        guard let initialVectorData = Data(base64Encoded: ivBase64EncodedString) else {
+            throw DecryptionError.ivIsNotValidBase64EncodedString
         }
 
-        guard let cipherTextBase64 = Data(base64Encoded: cipherText) else {
+        guard let cipherData = Data(base64Encoded: cipherTextBase64EncodedString) else {
             throw DecryptionError.cipherIsNotValidBase64EncodedString
         }
 
-        guard [kCCKeySizeAES128, kCCKeySizeAES192, kCCKeySizeAES256].contains(encryptionKeyBase64.count) else {
+        guard [kCCKeySizeAES128, kCCKeySizeAES192, kCCKeySizeAES256].contains(encryptionKeyData.count) else {
             throw DecryptionError.invalidEncryptionKeySize
         }
 
-        guard iv.count == kCCBlockSizeAES128 else {
+        guard initialVectorData.count == kCCBlockSizeAES128 else {
             throw DecryptionError.invalidInitialVectorSize
         }
 
-        guard cipherTextBase64.count.isMultiple(of: kCCBlockSizeAES128) else {
-            throw DecryptionError.invalidCipherTextSize
+        guard cipherData.count.isMultiple(of: kCCBlockSizeAES128) else {
+            throw DecryptionError.invalidCipherDataSize
         }
 
         let plainTextBuffer: [UInt8]
         do {
-            plainTextBuffer = try decrypt(key: [UInt8](encryptionKeyBase64), iv: [UInt8](ivBase64), cypherText: [UInt8](cipherTextBase64))
+            plainTextBuffer = try decrypt(encryptionKeyBytes: encryptionKeyData.bytes, initialVectorBytes: initialVectorData.bytes, cipherBytes: cipherData.bytes)
         } catch {
             throw error
         }
@@ -222,6 +179,10 @@ final class Crypto: CryptoProtocol {
     func getExperiments(from encryptedString: String, using encryptionKey: String) throws -> [Experiment] {
         try decryptAndDecode(from: encryptedString, using: encryptionKey)
     }
+}
+
+extension Data {
+    var bytes: [UInt8] { [UInt8](self) }
 }
 
 struct CryptoError: Error {
