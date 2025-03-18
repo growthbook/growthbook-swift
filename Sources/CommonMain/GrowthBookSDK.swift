@@ -369,6 +369,7 @@ public struct GrowthBookCacheOptions: Sendable, Equatable {
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
     @objc public func setAttributes(attributes: Any) {
         gbContext.attributes = JSON(attributes)
+        updateEvaluationContext(with: gbContext)
         refreshStickyBucketService()
     }
 
