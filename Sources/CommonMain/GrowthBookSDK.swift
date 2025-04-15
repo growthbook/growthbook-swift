@@ -293,6 +293,14 @@ public struct GrowthBookModel {
         refreshStickyBucketService()
     }
     
+    /// Merges the provided user attributes with the existing ones.
+    /// - Throws: `SwiftyJSON.Error.wrongType` if the top-level JSON types differ
+    @objc public func appendAttributes(attributes: Any) throws {
+        let updatedAttributes = try gbContext.attributes.merged(with: JSON(attributes))
+        gbContext.attributes = updatedAttributes
+        refreshStickyBucketService()
+    }
+    
     @objc public func setAttributeOverrides(overrides: Any) {
         attributeOverrides = JSON(overrides)
         if gbContext.stickyBucketService != nil {

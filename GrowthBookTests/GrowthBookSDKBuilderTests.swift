@@ -254,4 +254,37 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         
         XCTAssertEqual(2, countTrackingCallback)
     }
+    
+    func testAppendAttributes() throws {
+        let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
+                                            clientKey: testClientKey,
+                                            attributes: [:],
+                                            trackingCallback: { _, _ in },
+                                            refreshHandler: nil,
+                                            backgroundSync: false).initializer()
+        
+        
+        sdkInstance.setAttributes(attributes: ["name": "Alice"])
+        try sdkInstance.appendAttributes(attributes: ["age": 30])
+        
+        let result = sdkInstance.gbContext.attributes
+        XCTAssertEqual(result["name"].stringValue, "Alice")
+        XCTAssertEqual(result["age"].intValue, 30)
+        
+        
+        sdkInstance.setAttributes(attributes: ["user": ["id": 1, "name": "Alice"]])
+        try sdkInstance.appendAttributes(attributes: ["user": ["name": "Bob", "age": 25]])
+        
+        let user = sdkInstance.gbContext.attributes["user"]
+        XCTAssertEqual(user["id"].intValue, 1)
+        XCTAssertEqual(user["name"].stringValue, "Bob")
+        XCTAssertEqual(user["age"].intValue, 25)
+        
+        
+        sdkInstance.setAttributes(attributes: ["user": ["roles": ["admin", "editor"]]])
+        try sdkInstance.appendAttributes(attributes: ["user": ["roles": ["viewer"]]])
+
+        let roles = sdkInstance.gbContext.attributes["user"]["roles"].arrayValue.map { $0.stringValue }
+        XCTAssertEqual(roles, ["admin", "editor", "viewer"])
+    }
 }
