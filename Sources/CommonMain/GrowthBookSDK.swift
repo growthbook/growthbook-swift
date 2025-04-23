@@ -38,7 +38,7 @@ public struct GrowthBookModel {
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
     
-    private var cachingManager: CachingManager
+    private var cachingManager: CachingLayer
 
     @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false) {
         growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
@@ -67,6 +67,12 @@ public struct GrowthBookModel {
     /// Set Network Client - Network Client for Making API Calls
     @objc public func setNetworkDispatcher(networkDispatcher: NetworkProtocol) -> GrowthBookBuilder {
         self.networkDispatcher = networkDispatcher
+        return self
+    }
+    
+    /// Set Caching Manager - Caching Client for saving fetched features
+    @objc public func setCachingManager(cachingManager: CachingLayer) -> GrowthBookBuilder {
+        self.cachingManager = cachingManager
         return self
     }
     
@@ -148,7 +154,7 @@ public struct GrowthBookModel {
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext? = nil
-    var cachingManager: CachingManager
+    var cachingManager: CachingLayer
 
     init(context: Context,
          refreshHandler: CacheRefreshHandler? = nil,
@@ -156,7 +162,7 @@ public struct GrowthBookModel {
          networkDispatcher: NetworkProtocol = CoreNetworkClient(),
          features: Features? = nil,
          savedGroups: JSON? = nil,
-         cachingManager: CachingManager) {
+         cachingManager: CachingLayer) {
         gbContext = context
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher

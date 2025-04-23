@@ -15,9 +15,9 @@ class FeaturesViewModel {
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
     /// Caching Manager
-    let manager: CachingManager
+    let manager: CachingLayer
         
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer) {
         self.delegate = delegate
         self.dataSource = dataSource
         self.manager = cachingManager
@@ -42,7 +42,7 @@ class FeaturesViewModel {
     
     private func fetchCachedFeatures() {
         // Check for cache data
-        if let json = manager.getData(fileName: Constants.featureCache) {
+        if let json = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
             if let features = try? decoder.decode(Features.self, from: json) {
                 // Call Success Delegate with mention of data available but its not remote
@@ -58,7 +58,7 @@ class FeaturesViewModel {
     /// Fetch Features
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
         // Check for cache data
-        if let json = manager.getData(fileName: Constants.featureCache) {
+        if let json = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
             if let features = try? decoder.decode(Features.self, from: json) {
                 // Call Success Delegate with mention of data available but its not remote
@@ -112,7 +112,7 @@ class FeaturesViewModel {
                     let crypto: CryptoProtocol = Crypto()
                     if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                         if let featureData = try? JSONEncoder().encode(features) {
-                            manager.putData(fileName: Constants.featureCache, content: featureData)
+                            manager.saveContent(fileName: Constants.featureCache, content: featureData)
                         } else {
                             logger.error("Failed encode features")
                         }
@@ -129,7 +129,7 @@ class FeaturesViewModel {
                 }
             } else if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
-                    manager.putData(fileName: Constants.featureCache, content: featureData)
+                    manager.saveContent(fileName: Constants.featureCache, content: featureData)
                 }
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
             } else {
@@ -142,7 +142,7 @@ class FeaturesViewModel {
                 let crypto = Crypto()
                 if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
                     if let encryptedSavedGroups = try? JSONEncoder().encode(savedGroups) {
-                        manager.putData(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
+                        manager.saveContent(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
                     } else {
                         logger.error("Failed encode saved groups")
                     }
@@ -154,7 +154,7 @@ class FeaturesViewModel {
                 }
             } else if let savedGroups = jsonPetitions.savedGroups {
                 if let savedGroupsData = try? JSONEncoder().encode(savedGroups) {
-                    manager.putData(fileName: Constants.savedGroupsCache, content: savedGroupsData)
+                    manager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
             }
