@@ -12,6 +12,7 @@ protocol GrowthBookProtocol: AnyObject {
 
 public struct GrowthBookModel {
     var apiHost: String?
+    var streamingHost: String?
     var clientKey: String?
     var encryptionKey: String?
     var features: Data?
@@ -40,8 +41,8 @@ public struct GrowthBookModel {
     
     private var cachingManager: CachingManager
 
-    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false) {
-        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
+    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], features: Data? = nil, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager(apiKey: clientKey)
     }
@@ -107,10 +108,16 @@ public struct GrowthBookModel {
         cachingManager.setCustomCachePath(customDirectory)
         return self
     }
+    
+    @objc public func setStreamingHost(streamingHost: String) -> GrowthBookBuilder {
+        growthBookBuilderModel.streamingHost = streamingHost
+        return self
+    }
 
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
             apiHost: growthBookBuilderModel.apiHost,
+            streamingHost : growthBookBuilderModel.streamingHost,
             clientKey: growthBookBuilderModel.clientKey,
             encryptionKey: growthBookBuilderModel.encryptionKey,
             isEnabled: growthBookBuilderModel.isEnabled,

@@ -249,7 +249,7 @@ class ConditionEvaluator {
     /// This function is just a case statement that handles all the possible operators
     ///
     /// There are basic comparison operators in the form attributeValue {op} conditionValue
-    func isEvalOperatorCondition(operatorKey: String, attributeValue: JSON?, conditionValue: JSON, savedGroups: JSON? = nil) -> Bool {
+    func isEvalOperatorCondition(operatorKey: String, attributeValue: JSON, conditionValue: JSON, savedGroups: JSON? = nil) -> Bool {
         let conditionJson = JSON(conditionValue)
         // Evaluate TYPE operator - whether both are of same type
         if operatorKey == "$type" {
@@ -264,9 +264,9 @@ class ConditionEvaluator {
         // Evaluate EXISTS operator - whether condition contains attribute
         if operatorKey == "$exists" {
             let targetPrimitiveValue = conditionJson.stringValue
-            if targetPrimitiveValue == "false" && attributeValue == nil {
+            if targetPrimitiveValue == "false" && attributeValue == .null {
                 return true
-            } else if targetPrimitiveValue == "true" && attributeValue != nil {
+            } else if targetPrimitiveValue == "true" && attributeValue != .null {
                 return true
             }
         }
@@ -280,16 +280,16 @@ class ConditionEvaluator {
             }
         case "$exists":
             let targetPrimitiveValue = conditionJson.stringValue
-            if targetPrimitiveValue == "false" && attributeValue == nil {
+            if targetPrimitiveValue == "false" && attributeValue == .null {
                 return true
-            } else if targetPrimitiveValue == "true" && attributeValue != nil {
+            } else if targetPrimitiveValue == "true" && attributeValue != .null {
                 return true
             }
         default: break
         }
 
         /// There are three operators where conditionValue is an array
-        if let conditionValue = conditionJson.array, let attributeValue = attributeValue {
+        if let conditionValue = conditionJson.array, attributeValue != .null {
             switch operatorKey {
             case "$in":
                 return Common.isIn(actual: attributeValue, expected: conditionValue)
@@ -317,7 +317,7 @@ class ConditionEvaluator {
                 }
             default: break
             }
-        } else if let attribute = attributeValue?.array {
+        } else if let attribute = attributeValue.array {
             switch operatorKey {
             // Evaluate ELEMMATCH operator - whether condition matches attribute
             case "$elemMatch":
@@ -332,36 +332,36 @@ class ConditionEvaluator {
             let sourcePrimitiveValue = attributeValue
             switch operatorKey {
             case "$veq":
-                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) == Utils.paddedVersionString(input: conditionString)
                 }
             case "$vne":
-                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) != Utils.paddedVersionString(input: conditionString)
                 }
             case "$vgt":
-                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) > Utils.paddedVersionString(input: conditionString)
                 }
             case "$vgte":
-                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) >= Utils.paddedVersionString(input: conditionString)
                 }
             case "$vlt":
-                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) < Utils.paddedVersionString(input: conditionString)
                 }
             case "$vlte":
-                if let attributeString = attributeValue?.string, let conditionString = conditionValue.string {
+                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) <= Utils.paddedVersionString(input: conditionString)
                 }
             case "$inGroup":
-                if let attributeString = attributeValue, let conditionString = conditionValue.string {
-                    return Common.isIn(actual: attributeString, expected: savedGroups?[conditionString].array ?? [] )
+                if attributeValue != .null, let conditionString = conditionValue.string {
+                    return Common.isIn(actual: attributeValue, expected: savedGroups?[conditionString].array ?? [] )
                 }
             case "$notInGroup": 
-                if let attributeString = attributeValue, let conditionString = conditionValue.string {
-                    return !Common.isIn(actual: attributeString, expected: savedGroups?[conditionString].array ?? [])
+                if attributeValue != .null, let conditionString = conditionValue.string {
+                    return !Common.isIn(actual: attributeValue, expected: savedGroups?[conditionString].array ?? [])
                 }
             // Evaluate EQ operator - whether condition equals to attribute
             case "$eq":
@@ -375,36 +375,36 @@ class ConditionEvaluator {
                        let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull < conditionDoubleOrNull
                 }
-                return sourcePrimitiveValue ?? 0.0 < targetPrimitiveValue
+                return sourcePrimitiveValue < targetPrimitiveValue
             // Evaluate LTE operator - whether attribute less than or equal to condition
             case "$lte":
                 if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
                        let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull <= conditionDoubleOrNull
                 }
-                return  sourcePrimitiveValue ?? 0.0 <= targetPrimitiveValue
+                return  sourcePrimitiveValue <= targetPrimitiveValue
             // Evaluate GT operator - whether attribute greater than to condition
             case "$gt":
                 if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
                        let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull > conditionDoubleOrNull
                 }
-                return  sourcePrimitiveValue ?? 0.0 > targetPrimitiveValue
+                return  sourcePrimitiveValue > targetPrimitiveValue
             // Evaluate GTE operator - whether attribute greater than or equal to condition
             case "$gte":
                 if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
                        let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
                     return attributeDoubleOrNull >= conditionDoubleOrNull
                 }
-                return  sourcePrimitiveValue ?? 0.0 >= targetPrimitiveValue
+                return  sourcePrimitiveValue >= targetPrimitiveValue
             // Evaluate REGEX operator - whether attribute contains condition regex
             case "$regex":
                 let targetPrimitiveValueString = conditionValue.stringValue
-                let sourcePrimitiveValueString = attributeValue?.stringValue
-                if isContains(source: sourcePrimitiveValueString ?? "", target: targetPrimitiveValueString) {
+                let sourcePrimitiveValueString = attributeValue.stringValue
+                if isContains(source: sourcePrimitiveValueString, target: targetPrimitiveValueString) {
                     return true
                 }
-                return sourcePrimitiveValueString?.contains(targetPrimitiveValueString) ?? false
+                return sourcePrimitiveValueString.contains(targetPrimitiveValueString)
 
             default: break
             }
