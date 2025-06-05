@@ -75,9 +75,8 @@ class FeaturesViewModel {
     /// Fetch Features
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
         // Check for cache data
-        if !isCacheExpired() {
-            fetchCachedFeatures()
-        } else if let apiUrl = apiUrl {
+        fetchCachedFeatures()
+        if isCacheExpired(), let apiUrl = apiUrl {
             dataSource.fetchFeatures(apiUrl: apiUrl) { result in
                 switch result {
                 case .success(let data):
