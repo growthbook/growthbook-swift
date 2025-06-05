@@ -117,7 +117,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil,
                                             backgroundSync: false,
-                                            ttlSeconds: 0).setRefreshHandler(refreshHandler: { _ in
+                                            ttlSeconds:0).setRefreshHandler(refreshHandler: { _ in
             DispatchQueue.main.async {
                 refreshFlag.isRefreshed = true
                 expectation.fulfill()
