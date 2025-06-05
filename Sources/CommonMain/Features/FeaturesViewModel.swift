@@ -19,7 +19,7 @@ class FeaturesViewModel {
     
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
-        
+    
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager, ttlSeconds: Int) {
         self.delegate = delegate
         self.dataSource = dataSource
@@ -37,8 +37,8 @@ class FeaturesViewModel {
     }
     
     private func refreshExpiresAt() {
-            expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
-        }
+        expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
+    }
     
     func connectBackgroundSync(sseUrl: String) {
         guard let url = URL(string: sseUrl) else { return }
@@ -58,42 +58,25 @@ class FeaturesViewModel {
     
     private func fetchCachedFeatures() {
         // Check for cache data
-        guard let json = manager.getData(fileName: Constants.featureCache) else {
-            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
-            return
-        }
-        let decoder = JSONDecoder()
-        do {
-            let features = try decoder.decode(Features.self, from: json)
-            if isCacheExpired() {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
-            } else {
-                // Call Success Delegate with mention of data available but its not remote]
+        if let json = manager.getData(fileName: Constants.featureCache) {
+            let decoder = JSONDecoder()
+            if let features = try? decoder.decode(Features.self, from: json) {
+                // Call Success Delegate with mention of data available but its not remote
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+            } else {
+                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
             }
-        } catch {
-            delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+        } else {
+            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
         }
     }
-
-
+    
+    
     /// Fetch Features
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
-        var cachedFeatures: Features? = nil
         // Check for cache data
-        if let json = manager.getData(fileName: Constants.featureCache),
-           !isCacheExpired() {
-            do {
-                let decoder = JSONDecoder()
-                if let features = try? decoder.decode(Features.self, from: json) {
-                    cachedFeatures = features
-                    // Call Success Delegate with mention of data available but its not remote
-                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
-                }
-            } catch {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
-                logger.error("Failed parse local data")
-            }
+        if !isCacheExpired() {
+            fetchCachedFeatures()
         } else if let apiUrl = apiUrl {
             dataSource.fetchFeatures(apiUrl: apiUrl) { result in
                 switch result {
@@ -102,12 +85,7 @@ class FeaturesViewModel {
                     
                 case .failure(let error):
                     logger.info("Failed to get features from remote: \(error.localizedDescription)")
-                    if let cachedFeatures = cachedFeatures {
-                        self.delegate?.featuresFetchedSuccessfully(features: cachedFeatures, isRemote: false)
-                        logger.info("Used cached features after remote failure.")
-                    } else {
-                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
-                    }
+                    self.fetchCachedFeatures()
                 }
             }
         }
@@ -124,7 +102,7 @@ class FeaturesViewModel {
             }
         }
     }
-
+    
     /// Cache API Response and push success event
     func prepareFeaturesData(data: Data) {
         // Call Success Delegate with mention of data available with remote
@@ -191,5 +169,5 @@ class FeaturesViewModel {
             return
         }
     }
-        
+    
 }
