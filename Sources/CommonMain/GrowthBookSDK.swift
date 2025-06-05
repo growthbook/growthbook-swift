@@ -39,23 +39,28 @@ public struct GrowthBookModel {
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
     
     private var cachingManager: CachingManager
+    
+    private var ttlSeconds: Int
 
-    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false) {
-        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
+    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false, ttlSeconds: Int = 60) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager(apiKey: clientKey)
+        self.ttlSeconds = ttlSeconds
     }
 
-    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool, remoteEval: Bool = false) {
+    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool, remoteEval: Bool = false, ttlSeconds: Int = 60) {
         growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager()
+        self.ttlSeconds = ttlSeconds
     }
 
-    init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool, remoteEval: Bool = false) {
+    init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool, remoteEval: Bool = false, ttlSeconds: Int = 60) {
         growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager(apiKey: clientKey)
+        self.ttlSeconds = ttlSeconds
     }
 
     /// Set Refresh Handler - Will be called when cache is refreshed
@@ -131,7 +136,7 @@ public struct GrowthBookModel {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
 
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
+        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
     }
 }
 
@@ -148,6 +153,7 @@ public struct GrowthBookModel {
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext? = nil
+    private var ttlSeconds: Int
     var cachingManager: CachingManager
 
     init(context: Context,
@@ -156,14 +162,16 @@ public struct GrowthBookModel {
          networkDispatcher: NetworkProtocol = CoreNetworkClient(),
          features: Features? = nil,
          savedGroups: JSON? = nil,
-         cachingManager: CachingManager) {
+         cachingManager: CachingManager,
+         ttlSeconds: Int) {
         gbContext = context
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
         self.savedGroupsValues = savedGroups
         self.cachingManager = cachingManager
+        self.ttlSeconds = ttlSeconds
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager)
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
         if let features = features {
             gbContext.features = features
         } else {
@@ -221,6 +229,7 @@ public struct GrowthBookModel {
 
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
+        featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
         return FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: id).evaluateFeature().value ?? defaultValue
     }
 
@@ -263,6 +272,7 @@ public struct GrowthBookModel {
 
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
+        featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
         return FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: id).evaluateFeature()
     }
 
@@ -273,6 +283,7 @@ public struct GrowthBookModel {
 
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
+        featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
         let result = ExperimentEvaluator().evaluateExperiment(context: Utils.initializeEvalContext(context: gbContext), experiment: experiment)
         
         self.subscriptions.forEach { subscription in
