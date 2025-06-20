@@ -16,89 +16,130 @@ class FeaturesViewModel {
     var encryptionKey: String?
     /// Caching Manager
     let manager: CachingManager
+    let fallbackFeatures: Features?
+    
+    private let ttlSeconds: Int
+    private var expiresAt: TimeInterval?
+    
+    private var streamingUpdate: SSEHandler?
+    private let retryHandler = NetworkRetryHandler()
+
         
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager, ttlSeconds: Int, fallbackFeatures: Features? = nil) {
         self.delegate = delegate
         self.dataSource = dataSource
         self.manager = cachingManager
-        self.fetchCachedFeatures()
+        self.ttlSeconds=ttlSeconds
+        self.fallbackFeatures=fallbackFeatures
     }
     
-    func connectBackgroundSync(sseUrl: String) {
-        guard let url = URL(string: sseUrl) else { return }
-        let streamingUpdate = SSEHandler(url: url)
-        streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
-            guard let jsonData = data?.data(using: .utf8) else { return }
-            self?.prepareFeaturesData(data: jsonData)
+    
+    private func isCacheExpired() -> Bool {
+        guard let expiresAt = expiresAt else {
+            return true
         }
-        streamingUpdate.connect()
-        
-        streamingUpdate.onDissconnect { _, shouldReconnect, _ in
-            if let shouldReconnect = shouldReconnect, shouldReconnect {
-                streamingUpdate.connect()
-            }
-        }
+        return Date().timeIntervalSince1970 >= expiresAt
     }
     
-    private func fetchCachedFeatures() {
-        // Check for cache data
+    private func refreshExpiresAt() {
+            expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
+        }
+    
+    func connectBackgroundSync(sseUrl: String, apiUrl: String?) {
+           guard let url = URL(string: sseUrl) else { return }
+
+           let handler = SSEHandler(url: url)
+           self.streamingUpdate = handler
+
+           handler.addEventListener(event: "features") { [weak self] id, event, data in
+               guard let jsonData = data?.data(using: .utf8) else { return }
+               self?.prepareFeaturesData(data: jsonData)
+           }
+
+           handler.onDissconnect { [weak self] _, shouldReconnect, _ in
+               guard let self = self else { return }
+               if shouldReconnect == true {
+                   self.retryHandler.retryWhenOnline {
+                       self.streamingUpdate?.connect()
+                   }
+               }
+           }
+
+           retryHandler.retryWhenOnline {
+               logger.info("Connection established, fetching features from remote")
+               self.fetchFeatures(apiUrl: apiUrl)
+               handler.connect()
+           }
+       }
+       
+    
+    private func fetchCachedFeatures() -> Features? {
         if let json = manager.getData(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
             if let features = try? decoder.decode(Features.self, from: json) {
-                // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+                return features
             } else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                logger.error("Failed to parse cached features")
+                return nil
             }
         } else {
+            logger.warning("No cached features found")
+            return nil
+        }
+    }
+
+
+    /// Fetch Features
+    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
+        let cached = fetchCachedFeatures()
+
+        if let cached, !isCacheExpired() {
+            delegate?.featuresFetchedSuccessfully(features: cached, isRemote: false)
+            return
+        }
+
+        guard let apiUrl else {
+            useCachedOrFallback(cached)
+            return
+        }
+
+        dataSource.fetchFeatures(apiUrl: apiUrl) { result in
+            switch result {
+            case .success(let data):
+                self.prepareFeaturesData(data: data)
+            case .failure(let error):
+                logger.error("Failed fetching from API: \(error.localizedDescription)")
+                self.useCachedOrFallback(cached)
+            }
+        }
+
+        if remoteEval {
+            dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { result in
+                switch result {
+                case .success(let data):
+                    self.prepareFeaturesData(data: data)
+                case .failure(let error):
+                    self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
+                    logger.error("Remote eval failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    
+    private func useCachedOrFallback(_ cached: Features?) {
+        if let cached {
+            logger.info("Using expired cache as fallback")
+            delegate?.featuresFetchedSuccessfully(features: cached, isRemote: false)
+        } else if let fallback = fallbackFeatures {
+            logger.info("Using fallback features")
+            delegate?.featuresFetchedSuccessfully(features: fallback, isRemote: false)
+        } else {
+            logger.warning("No cache or fallback features available")
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
         }
     }
 
-    /// Fetch Features
-    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
-        // Check for cache data
-        if let json = manager.getData(fileName: Constants.featureCache) {
-            let decoder = JSONDecoder()
-            if let features = try? decoder.decode(Features.self, from: json) {
-                // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
-            } else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
-                logger.error("Failed parse local data")
-            }
-        } else {
-            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
-            logger.info("Cache directory is empty. Nothing to fetch.")
-        }
-        
-        if let apiUrl = apiUrl {
-            if remoteEval {
-                dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { result in
-                    switch result {
-                    case .success(let data):
-                        self.prepareFeaturesData(data: data)
-                    case .failure(let error):
-                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
-                        logger.error("Failed get features: \(error.localizedDescription)")
-                    }
-                }
-            } else {
-                dataSource.fetchFeatures(apiUrl: apiUrl) { result in
-                    switch result {
-                    case .success(let data):
-                        self.prepareFeaturesData(data: data)
-                    case .failure(let error):
-                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
-                        logger.error("Failed get features: \(error.localizedDescription)")
-                    }
-                }
-            }
-        } else {
-            delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
-            logger.error("Failed get api URL")
-        }
-    }
 
     /// Cache API Response and push success event
     func prepareFeaturesData(data: Data) {
@@ -113,6 +154,7 @@ class FeaturesViewModel {
                     if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                         if let featureData = try? JSONEncoder().encode(features) {
                             manager.putData(fileName: Constants.featureCache, content: featureData)
+                            refreshExpiresAt()
                         } else {
                             logger.error("Failed encode features")
                         }
@@ -130,6 +172,7 @@ class FeaturesViewModel {
             } else if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
                     manager.putData(fileName: Constants.featureCache, content: featureData)
+                    refreshExpiresAt()
                 }
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
             } else {

@@ -15,6 +15,7 @@ public struct GrowthBookModel {
     var clientKey: String?
     var encryptionKey: String?
     var features: Data?
+    var fallbackFeatures: Data?
     var attributes: JSON
     var trackingClosure: TrackingCallback
     var logLevel: Level = .info
@@ -39,23 +40,28 @@ public struct GrowthBookModel {
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
     
     private var cachingManager: CachingManager
+    
+    private var ttlSeconds: Int
 
-    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false) {
-        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
+    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], fallbackFeatures: Data? = nil, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false, ttlSeconds: Int = 60) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, fallbackFeatures: fallbackFeatures, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager(apiKey: clientKey)
+        self.ttlSeconds = ttlSeconds
     }
 
-    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool, remoteEval: Bool = false) {
+    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool, remoteEval: Bool = false, ttlSeconds: Int = 60) {
         growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager()
+        self.ttlSeconds = ttlSeconds
     }
 
-    init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool, remoteEval: Bool = false) {
+    init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool, remoteEval: Bool = false, ttlSeconds: Int = 60) {
         growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager(apiKey: clientKey)
+        self.ttlSeconds = ttlSeconds
     }
 
     /// Set Refresh Handler - Will be called when cache is refreshed
@@ -130,8 +136,13 @@ public struct GrowthBookModel {
         if let features = growthBookBuilderModel.features {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
-
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
+        
+        var fallbackFeatures: Features? = nil
+        if let fallbackData = growthBookBuilderModel.fallbackFeatures {
+            fallbackFeatures = try? JSONDecoder().decode(Features.self, from: fallbackData)
+        }
+        
+        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds, fallbackFeatures: fallbackFeatures)
     }
 }
 
@@ -148,6 +159,7 @@ public struct GrowthBookModel {
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext? = nil
+    private var ttlSeconds: Int
     var cachingManager: CachingManager
 
     init(context: Context,
@@ -156,14 +168,17 @@ public struct GrowthBookModel {
          networkDispatcher: NetworkProtocol = CoreNetworkClient(),
          features: Features? = nil,
          savedGroups: JSON? = nil,
-         cachingManager: CachingManager) {
+         cachingManager: CachingManager,
+         ttlSeconds: Int,
+         fallbackFeatures: Features? = nil) {
         gbContext = context
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
         self.savedGroupsValues = savedGroups
         self.cachingManager = cachingManager
+        self.ttlSeconds = ttlSeconds
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager)
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, fallbackFeatures: fallbackFeatures)
         if let features = features {
             gbContext.features = features
         } else {
@@ -178,7 +193,7 @@ public struct GrowthBookModel {
                 
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
         if let sseURL = context.getSSEUrl(), context.backgroundSync {
-            featureVM.connectBackgroundSync(sseUrl: sseURL)
+            featureVM.connectBackgroundSync(sseUrl: sseURL, apiUrl: gbContext.getFeaturesURL())
         }
         
         // Logger setup. if we have logHandler we have to re-initialise logger
@@ -221,6 +236,7 @@ public struct GrowthBookModel {
 
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
+        featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
         return FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: id).evaluateFeature().value ?? defaultValue
     }
 
@@ -263,6 +279,7 @@ public struct GrowthBookModel {
 
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
+        featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
         return FeatureEvaluator(context: Utils.initializeEvalContext(context: gbContext), featureKey: id).evaluateFeature()
     }
 
@@ -273,6 +290,7 @@ public struct GrowthBookModel {
 
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
+        featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
         let result = ExperimentEvaluator().evaluateExperiment(context: Utils.initializeEvalContext(context: gbContext), experiment: experiment)
         
         self.subscriptions.forEach { subscription in
