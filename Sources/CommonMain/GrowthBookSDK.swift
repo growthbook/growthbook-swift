@@ -15,6 +15,7 @@ public struct GrowthBookModel {
     var clientKey: String?
     var encryptionKey: String?
     var features: Data?
+    var fallbackFeatures: Data?
     var attributes: JSON
     var trackingClosure: TrackingCallback
     var logLevel: Level = .info
@@ -42,8 +43,8 @@ public struct GrowthBookModel {
     
     private var ttlSeconds: Int
 
-    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], features: Data? = nil, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false, ttlSeconds: Int = 60) {
-        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
+    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], fallbackFeatures: Data? = nil, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false, ttlSeconds: Int = 60) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, fallbackFeatures: fallbackFeatures, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
         self.refreshHandler = refreshHandler
         self.cachingManager = CachingManager(apiKey: clientKey)
         self.ttlSeconds = ttlSeconds
@@ -136,8 +137,13 @@ public struct GrowthBookModel {
         if let features = growthBookBuilderModel.features {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
-
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        
+        var fallbackFeatures: Features? = nil
+        if let fallbackData = growthBookBuilderModel.fallbackFeatures {
+            fallbackFeatures = try? JSONDecoder().decode(Features.self, from: fallbackData)
+        }
+        
+        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds, fallbackFeatures: fallbackFeatures)
     }
 }
 
@@ -164,7 +170,8 @@ public struct GrowthBookModel {
          features: Features? = nil,
          savedGroups: JSON? = nil,
          cachingManager: CachingManager,
-         ttlSeconds: Int) {
+         ttlSeconds: Int,
+         fallbackFeatures: Features? = nil) {
         gbContext = context
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
@@ -172,7 +179,7 @@ public struct GrowthBookModel {
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, fallbackFeatures: fallbackFeatures)
         if let features = features {
             gbContext.features = features
         } else {
@@ -187,7 +194,7 @@ public struct GrowthBookModel {
                 
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
         if let sseURL = context.getSSEUrl(), context.backgroundSync {
-            featureVM.connectBackgroundSync(sseUrl: sseURL)
+            featureVM.connectBackgroundSync(sseUrl: sseURL, apiUrl: gbContext.getFeaturesURL())
         }
         
         // Logger setup. if we have logHandler we have to re-initialise logger
