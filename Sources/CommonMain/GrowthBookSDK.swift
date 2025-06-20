@@ -117,7 +117,6 @@ public struct GrowthBookModel {
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
             apiHost: growthBookBuilderModel.apiHost,
-            streamingHost : growthBookBuilderModel.streamingHost,
             clientKey: growthBookBuilderModel.clientKey,
             encryptionKey: growthBookBuilderModel.encryptionKey,
             isEnabled: growthBookBuilderModel.isEnabled,
