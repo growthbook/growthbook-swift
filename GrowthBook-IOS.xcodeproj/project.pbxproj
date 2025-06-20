@@ -13,7 +13,6 @@
 		84095C902818245700ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
 		84095C932818254400ADDF19 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C91281824DB00ADDF19 /* Theme.swift */; };
 		840E386F2B88BD75003DFC9F /* ExperimentHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840E386E2B88BD75003DFC9F /* ExperimentHelper.swift */; };
-		844838352E054AD200784A36 /* NetworkRetryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844838342E054AD200784A36 /* NetworkRetryHandler.swift */; };
 		844838362E054AD200784A36 /* NetworkRetryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844838342E054AD200784A36 /* NetworkRetryHandler.swift */; };
 		846A7A562D6CAE56007CCFD1 /* GlobalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A7A552D6CAE53007CCFD1 /* GlobalContext.swift */; };
 		8483E6FA2ABC60B900306B55 /* DecryptionUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8483E6F92ABC60B900306B55 /* DecryptionUtils.swift */; };
@@ -456,7 +455,6 @@
 				84E82C3D2BD2AF8F003F000B /* StickyBucketingTests.swift in Sources */,
 				849114CD280DA73100C0B9A5 /* GrowthBookSDKBuilderTests.swift in Sources */,
 				849114CE280DA73100C0B9A5 /* MockNetworkClient.swift in Sources */,
-				844838352E054AD200784A36 /* NetworkRetryHandler.swift in Sources */,
 				849114CF280DA73100C0B9A5 /* CachingManagerTest.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
