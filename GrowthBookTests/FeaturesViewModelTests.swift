@@ -8,7 +8,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     var isError: Bool = false
     var hasFeatures: Bool = false
     
-    let cachingManager = CachingManager()
+    let cachingManager = CachingManager(apiKey: "features-vm-test-api-key")
     
     override func setUp() {
         super.setUp()
