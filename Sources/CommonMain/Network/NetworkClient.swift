@@ -9,42 +9,67 @@ import Foundation
 }
 
 class CoreNetworkClient: NetworkProtocol {
-    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
-        guard let url = URL(string: url) else { return }
-
-        let request = URLSession.shared.dataTask(with: url) {(data: Data?, response: URLResponse?, error: Error?) in
-            if let error = error {
-                errorResult(error)
-            }
-            guard let responseData = data else { return }
-            successResult(responseData)
-        }
-        request.resume()
+    var tokenProvider: (() -> String?)?
+    var onTokenExpired: (() -> Void)?
+    var defaultHeaders: [String: String]
+    
+    init(tokenProvider: (() -> String?)? = nil,
+         onTokenExpired: (() -> Void)? = nil,
+         defaultHeaders: [String: String] = [:]) {
+        self.tokenProvider = tokenProvider
+        self.onTokenExpired = onTokenExpired
+        self.defaultHeaders = defaultHeaders
     }
     
-    func consumePOSTRequest(url: String, params: [String: Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        perform(url: url, method: "GET", params: nil, successResult: successResult, errorResult: errorResult)
+    }
+    
+    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        perform(url: url, method: "POST", params: params, successResult: successResult, errorResult: errorResult)
+    }
+    
+    private func perform(url: String, method: String, params: [String: Any]?, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
         guard let url = URL(string: url) else { return }
         
-        let session = URLSession.shared
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = method
         
-        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue("application/json", forHTTPHeaderField: "Accept")
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: params, options: .prettyPrinted)
-        } catch let error {
-            errorResult(error)
+        for (key, value) in defaultHeaders {
+            request.setValue(value, forHTTPHeaderField: key)
         }
         
-        let task = session.dataTask(with: request) { data, response, error in
+        if let token = tokenProvider?() {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        
+        if let params = params {
+            let bodyData = try? JSONSerialization.data(withJSONObject: params)
+            if let bodyData = bodyData {
+                request.httpBody = bodyData
+                if request.value(forHTTPHeaderField: "Content-Type") == nil {
+                    request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+                }
+            }
+        }
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
             if let error = error {
                 errorResult(error)
+                return
             }
-            guard let responseData = data else { return }
-            successResult(responseData)
-        }
-        task.resume()
+            
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 403 {
+                self.onTokenExpired?()
+                return
+            }
+            
+            guard let data = data else {
+                errorResult(NSError(domain: "EmptyResponse", code: -2))
+                return
+            }
+            
+            successResult(data)
+        }.resume()
     }
 }
