@@ -3,7 +3,7 @@ import XCTest
 @testable import GrowthBook
 
 class CachingManagerTest: XCTestCase {
-    let manager = CachingManager()
+    let manager = CachingManager(apiKey: "caching-test-key")
 
     func testCachingFileName() throws {
 
