@@ -59,7 +59,7 @@ class CoreNetworkClient: NetworkProtocol {
                 return
             }
             
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 403 {
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 401 {
                 self.onTokenExpired?()
                 return
             }
