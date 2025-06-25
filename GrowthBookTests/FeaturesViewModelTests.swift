@@ -51,8 +51,6 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), cachingManager: cachingManager)
         
         viewModel.fetchFeatures(apiUrl: "")
-
-        let cachingManager: CachingLayer = CachingManager()
         
         guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
             XCTFail()
@@ -89,8 +87,6 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
         viewModel.fetchFeatures(apiUrl: "")
-
-        let cachingManager: CachingLayer = CachingManager()
         
         guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
             XCTFail()
