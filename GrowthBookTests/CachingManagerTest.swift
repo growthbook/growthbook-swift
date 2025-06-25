@@ -52,4 +52,9 @@ class CachingManagerTest: XCTestCase {
             logger.error("Failed get raw data or parse json error: \(error.localizedDescription)")
         }
     }
+    
+    override func tearDown() {
+           manager.clearCache()
+           super.tearDown()
+       }
 }
