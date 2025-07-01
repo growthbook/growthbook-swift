@@ -131,8 +131,13 @@ class FeatureEvaluator {
                     
                     if let tracks = rule.tracks {
                         tracks.forEach { track in
-                            if let experiment = track.result?.experiment, let result = track.result?.experimentResult, !ExperimentHelper.shared.isTracked(experiment, result) {
-                                context.options.trackingClosure(experiment, result)
+                            if let experiment = track.result?.experiment, let result = track.result?.experimentResult {
+                                // Only track if experiment is active and user is in experiment
+                                let experimentIsActive = experiment.isActive ?? true
+                                let userInExperiment = result.inExperiment
+                                if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
+                                    context.options.trackingClosure(experiment, result)
+                                }
                             }
                         }
                     }
