@@ -9,16 +9,13 @@ import Foundation
 }
 
 class CoreNetworkClient: NetworkProtocol {
-    var tokenProvider: (() -> String?)?
-    var onTokenExpired: (() -> Void)?
-    var defaultHeaders: [String: String]
+    var apiRequestHeaders: [String: String]
+    var streamingHostRequestHeaders: [String: String]
     
-    init(tokenProvider: (() -> String?)? = nil,
-         onTokenExpired: (() -> Void)? = nil,
-         defaultHeaders: [String: String] = [:]) {
-        self.tokenProvider = tokenProvider
-        self.onTokenExpired = onTokenExpired
-        self.defaultHeaders = defaultHeaders
+    init(apiRequestHeaders: [String: String] = [:],
+         streamingHostRequestHeaders: [String: String] = [:]) {
+        self.apiRequestHeaders = apiRequestHeaders
+        self.streamingHostRequestHeaders = streamingHostRequestHeaders
     }
     
     func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
@@ -35,12 +32,8 @@ class CoreNetworkClient: NetworkProtocol {
         var request = URLRequest(url: url)
         request.httpMethod = method
         
-        for (key, value) in defaultHeaders {
+        for (key, value) in apiRequestHeaders {
             request.setValue(value, forHTTPHeaderField: key)
-        }
-        
-        if let token = tokenProvider?() {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         
         if let params = params {
@@ -59,17 +52,22 @@ class CoreNetworkClient: NetworkProtocol {
                 return
             }
             
-            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 401 {
-                self.onTokenExpired?()
-                return
+            if let httpResponse = response as? HTTPURLResponse {
+                if httpResponse.statusCode >= 400 {
+                    let httpError = NSError(domain: "HTTPError", code: httpResponse.statusCode, userInfo: [
+                        NSLocalizedDescriptionKey: "HTTP Error: \(httpResponse.statusCode)"
+                    ])
+                    errorResult(httpError)
+                    return
+                }
             }
             
-            guard let data = data else {
+            guard let responseData = data else {
                 errorResult(NSError(domain: "EmptyResponse", code: -2))
                 return
             }
             
-            successResult(data)
+            successResult(responseData)
         }.resume()
     }
 }
