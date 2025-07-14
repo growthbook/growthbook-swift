@@ -153,7 +153,9 @@ class ExperimentEvaluator {
         }
         
         // Fire context.trackingClosure if set and the combination of hashAttribute, hashValue, experiment.key, and variationId has not been tracked before
-        if !ExperimentHelper.shared.isTracked(experiment, result) {
+        let experimentIsActive = experiment.isActive ?? true
+        let userInExperiment = result.inExperiment
+        if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
             context.options.trackingClosure(experiment, result)
         }
 
