@@ -25,6 +25,8 @@ public struct GrowthBookModel {
     var stickyBucketService: StickyBucketServiceProtocol?
     var backgroundSync: Bool
     var remoteEval: Bool
+    var apiRequestHeaders: [String: String]? = nil
+    var streamingHostRequestHeaders: [String: String]? = nil
 }
 
 /// GrowthBookBuilder - inItializer for GrowthBook SDK for Apps
@@ -40,21 +42,33 @@ public struct GrowthBookModel {
     
     private var cachingManager: CachingManager
 
-    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false) {
-        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
+    @objc public init(apiHost: String? = nil, clientKey: String? = nil, encryptionKey: String? = nil, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool = false, remoteEval: Bool = false, apiRequestHeaders: [String: String]? = nil, streamingHostRequestHeaders: [String: String]? = nil) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval, apiRequestHeaders: apiRequestHeaders, streamingHostRequestHeaders: streamingHostRequestHeaders)
         self.refreshHandler = refreshHandler
+        self.networkDispatcher = CoreNetworkClient(
+                    apiRequestHeaders: apiRequestHeaders ?? [:],
+                    streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+                )
         self.cachingManager = CachingManager(apiKey: clientKey)
     }
 
-    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool, remoteEval: Bool = false) {
-        growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
+    @objc public init(features: Data, attributes: [String: Any], trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler? = nil, backgroundSync: Bool, remoteEval: Bool = false, apiRequestHeaders: [String: String]? = nil, streamingHostRequestHeaders: [String: String]? = nil) {
+        growthBookBuilderModel = GrowthBookModel(features: features, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval, apiRequestHeaders: apiRequestHeaders, streamingHostRequestHeaders: streamingHostRequestHeaders)
         self.refreshHandler = refreshHandler
+        self.networkDispatcher = CoreNetworkClient(
+                apiRequestHeaders: apiRequestHeaders ?? [:],
+                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+            )
         self.cachingManager = CachingManager()
     }
 
-    init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool, remoteEval: Bool = false) {
-        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval)
+    init(apiHost: String, clientKey: String, encryptionKey: String? = nil, attributes: JSON, trackingCallback: @escaping TrackingCallback, refreshHandler: CacheRefreshHandler?, backgroundSync: Bool, remoteEval: Bool = false, apiRequestHeaders: [String: String]? = nil, streamingHostRequestHeaders: [String: String]? = nil) {
+        growthBookBuilderModel = GrowthBookModel(apiHost: apiHost, clientKey: clientKey, encryptionKey: encryptionKey, attributes: JSON(attributes), trackingClosure: trackingCallback, backgroundSync: backgroundSync, remoteEval: remoteEval, apiRequestHeaders: apiRequestHeaders, streamingHostRequestHeaders: streamingHostRequestHeaders)
         self.refreshHandler = refreshHandler
+        self.networkDispatcher = CoreNetworkClient(
+                apiRequestHeaders: apiRequestHeaders ?? [:],
+                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+            )
         self.cachingManager = CachingManager(apiKey: clientKey)
     }
 
@@ -305,6 +319,20 @@ public struct GrowthBookModel {
     @objc public func setForcedVariations(forcedVariations: Any) {
         gbContext.forcedVariations = JSON(forcedVariations)
         refreshForRemoteEval()
+    }
+    
+    /// Updates API request headers for dynamic header management
+    @objc public func updateApiRequestHeaders(_ headers: [String: String]) {
+        if let networkClient = networkDispatcher as? CoreNetworkClient {
+            networkClient.apiRequestHeaders = headers
+        }
+    }
+    
+    /// Updates streaming host request headers for SSE connections
+    @objc public func updateStreamingHostRequestHeaders(_ headers: [String: String]) {
+        if let networkClient = networkDispatcher as? CoreNetworkClient {
+            networkClient.streamingHostRequestHeaders = headers
+        }
     }
     
     @objc func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
