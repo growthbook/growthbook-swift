@@ -8,7 +8,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     var isError: Bool = false
     var hasFeatures: Bool = false
     
-    let cachingManager = CachingManager()
+    let cachingManager = CachingManager(apiKey: "features-vm-test-api-key")
     
     override func setUp() {
         super.setUp()
@@ -51,8 +51,6 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), cachingManager: cachingManager)
         
         viewModel.fetchFeatures(apiUrl: "")
-
-        let cachingManager: CachingLayer = CachingManager()
         
         guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
             XCTFail()
@@ -89,8 +87,6 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
         viewModel.fetchFeatures(apiUrl: "")
-
-        let cachingManager: CachingLayer = CachingManager()
         
         guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
             XCTFail()

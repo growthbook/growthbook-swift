@@ -11,7 +11,13 @@ public protocol CachingLayer: AnyObject {
 /// This is actual implementation of Caching Layer in iOS
 @objc public class CachingManager: NSObject, CachingLayer {
     
-    private var cacheDirectory = CacheDirectory.applicationSupport
+    private var cacheDirectory: CacheDirectory = {
+        #if os(tvOS)
+        return .caches
+        #else
+        return .applicationSupport
+        #endif
+    }()
     private var customCachePath: String?
     private var cacheKey: String = ""
     
