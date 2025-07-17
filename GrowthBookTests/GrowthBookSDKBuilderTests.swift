@@ -9,7 +9,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     let testAttributes: JSON = JSON()
     let testKeyString = "Ns04T5n9+59rl2x3SlNHtQ=="
     
-    let cachingManager = CachingManager(apiKey: "4r23r324f23")
+    let cachingManager: CachingLayer = CachingManager(apiKey: "4r23r324f23")
     
     final class RefreshFlag: @unchecked Sendable {
         private let lock = NSLock()

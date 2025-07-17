@@ -2,10 +2,13 @@ import Foundation
 import CommonCrypto
 
 /// Interface for Caching Layer
-public protocol CachingLayer: AnyObject {
+@objc public protocol CachingLayer: AnyObject {
     func saveContent(fileName: String, content: Data)
     func getContent(fileName: String) -> Data?
     func setCacheKey(_ key: String)
+    func clearCache()
+    func setSystemCacheDirectory(_ directory: CacheDirectory)
+    func setCustomCachePath(_ path: String)
 }
 
 /// This is actual implementation of Caching Layer in iOS
@@ -34,14 +37,6 @@ public protocol CachingLayer: AnyObject {
         }
         let key = hash.map { String(format: "%02x", $0) }.joined()
         return String(key.prefix(5))
-    }
-    
-    @objc func getData(fileName: String) -> Data? {
-        return getContent(fileName: fileName)
-    }
-
-    @objc func putData(fileName: String, content: Data) {
-        saveContent(fileName: fileName, content: content)
     }
 
     /// Set a custom cache saving directory
