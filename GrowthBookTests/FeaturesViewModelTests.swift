@@ -9,7 +9,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     var hasFeatures: Bool = false
     var ttlSeconds = 60
     
-    let cachingManager = CachingManager()
+    let cachingManager: CachingLayer = CachingManager()
     
     override func setUp() {
         super.setUp()
@@ -88,7 +88,8 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
         
-        viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
+        let encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
+        viewModel.encryptionKey = encryptionKey
         viewModel.fetchFeatures(apiUrl: "")
 
         let cachingManager: CachingLayer = CachingManager()
@@ -98,7 +99,10 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             return
         }
         
-        if let _ = try? JSONDecoder().decode(Features.self, from: featureData) {
+        let crypto: CryptoProtocol = Crypto()
+        if let encryptedString = String(data: featureData, encoding: .utf8), crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) != nil {
+            XCTAssertTrue(true)
+        } else if let _ = try? JSONDecoder().decode(Features.self, from: featureData) {
             XCTAssertTrue(true)
         } else {
             XCTFail()
