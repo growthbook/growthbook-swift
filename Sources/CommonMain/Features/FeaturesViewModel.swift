@@ -15,7 +15,7 @@ class FeaturesViewModel {
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
     /// Caching Manager
-    let manager: CachingManager
+    let manager: CachingLayer
     let fallbackFeatures: Features?
     
     private let ttlSeconds: Int
@@ -25,7 +25,8 @@ class FeaturesViewModel {
     private let retryHandler = NetworkRetryHandler()
 
         
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager, ttlSeconds: Int, fallbackFeatures: Features? = nil) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, fallbackFeatures: Features? = nil) {
+
         self.delegate = delegate
         self.dataSource = dataSource
         self.manager = cachingManager
@@ -42,8 +43,8 @@ class FeaturesViewModel {
     }
     
     private func refreshExpiresAt() {
-            expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
-        }
+        expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
+    }
     
     func connectBackgroundSync(sseUrl: String, apiUrl: String?) {
            guard let url = URL(string: sseUrl) else { return }
@@ -74,7 +75,7 @@ class FeaturesViewModel {
        
     
     private func fetchCachedFeatures() -> Features? {
-        if let json = manager.getData(fileName: Constants.featureCache) {
+        if let json = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
             if let features = try? decoder.decode(Features.self, from: json) {
                 return features
@@ -153,7 +154,7 @@ class FeaturesViewModel {
                     let crypto: CryptoProtocol = Crypto()
                     if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                         if let featureData = try? JSONEncoder().encode(features) {
-                            manager.putData(fileName: Constants.featureCache, content: featureData)
+                            manager.saveContent(fileName: Constants.featureCache, content: featureData)
                             refreshExpiresAt()
                         } else {
                             logger.error("Failed encode features")
@@ -171,7 +172,7 @@ class FeaturesViewModel {
                 }
             } else if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
-                    manager.putData(fileName: Constants.featureCache, content: featureData)
+                    manager.saveContent(fileName: Constants.featureCache, content: featureData)
                     refreshExpiresAt()
                 }
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
@@ -184,8 +185,8 @@ class FeaturesViewModel {
             if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                 let crypto = Crypto()
                 if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
-                    if let encryptedSavedGroups = try? JSONEncoder().encode(savedGroups) {
-                        manager.putData(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
+                    if let encryptedSavedGroups = encryptedSavedGroups.data(using: .utf8) {
+                        manager.saveContent(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
                     } else {
                         logger.error("Failed encode saved groups")
                     }
@@ -197,7 +198,7 @@ class FeaturesViewModel {
                 }
             } else if let savedGroups = jsonPetitions.savedGroups {
                 if let savedGroupsData = try? JSONEncoder().encode(savedGroups) {
-                    manager.putData(fileName: Constants.savedGroupsCache, content: savedGroupsData)
+                    manager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
             }
