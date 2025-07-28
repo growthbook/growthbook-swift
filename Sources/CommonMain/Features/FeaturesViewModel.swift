@@ -20,7 +20,7 @@ class FeaturesViewModel {
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
     
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager, ttlSeconds: Int) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int) {
         
         self.delegate = delegate
         self.dataSource = dataSource
