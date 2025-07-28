@@ -15,9 +15,9 @@ class FeaturesViewModel {
     let dataSource: FeaturesDataSource
     var encryptionKey: String?
     /// Caching Manager
-    let manager: CachingManager
+    let manager: CachingLayer
         
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingManager) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer) {
         self.delegate = delegate
         self.dataSource = dataSource
         self.manager = cachingManager
@@ -40,37 +40,35 @@ class FeaturesViewModel {
         }
     }
     
-    private func fetchCachedFeatures() {
+    private func fetchCachedFeatures(logging: Bool = false) {
         // Check for cache data
-        if let json = manager.getData(fileName: Constants.featureCache) {
+        if let data = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
-            if let features = try? decoder.decode(Features.self, from: json) {
+            if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
+                let crypto: CryptoProtocol = Crypto()
+                if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
+                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+                } else {
+                    delegate?.featuresFetchFailed(error: .failedParsedEncryptedData, isRemote: false)
+                    if logging { logger.error("Failed get features from cached encrypted features") }
+                }
+            } else if let features = try? decoder.decode(Features.self, from: data) {
                 // Call Success Delegate with mention of data available but its not remote
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
             } else {
                 delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                if logging { logger.error("Failed parse local data") }
             }
         } else {
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
+            if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
         }
     }
 
     /// Fetch Features
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
         // Check for cache data
-        if let json = manager.getData(fileName: Constants.featureCache) {
-            let decoder = JSONDecoder()
-            if let features = try? decoder.decode(Features.self, from: json) {
-                // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
-            } else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
-                logger.error("Failed parse local data")
-            }
-        } else {
-            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
-            logger.info("Cache directory is empty. Nothing to fetch.")
-        }
+        fetchCachedFeatures(logging: true)
         
         if let apiUrl = apiUrl {
             if remoteEval {
@@ -111,8 +109,8 @@ class FeaturesViewModel {
                 if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                     let crypto: CryptoProtocol = Crypto()
                     if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                        if let featureData = try? JSONEncoder().encode(features) {
-                            manager.putData(fileName: Constants.featureCache, content: featureData)
+                        if let featureData = encryptedString.data(using: .utf8) {
+                            manager.saveContent(fileName: Constants.featureCache, content: featureData)
                         } else {
                             logger.error("Failed encode features")
                         }
@@ -129,7 +127,7 @@ class FeaturesViewModel {
                 }
             } else if let features = jsonPetitions.features {
                 if let featureData = try? JSONEncoder().encode(features) {
-                    manager.putData(fileName: Constants.featureCache, content: featureData)
+                    manager.saveContent(fileName: Constants.featureCache, content: featureData)
                 }
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
             } else {
@@ -141,8 +139,8 @@ class FeaturesViewModel {
             if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                 let crypto = Crypto()
                 if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
-                    if let encryptedSavedGroups = try? JSONEncoder().encode(savedGroups) {
-                        manager.putData(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
+                    if let encryptedSavedGroups = encryptedSavedGroups.data(using: .utf8) {
+                        manager.saveContent(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
                     } else {
                         logger.error("Failed encode saved groups")
                     }
@@ -154,7 +152,7 @@ class FeaturesViewModel {
                 }
             } else if let savedGroups = jsonPetitions.savedGroups {
                 if let savedGroupsData = try? JSONEncoder().encode(savedGroups) {
-                    manager.putData(fileName: Constants.savedGroupsCache, content: savedGroupsData)
+                    manager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
             }

@@ -33,6 +33,10 @@ class FeatureEvaluator {
         context.stackContext.evaluatedFeatures.insert(featureKey)
         context.stackContext.id = featureKey
         
+        defer {
+            context.stackContext.evaluatedFeatures.remove(featureKey)
+        }
+        
         if context.userContext.forcedFeatureValues?.dictionaryValue[featureKey] != nil {
             let value = context.userContext.forcedFeatureValues?[featureKey] ?? "nil"
             logger.info("Global override for forced feature with key: \(featureKey) and value \(value)")
