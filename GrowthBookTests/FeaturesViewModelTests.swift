@@ -85,7 +85,8 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)), cachingManager: cachingManager)
         
-        viewModel.encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
+        let encryptionKey = "3tfeoyW0wlo47bDnbWDkxg=="
+        viewModel.encryptionKey = encryptionKey
         viewModel.fetchFeatures(apiUrl: "")
         
         guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
@@ -93,7 +94,10 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             return
         }
         
-        if let _ = try? JSONDecoder().decode(Features.self, from: featureData) {
+        let crypto: CryptoProtocol = Crypto()
+        if let encryptedString = String(data: featureData, encoding: .utf8), crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) != nil {
+            XCTAssertTrue(true)
+        } else if let _ = try? JSONDecoder().decode(Features.self, from: featureData) {
             XCTAssertTrue(true)
         } else {
             XCTFail()
