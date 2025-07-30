@@ -18,6 +18,7 @@ class FeatureValueTests: XCTestCase {
             let testData = FeaturesTest(json: item[1].dictionaryValue)
 
             let gbContext = Context(apiHost: nil,
+                                    streamingHost: nil,
                                     clientKey: nil,
                                     encryptionKey: nil,
                                     isEnabled: true,
