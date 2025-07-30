@@ -21,9 +21,10 @@ class FeaturesViewModel {
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
     
+    /// SSE Handler for background sync
+    internal var sseHandler: SSEHandler?
     private var streamingUpdate: SSEHandler?
     private let retryHandler = NetworkRetryHandler()
-
         
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, fallbackFeatures: Features? = nil) {
 
@@ -45,7 +46,7 @@ class FeaturesViewModel {
     private func refreshExpiresAt() {
         expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
     }
-    
+        
     func connectBackgroundSync(sseUrl: String, apiUrl: String?) {
            guard let url = URL(string: sseUrl) else { return }
 
@@ -72,6 +73,10 @@ class FeaturesViewModel {
                handler.connect()
            }
        }
+    
+    deinit {
+        sseHandler?.disconnect()
+    }
        
     
     private func fetchCachedFeatures() -> Features? {

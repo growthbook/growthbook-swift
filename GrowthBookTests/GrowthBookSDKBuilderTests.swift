@@ -4,8 +4,11 @@ import XCTest
 
 class GrowthBookSDKBuilderTests: XCTestCase {
     let testApiHost = "https://host.com"
+    let testStreamingHost = "https://streaming.host.com"
     let testClientKey = "4r23r324f23"
     let expectedURL = "https://host.com/api/features/4r23r324f23"
+    let expectedStreamingHostURL = "https://streaming.host.com/sub/4r23r324f23"
+    let expectedDefaultStreamingURL = "https://host.com/sub/4r23r324f23"
     let testAttributes: JSON = JSON()
     let testKeyString = "Ns04T5n9+59rl2x3SlNHtQ=="
     
@@ -31,6 +34,30 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         func reset() {
             isRefreshed = false
         }
+    }
+    
+    func testApiURL() throws {
+        var gbContext = Context(apiHost: testApiHost,
+                                streamingHost: testStreamingHost,
+                                clientKey: testClientKey,
+                                encryptionKey: nil,
+                                isEnabled: true,
+                                attributes: JSON(),
+                                forcedVariations: JSON(),
+                                isQaMode: false,
+                                trackingClosure: { _, _ in },
+                                backgroundSync: false,
+                                savedGroups: JSON())
+        
+        let streamingHostURL = gbContext.getSSEUrl()
+        
+        gbContext.streamingHost = nil
+        
+        let defaultURL = gbContext.getSSEUrl()
+        
+        XCTAssertTrue(gbContext.getFeaturesURL() == expectedURL)
+        XCTAssertTrue(streamingHostURL == expectedStreamingHostURL)
+        XCTAssertTrue(defaultURL == expectedDefaultStreamingURL)
     }
     
     func testSDKInitializationDefault() throws {
