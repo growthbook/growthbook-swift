@@ -40,9 +40,7 @@ public struct GrowthBookModel {
 
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
-    
     private var cachingManager: CachingLayer
-
     private var ttlSeconds: Int
                         
     @objc public init(
@@ -58,6 +56,7 @@ public struct GrowthBookModel {
         ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
         streamingHostRequestHeaders: [String: String]? = nil) {
+
         growthBookBuilderModel = GrowthBookModel(
             apiHost: apiHost,
             clientKey: clientKey,
@@ -208,6 +207,7 @@ public struct GrowthBookModel {
     @objc public func initializer() -> GrowthBookSDK {
         let gbContext = Context(
             apiHost: growthBookBuilderModel.apiHost,
+            streamingHost : growthBookBuilderModel.streamingHost,
             clientKey: growthBookBuilderModel.clientKey,
             encryptionKey: growthBookBuilderModel.encryptionKey,
             isEnabled: growthBookBuilderModel.isEnabled,

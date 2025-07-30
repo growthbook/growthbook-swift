@@ -16,6 +16,7 @@ class ExperimentEvaluator {
         
         // If context.forcedVariations[experiment.trackingKey] is defined, return immediately (not in experiment, forced variation)
         if let forcedVariation = context.userContext.forcedVariations?.dictionaryValue[experiment.key] {
+            logger.trace("Forced variation found for experiment \(experiment.key). \nForced variation: \(forcedVariation)")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: forcedVariation.intValue, hashUsed: false, featureId: featureId)
         }
         

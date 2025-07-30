@@ -18,6 +18,7 @@ class ExperimentRunTests: XCTestCase {
             let experiment = Experiment(json: item[2].dictionaryValue)
 
             let gbContext = Context(apiHost: nil,
+                                    streamingHost: nil,
                                     clientKey: nil,
                                     encryptionKey: nil,
                                     isEnabled: testContext.isEnabled,

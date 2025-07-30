@@ -16,7 +16,7 @@ class FeaturesViewModel {
     var encryptionKey: String?
     /// Caching Manager
     let manager: CachingLayer
-
+    internal var sseHandler: SSEHandler?
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
     
@@ -43,18 +43,28 @@ class FeaturesViewModel {
     
     func connectBackgroundSync(sseUrl: String) {
         guard let url = URL(string: sseUrl) else { return }
+        
+        // Disconnect existing connection if any
+        sseHandler?.disconnect()
+        
         let streamingUpdate = SSEHandler(url: url)
+        sseHandler = streamingUpdate
+        
         streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
             guard let jsonData = data?.data(using: .utf8) else { return }
             self?.prepareFeaturesData(data: jsonData)
         }
         streamingUpdate.connect()
         
-        streamingUpdate.onDissconnect { _, shouldReconnect, _ in
+        streamingUpdate.onDissconnect { [weak streamingUpdate] _, shouldReconnect, _ in
             if let shouldReconnect = shouldReconnect, shouldReconnect {
-                streamingUpdate.connect()
+                streamingUpdate?.connect()
             }
         }
+    }
+    
+    deinit {
+        sseHandler?.disconnect()
     }
     
     private func fetchCachedFeatures(logging: Bool = false) {
