@@ -10,7 +10,7 @@ import Foundation
     private let prefix: String
     private let localStorage: CachingLayer?
     
-    public init(prefix: String = "gbStickyBuckets__", localStorage: CachingLayer? = nil) {
+    public init(prefix: String = "gbStickyBuckets__", localStorage: CachingLayer? = CachingManager()) {
         self.prefix = prefix
         self.localStorage = localStorage
     }
