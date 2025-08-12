@@ -4,8 +4,6 @@ import Foundation
 @objc public class Context: NSObject {
     /// Your api host
     public let apiHost: String?
-    /// Your streaming host
-    public var streamingHost: String?
     /// Unique client key
     public let clientKey: String?
     /// Encryption key for encrypted features.
@@ -30,11 +28,11 @@ import Foundation
     public var stickyBucketIdentifierAttributes: [String]?
     /// Enable to use remote evaluation
     public let remoteEval: Bool
-    /// Keys are unique identifiers for the features and the values are Feature objects.
-    /// Feature definitions - To be pulled from API / Cache
-    var features: Features
-    /// Target the same group of users across multiple features and experiments with Saved Groups
+    /// Stores saved group data
     public var savedGroups: JSON?
+    // Keys are unique identifiers for the features and the values are Feature objects.
+    // Feature definitions - To be pulled from API / Cache
+    var features: Features
 
     init(apiHost: String?,
          streamingHost: String?,
@@ -70,7 +68,7 @@ import Foundation
         self.savedGroups = savedGroups
     }
     
-    @objc public func getFeaturesURL() -> String? {
+    @objc func getFeaturesURL() -> String? {
         if let apiHost = apiHost, let clientKey = clientKey {
             return "\(apiHost)/api/features/\(clientKey)"
         } else {
@@ -78,7 +76,7 @@ import Foundation
         }
     }
     
-    @objc public func getRemoteEvalUrl() -> String? {
+    @objc func getRemoteEvalUrl() -> String? {
         if let apiHost = apiHost, let clientKey = clientKey {
             return  "\(apiHost)/api/eval/\(clientKey)"
         } else {
@@ -86,9 +84,9 @@ import Foundation
         }
     }
     
-    @objc public func getSSEUrl() -> String? {
-        if let host = streamingHost ?? apiHost, let clientKey = clientKey {
-            return "\(host)/sub/\(clientKey)"
+    @objc func getSSEUrl() -> String? {
+        if let apiHost = apiHost, let clientKey = clientKey {
+            return "\(apiHost)/sub/\(clientKey)"
         } else {
             return nil
         }
