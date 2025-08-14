@@ -180,7 +180,7 @@ open class GBLogger {
         )
         
         queue.async {
-            if #available(iOS 14.0, macCatalyst 14.0, macOS 11.0, *) {
+            if #available(iOS 14.0, macCatalyst 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *) {
                 guard let logger = self.osLogger as? Logger else { return }
                 switch level {
                 case .trace, .debug:
