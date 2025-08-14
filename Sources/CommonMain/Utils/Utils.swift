@@ -267,7 +267,9 @@ public class Utils {
         }
         
         let allAttributes = getStickyBucketAttributes(context: context, attributes: attributes, data: data);
-        context.options.stickyBucketAssignmentDocs = stickyBucketService.getAllAssignments(attributes: allAttributes)
+        stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, error in
+            context.options.stickyBucketAssignmentDocs = docs
+        }
     }
     
     // Returns hash value for every attribute
