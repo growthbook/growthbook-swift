@@ -51,7 +51,7 @@ open class GBLogger {
     private let queue = DispatchQueue(label: "delba.log")
     
     private var osLogger: Any? = {
-        if #available(iOS 14.0, macCatalyst 14.0, macOS 11.0, *) {
+        if #available(iOS 14.0, macCatalyst 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *) {
             return Logger(subsystem: "com.growthbook.sdk", category: "GrowthBook")
         } else {
             return OSLog(subsystem: "com.growthbook.sdk", category: "GrowthBook")
