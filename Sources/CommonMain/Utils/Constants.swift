@@ -85,6 +85,8 @@ public enum SDKErrorCode: String {
     static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
     static let failedToFetchData = SDKError(code: .failedToFetchData)
     
+    static func failedToFetchData(_ error: Error?) -> SDKError { .init(code: .failedToFetchData, underlying: error) }
+    
     public let code: SDKErrorCode
     public let underlying: Error?
     
