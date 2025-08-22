@@ -364,7 +364,7 @@ To enable streaming updates set backgroundSync variable to "true"
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>, clientKey: <GrowthBook/ClientKey>, attributes: <[String: Any]>, trackingCallback: { experiment, experimentResult in 
-    }, refreshHandler: { isRefreshed in
+    }, refreshHandler: { error in
     }, backgroundSync: true)
     .initializer()
 ```
@@ -379,7 +379,7 @@ To use Remote Evaluation, add the `remoteEval: true` property to your SDK instan
 
 ```swift
 var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>, clientKey: <GrowthBook/ClientKey>, attributes: <[String: Any]>, trackingCallback: { experiment, experimentResult in 
-    }, refreshHandler: { isRefreshed in
+    }, refreshHandler: { error in
     }, remoteEval: true)
     .initializer()
 ```
