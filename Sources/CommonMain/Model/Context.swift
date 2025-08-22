@@ -70,7 +70,7 @@ import Foundation
         self.savedGroups = savedGroups
     }
     
-    @objc public func getFeaturesURL() -> String? {
+    @objc func getFeaturesURL() -> String? {
         if let apiHost = apiHost, let clientKey = clientKey {
             return "\(apiHost)/api/features/\(clientKey)"
         } else {
@@ -78,7 +78,7 @@ import Foundation
         }
     }
     
-    @objc public func getRemoteEvalUrl() -> String? {
+    @objc func getRemoteEvalUrl() -> String? {
         if let apiHost = apiHost, let clientKey = clientKey {
             return  "\(apiHost)/api/eval/\(clientKey)"
         } else {
@@ -86,7 +86,7 @@ import Foundation
         }
     }
     
-    @objc public func getSSEUrl() -> String? {
+    @objc func getSSEUrl() -> String? {
         if let host = streamingHost ?? apiHost, let clientKey = clientKey {
             return "\(host)/sub/\(clientKey)"
         } else {
