@@ -122,7 +122,7 @@ public struct GrowthBookModel {
     ///
     /// By default log level is set to `info`
     @objc public func setLogLevel(_ level: LoggerLevel) -> GrowthBookBuilder {
-        growthBookBuilderModel.logLevel = Logger.getLoggingLevel(from: level)
+        growthBookBuilderModel.logLevel = GBLogger.getLoggingLevel(from: level)
         return self
     }
     
