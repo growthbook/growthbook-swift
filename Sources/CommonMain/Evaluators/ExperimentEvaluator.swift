@@ -14,6 +14,16 @@ class ExperimentEvaluator {
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
         
+        // Query string overrides
+        let override = Utils.getQueryStringOverride(
+            id: experiment.key,
+            urlString: context.options.url,
+            numberOfVariations:experiment.variations.count
+        )
+        if (override != nil) {
+            return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: override!, hashUsed: false, featureId: featureId)
+        }
+        
         // If context.forcedVariations[experiment.trackingKey] is defined, return immediately (not in experiment, forced variation)
         if let forcedVariation = context.userContext.forcedVariations?.dictionaryValue[experiment.key] {
             logger.trace("Forced variation found for experiment \(experiment.key). \nForced variation: \(forcedVariation)")

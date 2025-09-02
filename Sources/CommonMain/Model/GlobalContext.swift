@@ -29,12 +29,15 @@ import Foundation
     public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
     /// Features that uses sticky bucketing
     public var stickyBucketIdentifierAttributes: [String]?
+    
+    public var url: String?
 
     init(isEnabled: Bool,
          stickyBucketAssignmentDocs:  [String: StickyAssignmentsDocument]? = nil,
          stickyBucketIdentifierAttributes: [String]? = nil,
          stickyBucketService: StickyBucketServiceProtocol? = nil,
          isQaMode: Bool,
+         url: String? = nil,
          trackingClosure: @escaping (Experiment, ExperimentResult) -> Void) {
         self.isEnabled = isEnabled
         self.stickyBucketAssignmentDocs = stickyBucketAssignmentDocs
@@ -42,6 +45,7 @@ import Foundation
         self.stickyBucketService = stickyBucketService
         self.isQaMode = isQaMode
         self.trackingClosure = trackingClosure
+        self.url = url
     }
 }
 

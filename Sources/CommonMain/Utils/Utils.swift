@@ -380,12 +380,66 @@ public class Utils {
             )
     }
     
-    static func initializeEvalContext(context: Context) -> EvalContext {
-        let options = ClientOptions(isEnabled: context.isEnabled,
+    static func parseQueryString(_ queryString: String?) -> [String: String] {
+            var map: [String: String] = [:]
+            
+            guard let queryString = queryString, !queryString.isEmpty else {
+                return map
+            }
+            
+            let params = queryString.split(separator: "&")
+            for param in params {
+                let keyValuePair = param.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                
+                guard let name = keyValuePair.first?.removingPercentEncoding,
+                      !name.isEmpty else {
+                    continue
+                }
+                
+                let value = keyValuePair.count > 1
+                    ? keyValuePair[1].removingPercentEncoding ?? ""
+                    : ""
+                
+                map[name] = value
+            }
+            
+            return map
+        }
+    
+    static func getQueryStringOverride(id: String, url: URL, numberOfVariations: Int) -> Int? {
+            let queryMap = parseQueryString(url.query)
+            
+            guard let possibleValue = queryMap[id] else {
+                return nil
+            }
+            
+            if let variationValue = Int(possibleValue),
+               variationValue >= 0 && variationValue < numberOfVariations {
+                return variationValue
+            } else {
+                return nil
+            }
+        }
+        
+        static func getQueryStringOverride(id: String, urlString: String?, numberOfVariations: Int) -> Int? {
+            guard let urlString = urlString, !urlString.isEmpty else {
+                return nil
+            }
+            
+            guard let url = URL(string: urlString) else {
+                return nil
+            }
+            
+            return getQueryStringOverride(id: id, url: url, numberOfVariations: numberOfVariations)
+        }
+    
+        static func initializeEvalContext(context: Context) -> EvalContext {
+            let options = ClientOptions(isEnabled: context.isEnabled,
                                     stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs,
                                     stickyBucketIdentifierAttributes: context.stickyBucketIdentifierAttributes,
                                     stickyBucketService: context.stickyBucketService,
                                     isQaMode: context.isQaMode,
+                                    url: context.url,
                                     trackingClosure: context.trackingClosure)
         
         let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
