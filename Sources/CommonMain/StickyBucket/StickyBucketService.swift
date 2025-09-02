@@ -8,10 +8,12 @@ import Foundation
 
 @objc public class StickyBucketService: NSObject, StickyBucketServiceProtocol {
     private let prefix: String
-    private let localStorage = CachingManager()
+    private let localStorage : CachingManager
     
-    public init(prefix: String = "gbStickyBuckets__", localStoragePath: CacheDirectory = .applicationSupport) {
+    public init(prefix: String = "gbStickyBuckets__", localStoragePath: CacheDirectory = .applicationSupport, cacheKey: String? = nil) {
         self.prefix = prefix
+        self.localStorage = CachingManager(apiKey: cacheKey)
+        super.init()
         localStorage.setSystemCacheDirectory(localStoragePath)
     }
     
@@ -35,7 +37,10 @@ import Foundation
         let key = "\(doc.attributeName)||\(doc.attributeValue)"
         
         
-        guard let docData = try? JSONEncoder().encode(doc) else { return }
+        guard let docData = try? JSONEncoder().encode(doc) else {
+            completion(nil)
+            return
+        }
         
         localStorage.saveContent(fileName: prefix + key, content: docData)
         completion(nil)
