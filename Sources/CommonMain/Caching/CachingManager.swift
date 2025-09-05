@@ -24,7 +24,7 @@ import CommonCrypto
     private var customCachePath: String?
     private var cacheKey: String = ""
     
-    init(apiKey: String? = nil) {
+    public init(apiKey: String? = nil) {
         super.init()
         if let apiKey {
             self.setCacheKey(apiKey)

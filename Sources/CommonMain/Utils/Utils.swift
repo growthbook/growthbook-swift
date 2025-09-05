@@ -261,19 +261,19 @@ public class Utils {
     }
     
     // Update sticky bucketing configuration
-    static func refreshStickyBuckets(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) {
-        guard let stickyBucketService = context.options.stickyBucketService else {
+    static func refreshStickyBuckets(context: Context, attributes: JSON, data: FeaturesDataModel?) {
+        guard let stickyBucketService = context.stickyBucketService else {
             return
         }
         
         let allAttributes = getStickyBucketAttributes(context: context, attributes: attributes, data: data);
         stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, error in
-            context.options.stickyBucketAssignmentDocs = docs
+            context.stickyBucketAssignmentDocs = docs
         }
     }
     
     // Returns hash value for every attribute
-    static func getStickyBucketAttributes(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) -> [String: String] {
+    static func getStickyBucketAttributes(context: Context, attributes: JSON, data: FeaturesDataModel?) -> [String: String] {
         
         var attributesResult: [String: String] = [:]
         let stickyBucketIdentifierAttributes = deriveStickyBucketIdentifierAttributes(context: context, data: data)
@@ -286,12 +286,11 @@ public class Utils {
     }
     
     // Returns fallback attributes for features that have variations
-    static func deriveStickyBucketIdentifierAttributes(context: EvalContext, data: FeaturesDataModel?) -> [String] {
+    static func deriveStickyBucketIdentifierAttributes(context: Context, data: FeaturesDataModel?) -> [String] {
         
         var attributes: Set<String> = []
         
-        let features = data?.features ?? context.globalContext.features
-        let experiments = data?.experiments ?? context.globalContext.experiments
+        let features = data?.features ?? context.features
             
         features.keys.forEach({ id in
             let feature = features[id]
@@ -307,12 +306,7 @@ public class Utils {
             }
         })
         
-        experiments?.forEach({ experiment in
-            attributes.insert(experiment.hashAttribute ?? "id")
-            if let fallbackAttribute = experiment.fallbackAttribute {
-                    attributes.insert(fallbackAttribute)
-                }
-        })
+       
         return Array(attributes)
     }
     
@@ -380,12 +374,66 @@ public class Utils {
             )
     }
     
-    static func initializeEvalContext(context: Context) -> EvalContext {
-        let options = ClientOptions(isEnabled: context.isEnabled,
+    static func parseQueryString(_ queryString: String?) -> [String: String] {
+            var map: [String: String] = [:]
+            
+            guard let queryString = queryString, !queryString.isEmpty else {
+                return map
+            }
+            
+            let params = queryString.split(separator: "&")
+            for param in params {
+                let keyValuePair = param.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+                
+                guard let name = keyValuePair.first?.removingPercentEncoding,
+                      !name.isEmpty else {
+                    continue
+                }
+                
+                let value = keyValuePair.count > 1
+                    ? keyValuePair[1].removingPercentEncoding ?? ""
+                    : ""
+                
+                map[name] = value
+            }
+            
+            return map
+        }
+    
+    static func getQueryStringOverride(id: String, url: URL, numberOfVariations: Int) -> Int? {
+            let queryMap = parseQueryString(url.query)
+            
+            guard let possibleValue = queryMap[id] else {
+                return nil
+            }
+            
+            if let variationValue = Int(possibleValue),
+               variationValue >= 0 && variationValue < numberOfVariations {
+                return variationValue
+            } else {
+                return nil
+            }
+        }
+        
+        static func getQueryStringOverride(id: String, urlString: String?, numberOfVariations: Int) -> Int? {
+            guard let urlString = urlString, !urlString.isEmpty else {
+                return nil
+            }
+            
+            guard let url = URL(string: urlString) else {
+                return nil
+            }
+            
+            return getQueryStringOverride(id: id, url: url, numberOfVariations: numberOfVariations)
+        }
+    
+        static func initializeEvalContext(context: Context) -> EvalContext {
+            let options = ClientOptions(isEnabled: context.isEnabled,
                                     stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs,
                                     stickyBucketIdentifierAttributes: context.stickyBucketIdentifierAttributes,
                                     stickyBucketService: context.stickyBucketService,
                                     isQaMode: context.isQaMode,
+                                    url: context.url,
                                     trackingClosure: context.trackingClosure)
         
         let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)

@@ -8,22 +8,19 @@ import Foundation
 
 @objc public class StickyBucketService: NSObject, StickyBucketServiceProtocol {
     private let prefix: String
-    private let localStorage: CachingLayer?
+    private let localStorage : CachingManager
     
-    public init(prefix: String = "gbStickyBuckets__", localStorage: CachingLayer? = nil) {
+    public init(prefix: String = "gbStickyBuckets__", localStoragePath: CacheDirectory = .applicationSupport, cacheKey: String? = nil) {
         self.prefix = prefix
-        self.localStorage = localStorage
+        self.localStorage = CachingManager(apiKey: cacheKey)
+        super.init()
+        localStorage.setSystemCacheDirectory(localStoragePath)
     }
     
     public func getAssignments(attributeName: String,
                                attributeValue: String,
                                completion: @escaping (StickyAssignmentsDocument?, Error?) -> Void) {
         let key = "\(attributeName)||\(attributeValue)"
-        
-        guard let localStorage = localStorage else {
-            completion(nil, nil)
-            return
-        }
         
         if
             let data = localStorage.getContent(fileName: prefix + key),
@@ -39,12 +36,12 @@ import Foundation
                                 completion: @escaping (Error?) -> Void) {
         let key = "\(doc.attributeName)||\(doc.attributeValue)"
         
-        guard let localStorage = localStorage,
-              let docData = try? JSONEncoder().encode(doc) else {
+        
+        guard let docData = try? JSONEncoder().encode(doc) else {
             completion(nil)
             return
         }
-
+        
         localStorage.saveContent(fileName: prefix + key, content: docData)
         completion(nil)
     }
@@ -65,12 +62,8 @@ import Foundation
     
     private func getAssignmentsSync(attributeName: String, attributeValue: String) -> StickyAssignmentsDocument? {
         let key = "\(attributeName)||\(attributeValue)"
-        
-        guard let localStorage = localStorage else { return nil }
-                
-        if
-            let data = localStorage.getContent(fileName: prefix + key),
-            let jsonPetitions = try? JSONDecoder().decode(StickyAssignmentsDocument.self, from: data) {
+                        
+        if let data = localStorage.getContent(fileName: prefix + key), let jsonPetitions = try? JSONDecoder().decode(StickyAssignmentsDocument.self, from: data) {
             return jsonPetitions
         }
 

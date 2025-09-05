@@ -217,7 +217,7 @@ class FeatureEvaluator {
     /// This is a helper method to create a FeatureResult object.
     ///
     /// Besides the passed-in arguments, there are two derived values - on and off, which are just the value cast to booleans.
-    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = nil) -> FeatureResult {
+    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = "") -> FeatureResult {
         var isFalse = false
         if let value = value {
             isFalse = value.stringValue == "false" || value.stringValue == "0" || (value.stringValue.isEmpty && value.dictionary == nil && value.array == nil)
