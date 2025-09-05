@@ -281,8 +281,8 @@ public struct GrowthBookModel {
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
         
-        refreshStickyBucketService()
         evalContext = Utils.initializeEvalContext(context: context)
+        refreshStickyBucketService()
 
     }
         
@@ -303,6 +303,10 @@ public struct GrowthBookModel {
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
     @objc public func getGBContext() -> Context {
         return gbContext
+    }
+    
+    public func getGBAttributes() -> JSON {
+        return gbContext.attributes
     }
 
     /// Get Cached Features
@@ -442,8 +446,7 @@ public struct GrowthBookModel {
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
         if (gbContext.stickyBucketService != nil) {
-            let evalContext = getEvalContext()
-            Utils.refreshStickyBuckets(context: evalContext, attributes: evalContext.userContext.attributes, data: data)
+            Utils.refreshStickyBuckets(context: gbContext, attributes: evalContext.userContext.attributes, data: data)
         }
     }
 }
