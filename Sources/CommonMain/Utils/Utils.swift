@@ -239,12 +239,16 @@ public class Utils {
         
         let fallbackKey = fallbackValue.isEmpty ? nil : "\(fallbackAttribute)||\(fallbackValue)"
         
-        let key = "\(expFallbackAttribute ?? "" )||\(context.userContext.attributes[expFallbackAttribute ?? ""].stringValue)"
-        let leftOperand = stickyBucketAssignmentDocs[key]?.attributeValue
-        
-        if (leftOperand != context.userContext.attributes[expFallbackAttribute ?? ""].stringValue) {
-            context.userContext.stickyBucketAssignmentDocs = [:]
+        if let expFallbackAttribute = expFallbackAttribute {
+            let fallbackAttrValue = context.userContext.attributes[expFallbackAttribute]
             
+            if fallbackAttrValue.type != .null {
+                let key = "\(expFallbackAttribute)||\(fallbackAttrValue.stringValue)"
+                let leftOperand = stickyBucketAssignmentDocs[key]?.attributeValue
+                if leftOperand != fallbackAttrValue.stringValue {
+                    context.userContext.stickyBucketAssignmentDocs = [:]
+                }
+            }
         }
 
         var mergedAssignments: [String: String] = [:]
