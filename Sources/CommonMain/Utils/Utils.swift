@@ -265,19 +265,19 @@ public class Utils {
     }
     
     // Update sticky bucketing configuration
-    static func refreshStickyBuckets(context: Context, attributes: JSON, data: FeaturesDataModel?) {
-        guard let stickyBucketService = context.stickyBucketService else {
+    static func refreshStickyBuckets(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) {
+        guard let stickyBucketService = context.options.stickyBucketService else {
             return
         }
         
         let allAttributes = getStickyBucketAttributes(context: context, attributes: attributes, data: data);
         stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, error in
-            context.stickyBucketAssignmentDocs = docs
+            context.options.stickyBucketAssignmentDocs = docs
         }
     }
     
     // Returns hash value for every attribute
-    static func getStickyBucketAttributes(context: Context, attributes: JSON, data: FeaturesDataModel?) -> [String: String] {
+    static func getStickyBucketAttributes(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) -> [String: String] {
         
         var attributesResult: [String: String] = [:]
         let stickyBucketIdentifierAttributes = deriveStickyBucketIdentifierAttributes(context: context, data: data)
@@ -290,11 +290,12 @@ public class Utils {
     }
     
     // Returns fallback attributes for features that have variations
-    static func deriveStickyBucketIdentifierAttributes(context: Context, data: FeaturesDataModel?) -> [String] {
+    static func deriveStickyBucketIdentifierAttributes(context: EvalContext, data: FeaturesDataModel?) -> [String] {
         
         var attributes: Set<String> = []
         
-        let features = data?.features ?? context.features
+        let features = data?.features ?? context.globalContext.features
+        let experiments = data?.experiments ?? context.globalContext.experiments
             
         features.keys.forEach({ id in
             let feature = features[id]
@@ -309,8 +310,13 @@ public class Utils {
                 }
             }
         })
+        experiments?.forEach({ experiment in
+            attributes.insert(experiment.hashAttribute ?? "id")
+            if let fallbackAttribute = experiment.fallbackAttribute {
+                attributes.insert(fallbackAttribute)
+            }
+        })
         
-       
         return Array(attributes)
     }
     
@@ -440,7 +446,7 @@ public class Utils {
                                     url: context.url,
                                     trackingClosure: context.trackingClosure)
         
-        let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
+            let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
         
         // should create manual force features
         let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: nil)

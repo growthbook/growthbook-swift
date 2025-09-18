@@ -282,6 +282,14 @@ public struct GrowthBookModel {
         logger.minLevel = logLevel
         
         evalContext = Utils.initializeEvalContext(context: context)
+        if let service = gbContext.stickyBucketService,
+           let docs = gbContext.stickyBucketAssignmentDocs {
+            for (_, doc) in docs {
+                service.saveAssignments(doc: doc) { _ in
+                    // Ignore hydration errors
+                }
+            }
+        }
         refreshStickyBucketService()
 
     }
@@ -350,7 +358,17 @@ public struct GrowthBookModel {
     
     private func getEvalContext() -> EvalContext {
         evalContext.stackContext = StackContext()
+        evalContext.userContext = getUserContext()
         return evalContext
+    }
+    
+    private func getUserContext() -> UserContext {
+        return UserContext(
+            attributes: evalContext.userContext.attributes,
+            stickyBucketAssignmentDocs: evalContext.options.stickyBucketAssignmentDocs,
+            forcedVariations: evalContext.userContext.forcedVariations,
+            forcedFeatureValues: evalContext.userContext.forcedFeatureValues
+        )
     }
     
     @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
@@ -445,8 +463,8 @@ public struct GrowthBookModel {
     }
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
-        if (gbContext.stickyBucketService != nil) {
-            Utils.refreshStickyBuckets(context: gbContext, attributes: evalContext.userContext.attributes, data: data)
+        if (evalContext != nil && evalContext.options.stickyBucketService != nil) {
+            Utils.refreshStickyBuckets(context: getEvalContext(), attributes: evalContext.userContext.attributes, data: data)
         }
     }
 }
