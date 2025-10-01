@@ -332,7 +332,12 @@ public struct GrowthBookModel {
 
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
-        return FeatureEvaluator(context: getEvalContext(), featureKey: id).evaluateFeature().value ?? defaultValue
+        let context = getEvalContext()
+        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+        // Update evalContext with any sticky bucket changes
+        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        return result.value ?? defaultValue
     }
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
@@ -359,6 +364,7 @@ public struct GrowthBookModel {
     private func getEvalContext() -> EvalContext {
         evalContext.stackContext = StackContext()
         evalContext.userContext = getUserContext()
+        evalContext.globalContext.features = gbContext.features
         return evalContext
     }
     
@@ -389,7 +395,12 @@ public struct GrowthBookModel {
 
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
-        return FeatureEvaluator(context: getEvalContext(), featureKey: id).evaluateFeature()
+        let context = getEvalContext()
+        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+        // Update evalContext with any sticky bucket changes
+        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        return result
     }
 
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
@@ -399,7 +410,11 @@ public struct GrowthBookModel {
 
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        let result = ExperimentEvaluator().evaluateExperiment(context: getEvalContext(), experiment: experiment)
+        let context = getEvalContext()
+        let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
+        // Update evalContext with any sticky bucket changes
+        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
         
         self.subscriptions.forEach { subscription in
             subscription(experiment, result)
