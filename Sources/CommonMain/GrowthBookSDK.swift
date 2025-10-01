@@ -365,7 +365,7 @@ public struct GrowthBookModel {
     private func getUserContext() -> UserContext {
         return UserContext(
             attributes: evalContext.userContext.attributes,
-            stickyBucketAssignmentDocs: evalContext.options.stickyBucketAssignmentDocs,
+            stickyBucketAssignmentDocs: evalContext.userContext.stickyBucketAssignmentDocs,
             forcedVariations: evalContext.userContext.forcedVariations,
             forcedFeatureValues: evalContext.userContext.forcedFeatureValues
         )
