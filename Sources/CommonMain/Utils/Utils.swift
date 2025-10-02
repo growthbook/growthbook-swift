@@ -454,4 +454,34 @@ public class Utils {
         let evalContext = EvalContext(globalContext: globalContext, userContext: userContext, stackContext: StackContext(), options: options)
         return evalContext
     }
+
+    /// Propagates sticky bucket assignments from child evaluation context to parent context
+    static func propagateStickyAssignments(from childContext: EvalContext, to parentContext: EvalContext) {
+        if let childAssignments = childContext.userContext.stickyBucketAssignmentDocs,
+           !childAssignments.isEmpty {
+            // Merge child assignments into parent context
+            if parentContext.userContext.stickyBucketAssignmentDocs == nil {
+                parentContext.userContext.stickyBucketAssignmentDocs = [:]
+            }
+
+            for (key, doc) in childAssignments {
+                if let existingDoc = parentContext.userContext.stickyBucketAssignmentDocs?[key] {
+                    // Merge assignments from both documents
+                    var mergedAssignments = existingDoc.assignments
+                    for (expKey, assignment) in doc.assignments {
+                        mergedAssignments[expKey] = assignment
+                    }
+                    let mergedDoc = StickyAssignmentsDocument(
+                        attributeName: doc.attributeName,
+                        attributeValue: doc.attributeValue,
+                        assignments: mergedAssignments
+                    )
+                    parentContext.userContext.stickyBucketAssignmentDocs?[key] = mergedDoc
+                } else {
+                    // Add new document
+                    parentContext.userContext.stickyBucketAssignmentDocs?[key] = doc
+                }
+            }
+        }
+    }
 }

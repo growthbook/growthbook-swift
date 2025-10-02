@@ -59,11 +59,13 @@ class FeatureEvaluator {
                     for parentCondition in parentConditions {
                         context.stackContext.evaluatedFeatures = Set(evaluatedFeatures)
 
-                        let parentResult = FeatureEvaluator(
+                        let parentEvaluator = FeatureEvaluator(
                             context: context,
                             featureKey: parentCondition.id
                         )
-                        .evaluateFeature()
+                        let parentResult = parentEvaluator.evaluateFeature()
+                        // Propagate any sticky bucket assignments from parent evaluation
+                        Utils.propagateStickyAssignments(from: parentEvaluator.context, to: context)
                         
                         if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
                             let featureResultWhenCircularDependencyDetected =  prepareResult(
@@ -78,7 +80,7 @@ class FeatureEvaluator {
                         
                         let evalCondition = ConditionEvaluator().isEvalCondition(
                             attributes: evalObjc,
-                            conditionObj: parentCondition.condition, 
+                            conditionObj: parentCondition.condition,
                             savedGroups: context.globalContext.savedGroups
                         )
                         
