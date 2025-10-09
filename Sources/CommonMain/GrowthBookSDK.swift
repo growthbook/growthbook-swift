@@ -329,6 +329,8 @@ public struct GrowthBookModel {
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
         gbContext.features = features
+        evalContext = Utils.initializeEvalContext(context: gbContext)
+        refreshStickyBucketService()
         if isRemote {
             refreshHandler?(true)
         }
@@ -340,6 +342,8 @@ public struct GrowthBookModel {
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
         
         gbContext.features = features
+        evalContext = Utils.initializeEvalContext(context: gbContext)
+        refreshStickyBucketService()
     }
 
     @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
