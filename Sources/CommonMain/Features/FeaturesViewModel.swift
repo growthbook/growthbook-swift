@@ -89,7 +89,7 @@ class FeaturesViewModel {
                     case .success(let data):
                         self.prepareFeaturesData(data: data)
                     case .failure(let error):
-                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
+                        self.delegate?.featuresFetchFailed(error: .failedToFetchData(error), isRemote: true)
                         logger.error("Failed get features: \(error.localizedDescription)")
                     }
                 }
@@ -99,7 +99,7 @@ class FeaturesViewModel {
                     case .success(let data):
                         self.prepareFeaturesData(data: data)
                     case .failure(let error):
-                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
+                        self.delegate?.featuresFetchFailed(error: .failedToFetchData(error), isRemote: true)
                         logger.error("Failed get features: \(error.localizedDescription)")
                     }
                 }
