@@ -282,6 +282,14 @@ public struct GrowthBookModel {
         logger.minLevel = logLevel
         
         evalContext = Utils.initializeEvalContext(context: context)
+        if let service = gbContext.stickyBucketService,
+           let docs = gbContext.stickyBucketAssignmentDocs {
+            for (_, doc) in docs {
+                service.saveAssignments(doc: doc) { _ in
+                    // Ignore hydration errors
+                }
+            }
+        }
         refreshStickyBucketService()
 
     }
@@ -324,7 +332,12 @@ public struct GrowthBookModel {
 
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
-        return FeatureEvaluator(context: getEvalContext(), featureKey: id).evaluateFeature().value ?? defaultValue
+        let context = getEvalContext()
+        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+        // Update evalContext with any sticky bucket changes
+        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        return result.value ?? defaultValue
     }
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
@@ -350,7 +363,18 @@ public struct GrowthBookModel {
     
     private func getEvalContext() -> EvalContext {
         evalContext.stackContext = StackContext()
+        evalContext.userContext = getUserContext()
+        evalContext.globalContext.features = gbContext.features
         return evalContext
+    }
+    
+    private func getUserContext() -> UserContext {
+        return UserContext(
+            attributes: evalContext.userContext.attributes,
+            stickyBucketAssignmentDocs: evalContext.userContext.stickyBucketAssignmentDocs,
+            forcedVariations: evalContext.userContext.forcedVariations,
+            forcedFeatureValues: evalContext.userContext.forcedFeatureValues
+        )
     }
     
     @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
@@ -371,7 +395,12 @@ public struct GrowthBookModel {
 
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
-        return FeatureEvaluator(context: getEvalContext(), featureKey: id).evaluateFeature()
+        let context = getEvalContext()
+        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+        // Update evalContext with any sticky bucket changes
+        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        return result
     }
 
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
@@ -381,7 +410,11 @@ public struct GrowthBookModel {
 
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        let result = ExperimentEvaluator().evaluateExperiment(context: getEvalContext(), experiment: experiment)
+        let context = getEvalContext()
+        let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
+        // Update evalContext with any sticky bucket changes
+        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
         
         self.subscriptions.forEach { subscription in
             subscription(experiment, result)
@@ -445,8 +478,8 @@ public struct GrowthBookModel {
     }
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
-        if (gbContext.stickyBucketService != nil) {
-            Utils.refreshStickyBuckets(context: gbContext, attributes: evalContext.userContext.attributes, data: data)
+        if (evalContext != nil && evalContext.options.stickyBucketService != nil) {
+            Utils.refreshStickyBuckets(context: getEvalContext(), attributes: evalContext.userContext.attributes, data: data)
         }
     }
 }
