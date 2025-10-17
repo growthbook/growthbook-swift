@@ -50,7 +50,7 @@ import Foundation
 }
 
 @objc public class UserContext: NSObject {
-    public let attributes: JSON
+    public var attributes: JSON
     public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
     public var forcedVariations: JSON?
     public var forcedFeatureValues: JSON?

@@ -162,7 +162,11 @@ class ExperimentEvaluator {
             if changed {
                 context.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs ?? [:]
                 context.userContext.stickyBucketAssignmentDocs?[key] = doc
-                context.options.stickyBucketService?.saveAssignments(doc: doc, completion: { _ in })
+                context.options.stickyBucketService?.saveAssignments(doc: doc, completion: { error in
+                    if let error {
+                        logger.error("Sticky bucketing error: \(error.localizedDescription)")
+                    }
+                })
             }
         }
         
