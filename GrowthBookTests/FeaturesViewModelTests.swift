@@ -134,7 +134,6 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     }
 
     func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
-        print("SOSSSS")
         isSuccess = true
         isError = false
         hasFeatures = !features.isEmpty
