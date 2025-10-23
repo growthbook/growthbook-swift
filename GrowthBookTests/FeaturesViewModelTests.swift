@@ -47,41 +47,56 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     func testGetDataFromCache() throws {
         isSuccess = false
         isError = true
-        
-        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), cachingManager: cachingManager)
-        
+
+        let viewModel = FeaturesViewModel(
+            delegate: self,
+            dataSource: FeaturesDataSource(
+                dispatcher: MockNetworkClient(
+                    successResponse: MockResponse().successResponse,
+                    error: nil
+                )
+            ),
+            cachingManager: cachingManager
+        )
+
+        let expectation = XCTestExpectation(description: "Wait for cache fetch and delegate callback")
+
         viewModel.fetchFeatures(apiUrl: "")
-        
-        guard let featureData = cachingManager.getContent(fileName: Constants.featureCache) else {
-            XCTFail()
-            return
-        }
-        
-        guard let savedGroupsData = cachingManager.getContent(fileName: Constants.savedGroupsCache) else {
-            XCTFail()
-            return
-        }
-        
-        // Since XCTest doesn’t have built-in async context support for this case, we wait one second to allow the delegate to be called.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-            if let features = try? JSONDecoder().decode(Features.self, from: featureData), features != [:] {
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            defer { expectation.fulfill() }
+
+            guard let featureData = self.cachingManager.getContent(fileName: Constants.featureCache) else {
+                XCTFail("Missing feature cache file")
+                return
+            }
+
+            guard let savedGroupsData = self.cachingManager.getContent(fileName: Constants.savedGroupsCache) else {
+                XCTFail("Missing saved groups cache file")
+                return
+            }
+
+            if let features = try? JSONDecoder().decode(Features.self, from: featureData),
+               !features.isEmpty {
                 XCTAssertTrue(true)
             } else {
-                XCTFail()
+                XCTFail("Decoded features are empty or invalid")
             }
+
+            if let _ = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
+                XCTAssertTrue(true)
+            } else {
+                XCTFail("Decoded saved groups are invalid")
+            }
+
+            XCTAssertTrue(self.isSuccess)
+            XCTAssertFalse(self.isError)
+            XCTAssertTrue(self.hasFeatures)
         }
-        
-        if let _ = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
-            XCTAssertTrue(true)
-        } else {
-            XCTFail()
-        }
-        
-        XCTAssertTrue(isSuccess)
-        XCTAssertFalse(isError)
-        XCTAssertTrue(hasFeatures)
+
+        wait(for: [expectation], timeout: 2.0)
     }
-    
+
     func testWithEncryptGetDataFromCache() throws {
         isSuccess = false
         isError = true
