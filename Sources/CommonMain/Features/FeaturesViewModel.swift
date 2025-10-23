@@ -12,14 +12,12 @@ protocol FeaturesFlowDelegate: AnyObject {
 /// View Model for Features
 class FeaturesViewModel {
     weak var delegate: FeaturesFlowDelegate?
-    let dataSource: FeaturesDataSource
     var encryptionKey: String?
-    /// Caching Manager
-    let manager: CachingLayer
-    /// SSE Handler for background sync
-    var sseHandler: SSEHandler?
     
-    private let fileSaveQueue = DispatchQueue(label: "fileSaveQueue", qos: .utility)
+    private let dataSource: FeaturesDataSource
+    private let manager: CachingLayer
+    private var sseHandler: SSEHandler?
+    private let fileSaveQueue = DispatchQueue(label: "com.sdk.fileSaveQueue", qos: .utility)
         
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer) {
         self.delegate = delegate
@@ -28,6 +26,10 @@ class FeaturesViewModel {
         self.fetchCachedFeatures()
     }
     
+    deinit {
+        sseHandler?.disconnect()
+    }
+        
     func connectBackgroundSync(sseUrl: String) {
         guard let url = URL(string: sseUrl) else { return }
         
@@ -37,178 +39,166 @@ class FeaturesViewModel {
         let streamingUpdate = SSEHandler(url: url)
         sseHandler = streamingUpdate
         
-        streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
-            guard let jsonData = data?.data(using: .utf8) else { return }
-            self?.prepareFeaturesData(data: jsonData)
+        streamingUpdate.addEventListener(event: "features") { [weak self] _, _, data in
+            guard let self, let jsonData = data?.data(using: .utf8) else { return }
+            self.prepareFeaturesData(data: jsonData)
         }
         streamingUpdate.connect()
         
         streamingUpdate.onDissconnect { [weak streamingUpdate] _, shouldReconnect, _ in
-            if let shouldReconnect = shouldReconnect, shouldReconnect {
+            if shouldReconnect == true {
                 streamingUpdate?.connect()
             }
         }
     }
-    
-    deinit {
-        sseHandler?.disconnect()
-    }
-    
-    private func fetchCachedFeatures(logging: Bool = false) {
-        // Check for cache data
-        if let data = manager.getContent(fileName: Constants.featureCache) {
-            let decoder = JSONDecoder()
-            if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
-                let crypto: CryptoProtocol = Crypto()
-                if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
-                } else {
-                    delegate?.featuresFetchFailed(error: .failedParsedEncryptedData, isRemote: false)
-                    if logging { logger.error("Failed get features from cached encrypted features") }
-                }
-            } else if let features = try? decoder.decode(Features.self, from: data) {
-                // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
-            } else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
-                if logging { logger.error("Failed parse local data") }
-            }
-        } else {
-            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
-            if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
-        }
-    }
-
-    /// Fetch Features
+        
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
-        // Check for cache data
         fetchCachedFeatures(logging: true)
         
-        if let apiUrl = apiUrl {
-            if remoteEval {
-                dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { result in
-                    switch result {
-                    case .success(let data):
-                        self.prepareFeaturesData(data: data)
-                    case .failure(let error):
-                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
-                        logger.error("Failed get features: \(error.localizedDescription)")
-                    }
-                }
-            } else {
-                dataSource.fetchFeatures(apiUrl: apiUrl) { result in
-                    switch result {
-                    case .success(let data):
-                        self.prepareFeaturesData(data: data)
-                    case .failure(let error):
-                        self.delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: true)
-                        logger.error("Failed get features: \(error.localizedDescription)")
-                    }
-                }
+        guard let apiUrl else {
+            logger.error("Missing API URL")
+            notify { $0.featuresFetchFailed(error: .failedMissingKey, isRemote: true) }
+            return
+        }
+        
+        let completion: (Result<Data, Error>) -> Void = { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let data):
+                self.prepareFeaturesData(data: data)
+            case .failure(let error):
+                logger.error("Failed to fetch features: \(error.localizedDescription)")
+                self.notify { $0.featuresFetchFailed(error: .failedToLoadData, isRemote: true) }
             }
+        }
+        
+        if remoteEval {
+            dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload, fetchResult: completion)
         } else {
-            delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
-            logger.error("Failed get api URL")
+            dataSource.fetchFeatures(apiUrl: apiUrl, fetchResult: completion)
         }
     }
-
-    /// Cache API Response and push success event
-    func prepareFeaturesData(data: Data) {
-        // Call Success Delegate with mention of data available with remote
-
+        
+    private func fetchCachedFeatures(logging: Bool = false) {
+        guard let data = manager.getContent(fileName: Constants.featureCache) else {
+            if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
+            notify { $0.featuresFetchFailed(error: .failedToLoadData, isRemote: false) }
+            return
+        }
+        
         let decoder = JSONDecoder()
+        
+        if let encryptedString = String(data: data, encoding: .utf8),
+           let encryptionKey, !encryptionKey.isEmpty {
+            
+            let crypto: CryptoProtocol = Crypto()
+            if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
+                notify { $0.featuresFetchedSuccessfully(features: features, isRemote: false) }
+            } else {
+                if logging { logger.error("Failed get features from cached encrypted features") }
+                notify { $0.featuresFetchFailed(error: .failedParsedEncryptedData, isRemote: false) }
+            }
+            
+        } else if let features = try? decoder.decode(Features.self, from: data) {
+            notify { $0.featuresFetchedSuccessfully(features: features, isRemote: false) }
+        } else {
+            if logging { logger.error("Failed to parse local data") }
+            notify { $0.featuresFetchFailed(error: .failedParsedData, isRemote: false) }
+        }
+    }
+        
+    func prepareFeaturesData(data: Data) {
+        let decoder = JSONDecoder()
+        
         guard let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) else {
             logger.error("Failed to decode FeaturesDataModel")
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: true)
-            }
+            notify { $0.featuresFetchFailed(error: .failedParsedData, isRemote: true) }
             return
         }
-
+        
         if let encryptedString = jsonPetitions.encryptedFeatures {
-            guard let encryptionKey = encryptionKey, !encryptionKey.isEmpty else {
-                logger.error("Missing encryption key")
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
-                }
-                return
-            }
-
-            let crypto = Crypto()
-            guard let features = crypto.getFeaturesFromEncryptedFeatures(
-                encryptedString: encryptedString,
-                encryptionKey: encryptionKey
-            ) else {
-                logger.error("Failed to decrypt features")
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.featuresFetchFailed(error: .failedEncryptedFeatures, isRemote: true)
-                }
-                return
-            }
-
-            if let featureData = encryptedString.data(using: .utf8) {
-                saveDataThreadSafe(fileName: Constants.featureCache, content: featureData)
-            } else {
-                logger.error("Failed to encode features as UTF-8")
-            }
-
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
-            }
+            handleEncryptedFeatures(encryptedString: encryptedString, jsonPetitions: jsonPetitions)
         } else if let features = jsonPetitions.features {
-            if let featureData = try? JSONEncoder().encode(features) {
-                saveDataThreadSafe(fileName: Constants.featureCache, content: featureData)
-            }
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
-            }
-
+            handlePlainFeatures(features, jsonPetitions: jsonPetitions)
         } else {
             logger.error("Missing both encrypted and plain features")
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.featuresFetchFailed(error: .failedMissingKey, isRemote: true)
-            }
+            notify { $0.featuresFetchFailed(error: .failedMissingKey, isRemote: true) }
+        }
+    }
+        
+    private func handleEncryptedFeatures(encryptedString: String, jsonPetitions: FeaturesDataModel) {
+        guard let encryptionKey = encryptionKey, !encryptionKey.isEmpty else {
+            logger.error("Missing encryption key")
+            notify { $0.featuresFetchFailed(error: .failedMissingKey, isRemote: true) }
             return
         }
-
+        
+        let crypto = Crypto()
+        guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else {
+            logger.error("Failed to decrypt features")
+            notify { $0.featuresFetchFailed(error: .failedEncryptedFeatures, isRemote: true) }
+            return
+        }
+        
+        if let featureData = encryptedString.data(using: .utf8) {
+            saveDataThreadSafe(fileName: Constants.featureCache, content: featureData)
+        } else {
+            logger.error("Failed to encode features as UTF-8")
+        }
+        
+        notify { $0.featuresFetchedSuccessfully(features: features, isRemote: true) }
+        handleSavedGroups(from: jsonPetitions)
+    }
+    
+    private func handlePlainFeatures(_ features: Features, jsonPetitions: FeaturesDataModel) {
+        if let featureData = try? JSONEncoder().encode(features) {
+            saveDataThreadSafe(fileName: Constants.featureCache, content: featureData)
+        }
+        
+        notify { $0.featuresFetchedSuccessfully(features: features, isRemote: true) }
+        handleSavedGroups(from: jsonPetitions)
+    }
+    
+    private func handleSavedGroups(from jsonPetitions: FeaturesDataModel) {
         if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups,
            !encryptedSavedGroups.isEmpty,
            let encryptionKey = encryptionKey,
            !encryptionKey.isEmpty {
             
             let crypto = Crypto()
-            if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(
-                encryptedString: encryptedSavedGroups,
-                encryptionKey: encryptionKey
-            ) {
-                if let encryptedSavedGroupsData = encryptedSavedGroups.data(using: .utf8) {
-                    saveDataThreadSafe(fileName: Constants.savedGroupsCache, content: encryptedSavedGroupsData)
-                } else {
-                    logger.error("Failed to encode saved groups as UTF-8")
+            if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
+                if let savedGroupsData = encryptedSavedGroups.data(using: .utf8) {
+                    saveDataThreadSafe(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
-                }
+                notify { $0.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true) }
             } else {
                 logger.error("Failed to decrypt saved groups")
-                DispatchQueue.main.async { [weak self] in
-                    self?.delegate?.savedGroupsFetchFailed(error: .failedEncryptedSavedGroups, isRemote: true)
-                }
+                notify { $0.savedGroupsFetchFailed(error: .failedEncryptedSavedGroups, isRemote: true) }
             }
             
         } else if let savedGroups = jsonPetitions.savedGroups {
             if let savedGroupsData = try? JSONEncoder().encode(savedGroups) {
                 saveDataThreadSafe(fileName: Constants.savedGroupsCache, content: savedGroupsData)
             }
-            DispatchQueue.main.async { [weak self] in
-                self?.delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
-            }
+            notify { $0.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true) }
         }
     }
-    
+        
     private func saveDataThreadSafe(fileName: String, content: Data) {
         fileSaveQueue.async { [weak self] in
             self?.manager.saveContent(fileName: fileName, content: content)
+        }
+    }
+        
+    private func notify(_ action: @escaping (FeaturesFlowDelegate) -> Void) {
+        if Thread.isMainThread {
+            guard let delegate = self.delegate else { return }
+            action(delegate)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let delegate = self.delegate else { return }
+                action(delegate)
+            }
         }
     }
 }

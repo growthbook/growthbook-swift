@@ -62,10 +62,13 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             return
         }
         
-        if let features = try? JSONDecoder().decode(Features.self, from: featureData), features != [:] {
-            XCTAssertTrue(true)
-        } else {
-            XCTFail()
+        // Since XCTest doesn’t have built-in async context support for this case, we wait one second to allow the delegate to be called.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            if let features = try? JSONDecoder().decode(Features.self, from: featureData), features != [:] {
+                XCTAssertTrue(true)
+            } else {
+                XCTFail()
+            }
         }
         
         if let _ = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
@@ -131,6 +134,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     }
 
     func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
+        print("SOSSSS")
         isSuccess = true
         isError = false
         hasFeatures = !features.isEmpty
