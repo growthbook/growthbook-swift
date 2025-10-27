@@ -37,6 +37,8 @@ import Foundation
     public var savedGroups: JSON?
     
     public var url: String? = nil
+    
+    public var forcedFeatureValues: JSON? = nil
 
     init(apiHost: String?,
          streamingHost: String?,
@@ -54,7 +56,8 @@ import Foundation
          backgroundSync: Bool = false,
          remoteEval: Bool = false,
          savedGroups: JSON? = nil,
-         url: String? = nil) {
+         url: String? = nil,
+         forcedFeatureValues: JSON? = nil) {
         self.apiHost = apiHost
         self.streamingHost = streamingHost
         self.clientKey = clientKey
@@ -72,6 +75,7 @@ import Foundation
         self.remoteEval = remoteEval
         self.savedGroups = savedGroups
         self.url = url
+        self.forcedFeatureValues = forcedFeatureValues
     }
     
     @objc public func getFeaturesURL() -> String? {

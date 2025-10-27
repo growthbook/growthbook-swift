@@ -449,7 +449,7 @@ public class Utils {
             let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
         
         // should create manual force features
-        let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: nil)
+            let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: context.forcedFeatureValues)
         
         let evalContext = EvalContext(globalContext: globalContext, userContext: userContext, stackContext: StackContext(), options: options)
         return evalContext
