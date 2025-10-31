@@ -18,11 +18,14 @@ class FeaturesViewModel {
     private let manager: CachingLayer
     private var sseHandler: SSEHandler?
     private let fileSaveQueue = DispatchQueue(label: "com.sdk.fileSaveQueue", qos: .utility)
+    
+    var forceSynchronousSave: Bool
         
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer) {
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, forceSynchronousSave: Bool = false) {
         self.delegate = delegate
         self.dataSource = dataSource
         self.manager = cachingManager
+        self.forceSynchronousSave = forceSynchronousSave
         self.fetchCachedFeatures()
     }
     
@@ -185,8 +188,13 @@ class FeaturesViewModel {
     }
         
     private func saveDataThreadSafe(fileName: String, content: Data) {
-        fileSaveQueue.async { [weak self] in
-            self?.manager.saveContent(fileName: fileName, content: content)
+        if forceSynchronousSave {
+            manager.saveContent(fileName: fileName, content: content)
+            return
+        } else {
+            fileSaveQueue.async { [weak self] in
+                self?.manager.saveContent(fileName: fileName, content: content)
+            }
         }
     }
         
