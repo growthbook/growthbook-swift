@@ -229,7 +229,7 @@ public struct GrowthBookModel {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
 
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
+        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
     }
 }
 
