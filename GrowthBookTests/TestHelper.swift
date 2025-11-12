@@ -81,12 +81,16 @@ struct ContextTest: Codable {
     var features: [String: Feature] = [:]
     var isQaMode: Bool = false
     var isEnabled: Bool = true
+    var url: String? = nil
     var forcedVariations: JSON? = nil
     var savedGroups: JSON? = nil
 
     init(json: [String: JSON]) {
         if let attributes = json["attributes"] {
             self.attributes = attributes
+        }
+        if let url = json["url"] {
+            self.url = url.stringValue
         }
         if let qaMode = json["qaMode"] {
             self.isQaMode = qaMode.boolValue

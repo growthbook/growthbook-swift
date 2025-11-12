@@ -35,6 +35,10 @@ import Foundation
     var features: Features
     /// Target the same group of users across multiple features and experiments with Saved Groups
     public var savedGroups: JSON?
+    
+    public var url: String? = nil
+    
+    public var forcedFeatureValues: JSON? = nil
 
     init(apiHost: String?,
          streamingHost: String?,
@@ -51,7 +55,9 @@ import Foundation
          features: Features = [:],
          backgroundSync: Bool = false,
          remoteEval: Bool = false,
-         savedGroups: JSON? = nil) {
+         savedGroups: JSON? = nil,
+         url: String? = nil,
+         forcedFeatureValues: JSON? = nil) {
         self.apiHost = apiHost
         self.streamingHost = streamingHost
         self.clientKey = clientKey
@@ -68,6 +74,8 @@ import Foundation
         self.backgroundSync = backgroundSync
         self.remoteEval = remoteEval
         self.savedGroups = savedGroups
+        self.url = url
+        self.forcedFeatureValues = forcedFeatureValues
     }
     
     @objc public func getFeaturesURL() -> String? {
