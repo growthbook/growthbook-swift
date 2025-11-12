@@ -71,7 +71,7 @@ class FeaturesViewModel {
                 self.prepareFeaturesData(data: data)
             case .failure(let error):
                 logger.error("Failed to fetch features: \(error.localizedDescription)")
-                self.notify { $0.featuresFetchFailed(error: .failedToLoadData, isRemote: true) }
+                self.notify { $0.featuresFetchFailed(error: .failedToFetchData(error), isRemote: true) }
             }
         }
         
