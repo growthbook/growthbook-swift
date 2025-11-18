@@ -254,7 +254,7 @@ public struct GrowthBookModel {
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext!
-    private let evalContextLock = NSRecursiveLock()
+    private let evaluationLock = NSLock()
     var cachingManager: CachingLayer
     
     init(context: Context,
@@ -290,9 +290,9 @@ public struct GrowthBookModel {
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
         
-        evalContextLock.lock()
+        evaluationLock.lock()
         evalContext = Utils.initializeEvalContext(context: context)
-        evalContextLock.unlock()
+        evaluationLock.unlock()
         if let service = gbContext.stickyBucketService,
            let docs = gbContext.stickyBucketAssignmentDocs {
             for (_, doc) in docs {
@@ -343,17 +343,25 @@ public struct GrowthBookModel {
     
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
-        let context = getEvalContext()
-        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
-        updateEvalContext(with: context)
+        evaluationLock.lock()
+        defer { evaluationLock.unlock() }
+        
+        if evalContext == nil {
+            evalContext = Utils.initializeEvalContext(context: gbContext)
+        }
+        let result = FeatureEvaluator(context: evalContext, featureKey: id).evaluateFeature()
+        // If feature is unknown, return the default value
+        if result.source == "unknownFeature" {
+            return defaultValue
+        }
         return result.value ?? defaultValue
     }
     
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
         gbContext.features = features
-        evalContextLock.lock()
+        evaluationLock.lock()
         evalContext = Utils.initializeEvalContext(context: gbContext)
-        evalContextLock.unlock()
+        evaluationLock.unlock()
         refreshStickyBucketService()
         if isRemote {
             refreshHandler?(true)
@@ -366,9 +374,9 @@ public struct GrowthBookModel {
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
         
         gbContext.features = features
-        evalContextLock.lock()
+        evaluationLock.lock()
         evalContext = Utils.initializeEvalContext(context: gbContext)
-        evalContextLock.unlock()
+        evaluationLock.unlock()
         refreshStickyBucketService()
     }
     
@@ -378,59 +386,6 @@ public struct GrowthBookModel {
         }
     }
     
-    private func getEvalContext() -> EvalContext {
-        evalContextLock.lock()
-        let contextCopy = copyEvalContextLocked()
-        evalContextLock.unlock()
-        return contextCopy
-    }
-    
-    private func copyEvalContextLocked() -> EvalContext {
-        if evalContext == nil {
-            evalContext = Utils.initializeEvalContext(context: gbContext)
-        }
-        guard let baseContext = evalContext else {
-            return Utils.initializeEvalContext(context: gbContext)
-        }
-        
-        let options = baseContext.options
-        
-        let userContext = UserContext(
-            attributes: baseContext.userContext.attributes,
-            stickyBucketAssignmentDocs: baseContext.userContext.stickyBucketAssignmentDocs,
-            forcedVariations: baseContext.userContext.forcedVariations,
-            forcedFeatureValues: gbContext.forcedFeatureValues ?? baseContext.userContext.forcedFeatureValues
-        )
-        
-        let globalContext = GlobalContext(
-            features: gbContext.features,
-            experiments: baseContext.globalContext.experiments,
-            savedGroups: gbContext.savedGroups
-        )
-        
-        let contextCopy = EvalContext(
-            globalContext: globalContext,
-            userContext: userContext,
-            stackContext: StackContext(),
-            options: options
-        )
-        
-        return contextCopy
-    }
-    
-    private func updateEvalContext(with context: EvalContext) {
-        evalContextLock.lock()
-        if evalContext != nil {
-            evalContext.userContext.attributes = context.userContext.attributes
-            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-            evalContext.userContext.forcedVariations = context.userContext.forcedVariations
-            evalContext.userContext.forcedFeatureValues = context.userContext.forcedFeatureValues
-            evalContext.options.stickyBucketAssignmentDocs = context.options.stickyBucketAssignmentDocs
-            evalContext.options.stickyBucketIdentifierAttributes = context.options.stickyBucketIdentifierAttributes
-            gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-        }
-        evalContextLock.unlock()
-    }
     
     @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
         refreshHandler?(false)
@@ -454,10 +409,13 @@ public struct GrowthBookModel {
     
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
-        let context = getEvalContext()
-        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
-        updateEvalContext(with: context)
-        return result
+        evaluationLock.lock()
+        defer { evaluationLock.unlock() }
+        
+        if evalContext == nil {
+            evalContext = Utils.initializeEvalContext(context: gbContext)
+        }
+        return FeatureEvaluator(context: evalContext, featureKey: id).evaluateFeature()
     }
     
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
@@ -467,9 +425,13 @@ public struct GrowthBookModel {
     
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        let context = getEvalContext()
-        let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
-        updateEvalContext(with: context)
+        evaluationLock.lock()
+        defer { evaluationLock.unlock() }
+        
+        if evalContext == nil {
+            evalContext = Utils.initializeEvalContext(context: gbContext)
+        }
+        let result = ExperimentEvaluator().evaluateExperiment(context: evalContext, experiment: experiment)
         
         self.subscriptions.forEach { subscription in
             subscription(experiment, result)
@@ -487,9 +449,9 @@ public struct GrowthBookModel {
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
     @objc public func setAttributes(attributes: Any) {
         gbContext.attributes = JSON(attributes)
-        evalContextLock.lock()
+        evaluationLock.lock()
         evalContext = Utils.initializeEvalContext(context: gbContext)
-        evalContextLock.unlock()
+        evaluationLock.unlock()
         refreshStickyBucketService()
     }
     
@@ -498,9 +460,9 @@ public struct GrowthBookModel {
     @objc public func appendAttributes(attributes: Any) throws {
         let updatedAttributes = try gbContext.attributes.merged(with: JSON(attributes))
         gbContext.attributes = updatedAttributes
-        evalContextLock.lock()
+        evaluationLock.lock()
         evalContext = Utils.initializeEvalContext(context: gbContext)
-        evalContextLock.unlock()
+        evaluationLock.unlock()
         refreshStickyBucketService()
     }
     
@@ -509,9 +471,9 @@ public struct GrowthBookModel {
         if gbContext.stickyBucketService != nil {
             refreshStickyBucketService()
         }
-        evalContextLock.lock()
+        evaluationLock.lock()
         evalContext = Utils.initializeEvalContext(context: gbContext)
-        evalContextLock.unlock()
+        evaluationLock.unlock()
         refreshForRemoteEval()
     }
     
@@ -540,15 +502,15 @@ public struct GrowthBookModel {
     }
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
-        evalContextLock.lock()
+        evaluationLock.lock()
         guard let currentEvalContext = evalContext,
               currentEvalContext.options.stickyBucketService != nil else {
-            evalContextLock.unlock()
+            evaluationLock.unlock()
             return
         }
         let attributes = currentEvalContext.userContext.attributes
-        evalContextLock.unlock()
-        Utils.refreshStickyBuckets(context: getEvalContext(), attributes: attributes, data: data)
+        evaluationLock.unlock()
+        Utils.refreshStickyBuckets(context: currentEvalContext, attributes: attributes, data: data)
     }
     
     private func convertForcedFeaturesToArray(_ forcedFeatures: JSON?) -> [[JSON]]? {
