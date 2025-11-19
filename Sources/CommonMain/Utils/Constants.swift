@@ -93,11 +93,11 @@ public struct VariationMeta: Codable {
 
 public struct Track: Codable {
     public let experiment: Experiment?
-    public let result: FeatureResult?
+    public let result: ExperimentResult?
     
     init(json: [String: JSON]) {
         experiment = Experiment(json: json["experiment"]?.dictionaryValue ?? [:])
-        result = FeatureResult(json: json["result"]?.dictionaryValue ?? [:])
+        result = ExperimentResult(json: json["result"]?.dictionaryValue ?? [:])
     }
 }
 
