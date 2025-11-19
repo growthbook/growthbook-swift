@@ -37,7 +37,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     }
     
     func testApiURL() throws {
-        var gbContext = Context(apiHost: testApiHost,
+        let gbContext = Context(apiHost: testApiHost,
                                 streamingHost: testStreamingHost,
                                 clientKey: testClientKey,
                                 encryptionKey: nil,
@@ -229,8 +229,8 @@ class GrowthBookSDKBuilderTests: XCTestCase {
             XCTFail()
             return
         }
-        XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].condition == features["testfeature1"]?.rules?[0].condition)
-        XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].force == features["testfeature1"]?.rules?[0].force)
+        XCTAssertTrue(sdkInstance.getGBContext().features["testfeature1"]?.rules?[0].condition == features["testfeature1"]?.rules?[0].condition)
+        XCTAssertTrue(sdkInstance.getGBContext().features["testfeature1"]?.rules?[0].force == features["testfeature1"]?.rules?[0].force)
     }
     
     func testClearCache() throws {
@@ -293,7 +293,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         sdkInstance.setAttributes(attributes: ["name": "Alice"])
         try sdkInstance.appendAttributes(attributes: ["age": 30])
         
-        let result = sdkInstance.gbContext.attributes
+        let result = sdkInstance.getGBContext().attributes
         XCTAssertEqual(result["name"].stringValue, "Alice")
         XCTAssertEqual(result["age"].intValue, 30)
         
@@ -301,7 +301,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         sdkInstance.setAttributes(attributes: ["user": ["id": 1, "name": "Alice"]])
         try sdkInstance.appendAttributes(attributes: ["user": ["name": "Bob", "age": 25]])
         
-        let user = sdkInstance.gbContext.attributes["user"]
+        let user = sdkInstance.getGBContext().attributes["user"]
         XCTAssertEqual(user["id"].intValue, 1)
         XCTAssertEqual(user["name"].stringValue, "Bob")
         XCTAssertEqual(user["age"].intValue, 25)
@@ -310,7 +310,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         sdkInstance.setAttributes(attributes: ["user": ["roles": ["admin", "editor"]]])
         try sdkInstance.appendAttributes(attributes: ["user": ["roles": ["viewer"]]])
 
-        let roles = sdkInstance.gbContext.attributes["user"]["roles"].arrayValue.map { $0.stringValue }
+        let roles = sdkInstance.getGBContext().attributes["user"]["roles"].arrayValue.map { $0.stringValue }
         XCTAssertEqual(roles, ["admin", "editor", "viewer"])
     }
 }
