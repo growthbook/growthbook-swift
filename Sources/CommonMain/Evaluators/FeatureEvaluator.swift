@@ -137,7 +137,7 @@ class FeatureEvaluator {
                     
                     if let tracks = rule.tracks {
                         tracks.forEach { track in
-                            if let experiment = track.result?.experiment, let result = track.result?.experimentResult, !ExperimentHelper.shared.isTracked(experiment, result) {
+                            if let experiment = track.experiment, let result = track.result, !ExperimentHelper.shared.isTracked(experiment, result) {
                                 context.options.trackingClosure(experiment, result)
                             }
                         }
