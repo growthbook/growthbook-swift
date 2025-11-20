@@ -352,10 +352,17 @@ public struct GrowthBookModel {
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
         return syncQueue.sync {
+            // Ensure evalContext is initialized before use
+            if evalContext == nil {
+                evalContext = Utils.initializeEvalContext(context: gbContext)
+            }
             let context = getEvalContext()
             let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
             // Update evalContext with any sticky bucket changes
-            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            // Use optional chaining to safely access evalContext in case it was deallocated
+            if let currentEvalContext = evalContext {
+                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            }
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             return result.value ?? defaultValue
         }
@@ -395,26 +402,44 @@ public struct GrowthBookModel {
     private func getEvalContext() -> EvalContext {
         // Create a copy of the evalContext to avoid race conditions
         // This ensures thread-safety when background sync updates features
+        // Capture current evalContext and gbContext.features atomically to avoid race conditions
+        guard let currentEvalContext = evalContext else {
+            // Fallback: create a new context if evalContext is nil
+            return Utils.initializeEvalContext(context: gbContext)
+        }
+        let currentFeatures = gbContext.features
+        let currentSavedGroups = currentEvalContext.globalContext.savedGroups
+        
         let newStackContext = StackContext()
         let newUserContext = getUserContext()
         let newGlobalContext = GlobalContext(
-            features: gbContext.features,
-            savedGroups: evalContext.globalContext.savedGroups
+            features: currentFeatures,
+            savedGroups: currentSavedGroups
         )
         let newEvalContext = EvalContext(
             globalContext: newGlobalContext,
             userContext: newUserContext,
             stackContext: newStackContext,
-            options: evalContext.options
+            options: currentEvalContext.options
         )
         return newEvalContext
     }
     
     private func getUserContext() -> UserContext {
+        // Capture current evalContext atomically to avoid race conditions
+        guard let currentEvalContext = evalContext else {
+            // Fallback: create a basic user context if evalContext is nil
+            return UserContext(
+                attributes: gbContext.attributes,
+                stickyBucketAssignmentDocs: gbContext.stickyBucketAssignmentDocs,
+                forcedVariations: gbContext.forcedVariations,
+                forcedFeatureValues: gbContext.forcedFeatureValues
+            )
+        }
         return UserContext(
-            attributes: evalContext.userContext.attributes,
-            stickyBucketAssignmentDocs: evalContext.userContext.stickyBucketAssignmentDocs,
-            forcedVariations: evalContext.userContext.forcedVariations,
+            attributes: currentEvalContext.userContext.attributes,
+            stickyBucketAssignmentDocs: currentEvalContext.userContext.stickyBucketAssignmentDocs,
+            forcedVariations: currentEvalContext.userContext.forcedVariations,
             forcedFeatureValues: gbContext.forcedFeatureValues
         )
     }
@@ -445,10 +470,17 @@ public struct GrowthBookModel {
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
         return syncQueue.sync {
+            // Ensure evalContext is initialized before use
+            if evalContext == nil {
+                evalContext = Utils.initializeEvalContext(context: gbContext)
+            }
             let context = getEvalContext()
             let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
             // Update evalContext with any sticky bucket changes
-            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            // Use optional chaining to safely access evalContext in case it was deallocated
+            if let currentEvalContext = evalContext {
+                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            }
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             return result
         }
@@ -457,10 +489,17 @@ public struct GrowthBookModel {
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
     @objc public func isOn(feature id: String) -> Bool {
         return syncQueue.sync {
+            // Ensure evalContext is initialized before use
+            if evalContext == nil {
+                evalContext = Utils.initializeEvalContext(context: gbContext)
+            }
             let context = getEvalContext()
             let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
             // Update evalContext with any sticky bucket changes
-            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            // Use optional chaining to safely access evalContext in case it was deallocated
+            if let currentEvalContext = evalContext {
+                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            }
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             return result.isOn
         }
@@ -469,10 +508,17 @@ public struct GrowthBookModel {
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
         return syncQueue.sync {
+            // Ensure evalContext is initialized before use
+            if evalContext == nil {
+                evalContext = Utils.initializeEvalContext(context: gbContext)
+            }
             let context = getEvalContext()
             let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
             // Update evalContext with any sticky bucket changes
-            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            // Use optional chaining to safely access evalContext in case it was deallocated
+            if let currentEvalContext = evalContext {
+                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            }
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             
             let subscriptionsCopy = self.subscriptions
@@ -557,8 +603,13 @@ public struct GrowthBookModel {
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
         syncQueue.async { [weak self] in
-            guard let self = self, self.evalContext != nil, self.evalContext.options.stickyBucketService != nil else { return }
-            Utils.refreshStickyBuckets(context: self.getEvalContext(), attributes: self.evalContext.userContext.attributes, data: data)
+            guard let self = self else { return }
+            // Capture evalContext atomically to avoid race conditions
+            guard let currentEvalContext = self.evalContext,
+                  currentEvalContext.options.stickyBucketService != nil else { return }
+            let context = self.getEvalContext()
+            let attributes = currentEvalContext.userContext.attributes
+            Utils.refreshStickyBuckets(context: context, attributes: attributes, data: data)
         }
     }
     
