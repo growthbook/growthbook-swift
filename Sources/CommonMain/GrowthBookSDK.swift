@@ -359,10 +359,8 @@ public struct GrowthBookModel {
             let context = getEvalContext()
             let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
             // Update evalContext with any sticky bucket changes
-            // Use optional chaining to safely access evalContext in case it was deallocated
-            if let currentEvalContext = evalContext {
-                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-            }
+            // evalContext is guaranteed to be non-nil here since we checked above and we're in syncQueue.sync
+            evalContext?.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             return result.value ?? defaultValue
         }
@@ -477,10 +475,8 @@ public struct GrowthBookModel {
             let context = getEvalContext()
             let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
             // Update evalContext with any sticky bucket changes
-            // Use optional chaining to safely access evalContext in case it was deallocated
-            if let currentEvalContext = evalContext {
-                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-            }
+            // evalContext is guaranteed to be non-nil here since we checked above and we're in syncQueue.sync
+            evalContext?.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             return result
         }
@@ -496,10 +492,8 @@ public struct GrowthBookModel {
             let context = getEvalContext()
             let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
             // Update evalContext with any sticky bucket changes
-            // Use optional chaining to safely access evalContext in case it was deallocated
-            if let currentEvalContext = evalContext {
-                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-            }
+            // evalContext is guaranteed to be non-nil here since we checked above and we're in syncQueue.sync
+            evalContext?.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             return result.isOn
         }
@@ -515,10 +509,8 @@ public struct GrowthBookModel {
             let context = getEvalContext()
             let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
             // Update evalContext with any sticky bucket changes
-            // Use optional chaining to safely access evalContext in case it was deallocated
-            if let currentEvalContext = evalContext {
-                currentEvalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-            }
+            // evalContext is guaranteed to be non-nil here since we checked above and we're in syncQueue.sync
+            evalContext?.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
             
             let subscriptionsCopy = self.subscriptions
