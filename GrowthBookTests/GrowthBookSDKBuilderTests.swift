@@ -263,6 +263,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     func testTrackingCallback() throws {
         let attributes = JSON(["id": 1234])
         var countTrackingCallback = 0
+        let expectation = XCTestExpectation(description: "Features loaded")
         
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
@@ -271,7 +272,11 @@ class GrowthBookSDKBuilderTests: XCTestCase {
             countTrackingCallback += 1
         },
                                             refreshHandler: nil,
-                                            backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
+                                            backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
+            expectation.fulfill()
+        }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
+        
+        wait(for: [expectation], timeout: 1.0)
         
         let _ = sdkInstance.evalFeature(id: "qrscanpayment1")
         let _ = sdkInstance.evalFeature(id: "qrscanpayment1")
