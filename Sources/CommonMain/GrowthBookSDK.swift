@@ -383,7 +383,7 @@ public struct GrowthBookModel {
         let crypto: CryptoProtocol = subtle ?? Crypto()
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
         
-        syncQueue.async { [weak self] in
+        syncQueue.sync { [weak self] in
             guard let self = self else { return }
             self.gbContext.features = features
             self.evalContext = Utils.initializeEvalContext(context: self.gbContext)
