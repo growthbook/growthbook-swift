@@ -255,6 +255,8 @@ public struct GrowthBookModel {
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext!
     var cachingManager: CachingLayer
+    // Serial queue for thread-safe access to evalContext and gbContext.features
+    private let syncQueue = DispatchQueue(label: "com.growthbook.sdk.sync", qos: .userInitiated)
     
     init(context: Context,
          refreshHandler: CacheRefreshHandler? = nil,
@@ -304,10 +306,13 @@ public struct GrowthBookModel {
     
     /// Manually Refresh Cache
     @objc public func refreshCache() {
-        if gbContext.remoteEval {
-            refreshForRemoteEval()
-        } else {
-            featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            if self.gbContext.remoteEval {
+                self.refreshForRemoteEval()
+            } else {
+                self.featureVM.fetchFeatures(apiUrl: self.gbContext.getFeaturesURL())
+            }
         }
     }
     
@@ -318,16 +323,22 @@ public struct GrowthBookModel {
     
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
     @objc public func getGBContext() -> Context {
-        return gbContext
+        return syncQueue.sync {
+            return gbContext
+        }
     }
     
     public func getGBAttributes() -> JSON {
-        return gbContext.attributes
+        return syncQueue.sync {
+            return gbContext.attributes
+        }
     }
     
     /// Get Cached Features
     @objc public func getFeatures() -> [String: Feature] {
-        return gbContext.features
+        return syncQueue.sync {
+            return gbContext.features
+        }
     }
     
     @objc public func subscribe(_ result: @escaping ExperimentRunCallback) {
@@ -340,20 +351,25 @@ public struct GrowthBookModel {
     
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
-        let context = getEvalContext()
-        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
-        // Update evalContext with any sticky bucket changes
-        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-        return result.value ?? defaultValue
+        return syncQueue.sync {
+            let context = getEvalContext()
+            let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+            // Update evalContext with any sticky bucket changes
+            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            return result.value ?? defaultValue
+        }
     }
     
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
-        gbContext.features = features
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        refreshStickyBucketService()
-        if isRemote {
-            refreshHandler?(true)
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.gbContext.features = features
+            self.evalContext = Utils.initializeEvalContext(context: self.gbContext)
+            self.refreshStickyBucketService()
+            if isRemote {
+                self.refreshHandler?(true)
+            }
         }
     }
     
@@ -362,9 +378,12 @@ public struct GrowthBookModel {
         let crypto: CryptoProtocol = subtle ?? Crypto()
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
         
-        gbContext.features = features
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        refreshStickyBucketService()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.gbContext.features = features
+            self.evalContext = Utils.initializeEvalContext(context: self.gbContext)
+            self.refreshStickyBucketService()
+        }
     }
     
     @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
@@ -374,10 +393,21 @@ public struct GrowthBookModel {
     }
     
     private func getEvalContext() -> EvalContext {
-        evalContext.stackContext = StackContext()
-        evalContext.userContext = getUserContext()
-        evalContext.globalContext.features = gbContext.features
-        return evalContext
+        // Create a copy of the evalContext to avoid race conditions
+        // This ensures thread-safety when background sync updates features
+        let newStackContext = StackContext()
+        let newUserContext = getUserContext()
+        let newGlobalContext = GlobalContext(
+            features: gbContext.features,
+            savedGroups: evalContext.globalContext.savedGroups
+        )
+        let newEvalContext = EvalContext(
+            globalContext: newGlobalContext,
+            userContext: newUserContext,
+            stackContext: newStackContext,
+            options: evalContext.options
+        )
+        return newEvalContext
     }
     
     private func getUserContext() -> UserContext {
@@ -394,8 +424,11 @@ public struct GrowthBookModel {
     }
     
     public func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
-        gbContext.savedGroups = savedGroups
-        refreshHandler?(true)
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.gbContext.savedGroups = savedGroups
+            self.refreshHandler?(true)
+        }
     }
     
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation
@@ -411,69 +444,97 @@ public struct GrowthBookModel {
     
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
-        let context = getEvalContext()
-        let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
-        // Update evalContext with any sticky bucket changes
-        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-        return result
+        return syncQueue.sync {
+            let context = getEvalContext()
+            let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+            // Update evalContext with any sticky bucket changes
+            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            return result
+        }
     }
     
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
     @objc public func isOn(feature id: String) -> Bool {
-        return evalFeature(id: id).isOn
+        return syncQueue.sync {
+            let context = getEvalContext()
+            let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+            // Update evalContext with any sticky bucket changes
+            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            return result.isOn
+        }
     }
     
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        let context = getEvalContext()
-        let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
-        // Update evalContext with any sticky bucket changes
-        evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-        gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
-        
-        self.subscriptions.forEach { subscription in
-            subscription(experiment, result)
+        return syncQueue.sync {
+            let context = getEvalContext()
+            let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
+            // Update evalContext with any sticky bucket changes
+            evalContext.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            gbContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs
+            
+            let subscriptionsCopy = self.subscriptions
+            DispatchQueue.main.async {
+                subscriptionsCopy.forEach { subscription in
+                    subscription(experiment, result)
+                }
+            }
+            
+            return result
         }
-        
-        return result
     }
     
     /// The setForcedFeatures method updates forced features
     @objc public func setForcedFeatures(forcedFeatures: Any) {
-        gbContext.forcedFeatureValues = JSON(forcedFeatures)
-        refreshForRemoteEval()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.gbContext.forcedFeatureValues = JSON(forcedFeatures)
+            self.refreshForRemoteEval()
+        }
     }
     
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
     @objc public func setAttributes(attributes: Any) {
-        gbContext.attributes = JSON(attributes)
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        refreshStickyBucketService()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.gbContext.attributes = JSON(attributes)
+            self.evalContext = Utils.initializeEvalContext(context: self.gbContext)
+            self.refreshStickyBucketService()
+        }
     }
     
     /// Merges the provided user attributes with the existing ones.
     /// - Throws: `SwiftyJSON.Error.wrongType` if the top-level JSON types differ
     @objc public func appendAttributes(attributes: Any) throws {
-        let updatedAttributes = try gbContext.attributes.merged(with: JSON(attributes))
-        gbContext.attributes = updatedAttributes
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        refreshStickyBucketService()
+        try syncQueue.sync {
+            let updatedAttributes = try gbContext.attributes.merged(with: JSON(attributes))
+            gbContext.attributes = updatedAttributes
+            evalContext = Utils.initializeEvalContext(context: gbContext)
+            refreshStickyBucketService()
+        }
     }
     
     @objc public func setAttributeOverrides(overrides: Any) {
-        attributeOverrides = JSON(overrides)
-        if gbContext.stickyBucketService != nil {
-            refreshStickyBucketService()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.attributeOverrides = JSON(overrides)
+            if self.gbContext.stickyBucketService != nil {
+                self.refreshStickyBucketService()
+            }
+            self.evalContext = Utils.initializeEvalContext(context: self.gbContext)
+            self.refreshForRemoteEval()
         }
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        refreshForRemoteEval()
     }
     
     /// The setForcedVariations method updates forced variations and makes API call if remote eval is enabled
     @objc public func setForcedVariations(forcedVariations: Any) {
-        gbContext.forcedVariations = JSON(forcedVariations)
-        refreshForRemoteEval()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.gbContext.forcedVariations = JSON(forcedVariations)
+            self.refreshForRemoteEval()
+        }
     }
     
     /// Updates API request headers for dynamic header management
@@ -495,8 +556,9 @@ public struct GrowthBookModel {
     }
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
-        if (evalContext != nil && evalContext.options.stickyBucketService != nil) {
-            Utils.refreshStickyBuckets(context: getEvalContext(), attributes: evalContext.userContext.attributes, data: data)
+        syncQueue.async { [weak self] in
+            guard let self = self, self.evalContext != nil, self.evalContext.options.stickyBucketService != nil else { return }
+            Utils.refreshStickyBuckets(context: self.getEvalContext(), attributes: self.evalContext.userContext.attributes, data: data)
         }
     }
     
