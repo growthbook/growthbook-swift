@@ -116,6 +116,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     func testSDKInitializationDataWithEncripted() throws {
         
         let variations: [String: Int] = [:]
+        let expectation = XCTestExpectation(description: "Features loaded")
         
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
@@ -123,15 +124,19 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             attributes: testAttributes,
                                             trackingCallback: { _, _ in },
                                             refreshHandler: nil, 
-                                            backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
+                                            backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
+            DispatchQueue.main.async {
+                expectation.fulfill()
+            }
+        }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponseEncryptedFeatures, error: nil)).setEnabled(isEnabled: false).setForcedVariations(forcedVariations: variations).setQAMode(isEnabled: true).initializer()
+        
+        wait(for: [expectation], timeout: 1.0)
         
         XCTAssertFalse(sdkInstance.getGBContext().isEnabled)
         XCTAssertTrue(sdkInstance.getGBContext().getFeaturesURL() == expectedURL)
         XCTAssertTrue(sdkInstance.getGBContext().isQaMode)
         XCTAssertTrue(sdkInstance.getGBContext().attributes == testAttributes)
-        if !sdkInstance.getGBContext().features.isEmpty {
-            XCTAssertTrue(sdkInstance.getGBContext().features.contains(where: { $0.key == "pricing-test-new"}))
-        }
+        XCTAssertTrue(sdkInstance.getGBContext().features.contains(where: { $0.key == "pricing-test-new"}))
     }
     
     func testSDKRefreshHandler() throws {
@@ -263,6 +268,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     func testTrackingCallback() throws {
         let attributes = JSON(["id": 1234])
         var countTrackingCallback = 0
+        let expectation = XCTestExpectation(description: "Features loaded")
         
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
@@ -271,7 +277,11 @@ class GrowthBookSDKBuilderTests: XCTestCase {
             countTrackingCallback += 1
         },
                                             refreshHandler: nil,
-                                            backgroundSync: false).setRefreshHandler(refreshHandler: { _ in }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
+                                            backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
+            expectation.fulfill()
+        }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)).initializer()
+        
+        wait(for: [expectation], timeout: 1.0)
         
         let _ = sdkInstance.evalFeature(id: "qrscanpayment1")
         let _ = sdkInstance.evalFeature(id: "qrscanpayment1")
