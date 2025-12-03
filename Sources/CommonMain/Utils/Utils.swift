@@ -339,7 +339,7 @@ public class Utils {
         )
         
         if minExperimentBucketVersion > 0 {
-            for version in 0...minExperimentBucketVersion {
+            for version in 0..<minExperimentBucketVersion {
                 let blockedKey = getStickyBucketExperimentKey(experimentKey, version)
                 if let _ = assignments[blockedKey] {
                     return (variation: -1, versionIsBlocked: true)
