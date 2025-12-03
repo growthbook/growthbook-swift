@@ -237,8 +237,8 @@ public struct GrowthBookModel {
         if let features = growthBookBuilderModel.features {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
-        
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
+
+        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
     }
 }
 
@@ -254,6 +254,7 @@ public struct GrowthBookModel {
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext!
+    private let evaluationLock = NSLock()
     var cachingManager: CachingLayer
     // Serial queue for thread-safe access to evalContext and gbContext.features
     private let syncQueue = DispatchQueue(label: "com.growthbook.sdk.sync", qos: .userInitiated)
@@ -291,7 +292,9 @@ public struct GrowthBookModel {
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
         
+        evaluationLock.lock()
         evalContext = Utils.initializeEvalContext(context: context)
+        evaluationLock.unlock()
         if let service = gbContext.stickyBucketService,
            let docs = gbContext.stickyBucketAssignmentDocs {
             for (_, doc) in docs {
