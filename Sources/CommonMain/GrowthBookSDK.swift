@@ -261,8 +261,8 @@ public struct GrowthBookModel {
         if let features = growthBookBuilderModel.features {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
-        
-        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
+
+        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
     }
 }
 
@@ -278,6 +278,7 @@ public struct GrowthBookModel {
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext!
+    private let evaluationLock = NSLock()
     var cachingManager: CachingLayer
     
     init(contextManager: ContextManager,
@@ -321,19 +322,23 @@ public struct GrowthBookModel {
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
         
+        evaluationLock.lock()
+            
         // Initialize evalContext from contextManager
         evalContext = contextManager.getEvalContext()
-        
-        if let service = globalConfig.stickyBucketService,
-           let docs = evalData.stickyBucketAssignmentDocs {
-            for (_, doc) in docs {
-                service.saveAssignments(doc: doc) { _ in
-                    // Ignore hydration errors
-                }
-            }
-        }
-        refreshStickyBucketService()
-        
+            
+        evaluationLock.unlock()
+            evalContext = contextManager.getEvalContext()
+
+                    if let service = globalConfig.stickyBucketService,
+                       let docs = evalData.stickyBucketAssignmentDocs {
+                        for (_, doc) in docs {
+                            service.saveAssignments(doc: doc) { _ in
+                                // Ignore hydration errors
+                            }
+                        }
+                    }
+                    refreshStickyBucketService()
     }
     
     // Convenience init for backward compatibility
@@ -446,6 +451,8 @@ public struct GrowthBookModel {
     
     /// Get the value of the feature with a fallback
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
+        evaluationLock.lock()
+        defer { evaluationLock.unlock() }
         let context = getEvalContext()
         let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
         // Update evalContext with any sticky bucket changes
@@ -454,9 +461,13 @@ public struct GrowthBookModel {
     }
     
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
+        evaluationLock.lock()
+
         contextManager.updateEvalData { data in
             data.features = features
         }
+        
+        evaluationLock.unlock()
         refreshStickyBucketService()
         if isRemote {
             refreshHandler?(true)
@@ -468,10 +479,11 @@ public struct GrowthBookModel {
         let crypto: CryptoProtocol = subtle ?? Crypto()
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
         
+        evaluationLock.lock()
         contextManager.updateEvalData { data in
             data.features = features
         }
-
+        evaluationLock.unlock()
         refreshStickyBucketService()
     }
     
@@ -511,6 +523,8 @@ public struct GrowthBookModel {
     
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
     @objc public func evalFeature(id: String) -> FeatureResult {
+        evaluationLock.lock()
+        defer { evaluationLock.unlock() }
         let context = getEvalContext()
         let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
         // Update evalContext with any sticky bucket changes
@@ -525,6 +539,8 @@ public struct GrowthBookModel {
     
     /// The run method takes an Experiment object and returns an experiment result
     @objc public func run(experiment: Experiment) -> ExperimentResult {
+        evaluationLock.lock()
+        defer { evaluationLock.unlock() }
         let context = getEvalContext()
         let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
         // Update evalContext with any sticky bucket changes
@@ -547,29 +563,38 @@ public struct GrowthBookModel {
     
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
     @objc public func setAttributes(attributes: Any) {
+        evaluationLock.lock()
         contextManager.updateEvalData { data in
             data.attributes = JSON(attributes)
         }
+        evaluationLock.unlock()
         refreshStickyBucketService()
     }
     
     /// Merges the provided user attributes with the existing ones.
     /// - Throws: `SwiftyJSON.Error.wrongType` if the top-level JSON types differ
     @objc public func appendAttributes(attributes: Any) throws {
+        evaluationLock.lock()
+        
         let evalData = contextManager.getEvaluationData()
         let updatedAttributes = try evalData.attributes.merged(with: JSON(attributes))
         contextManager.updateEvalData { data in
             data.attributes = updatedAttributes
         }
+        
+        evaluationLock.unlock()
+        
         refreshStickyBucketService()
     }
     
     @objc public func setAttributeOverrides(overrides: Any) {
         attributeOverrides = JSON(overrides)
+        evaluationLock.lock()
         let globalConfig = contextManager.getGlobalConfig()
         if globalConfig.stickyBucketService != nil {
             refreshStickyBucketService()
         }
+        evaluationLock.unlock()
         refreshForRemoteEval()
     }
     
@@ -600,12 +625,14 @@ public struct GrowthBookModel {
     }
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
+        evaluationLock.lock()
         let context = getEvalContext()
         let globalConfig = contextManager.getGlobalConfig()
         if globalConfig.stickyBucketService != nil {
             let evalData = contextManager.getEvaluationData()
             Utils.refreshStickyBuckets(context: context, attributes: evalData.attributes, data: data)
         }
+        evaluationLock.unlock()
     }
     
     private func convertForcedFeaturesToArray(_ forcedFeatures: JSON?) -> [[JSON]]? {
@@ -616,6 +643,7 @@ public struct GrowthBookModel {
         let result = features.map { key, value -> [JSON] in
             return [JSON(key), value]
         }
+        
         
         return result
     }
