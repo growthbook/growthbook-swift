@@ -437,6 +437,15 @@ public class Utils {
         return getQueryStringOverride(id: id, url: url, numberOfVariations: numberOfVariations)
     }
     
+    /// Creates an EvalContext from a Context object.
+    /// 
+    /// - Deprecated: This method is deprecated. Use `ContextManager.getEvalContext()` instead.
+    ///   The logic has been moved to `ContextManager.buildEvalContext()` for better encapsulation.
+    ///   This method is kept for backward compatibility with existing tests.
+    /// 
+    /// - Parameter context: The Context object to create EvalContext from
+    /// - Returns: A new EvalContext instance
+    @available(*, deprecated, message: "Use ContextManager.getEvalContext() instead. This method is kept for backward compatibility with tests.")
     static func initializeEvalContext(context: Context) -> EvalContext {
         let options = ClientOptions(isEnabled: context.isEnabled,
                                     stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs,
