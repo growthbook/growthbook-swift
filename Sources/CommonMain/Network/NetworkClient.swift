@@ -58,6 +58,7 @@ class CoreNetworkClient: NetworkProtocol {
                 request.setValue(etag, forHTTPHeaderField: "If-None-Match")
             }
             request.setValue("max-age=3600", forHTTPHeaderField: "Cache-Control")
+            request.setValue("gzip, deflate, br", forHTTPHeaderField: "Accept-Encoding")
         }
         
         if let params = params {
