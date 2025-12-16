@@ -79,7 +79,7 @@ class CoreNetworkClient: NetworkProtocol {
             if let httpResponse = response as? HTTPURLResponse {
                 
                 if method == "GET" && self.matchesFeaturesPattern(urlString) {
-                    if #available(iOS 13.0, tvOS 13.0, *) {
+                    if #available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) {
                         if let etag = httpResponse.value(forHTTPHeaderField: "ETag") {
                             self.eTagCache.put(urlString, etag)
                         }
