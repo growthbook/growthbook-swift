@@ -59,11 +59,13 @@ class FeatureEvaluator {
                     for parentCondition in parentConditions {
                         context.stackContext.evaluatedFeatures = Set(evaluatedFeatures)
 
-                        let parentResult = FeatureEvaluator(
+                        let parentEvaluator = FeatureEvaluator(
                             context: context,
                             featureKey: parentCondition.id
                         )
-                        .evaluateFeature()
+                        let parentResult = parentEvaluator.evaluateFeature()
+                        // Propagate any sticky bucket assignments from parent evaluation
+                        Utils.propagateStickyAssignments(from: parentEvaluator.context, to: context)
                         
                         if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
                             let featureResultWhenCircularDependencyDetected =  prepareResult(
@@ -78,7 +80,7 @@ class FeatureEvaluator {
                         
                         let evalCondition = ConditionEvaluator().isEvalCondition(
                             attributes: evalObjc,
-                            conditionObj: parentCondition.condition, 
+                            conditionObj: parentCondition.condition,
                             savedGroups: context.globalContext.savedGroups
                         )
                         
@@ -217,7 +219,7 @@ class FeatureEvaluator {
     /// This is a helper method to create a FeatureResult object.
     ///
     /// Besides the passed-in arguments, there are two derived values - on and off, which are just the value cast to booleans.
-    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = nil) -> FeatureResult {
+    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = "") -> FeatureResult {
         var isFalse = false
         if let value = value {
             isFalse = value.stringValue == "false" || value.stringValue == "0" || (value.stringValue.isEmpty && value.dictionary == nil && value.array == nil)

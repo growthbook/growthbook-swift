@@ -9,14 +9,14 @@ class UtilsTests: XCTestCase {
         var failedScenarios: [String] = []
         var passedScenarios: [String] = []
         for item in evalConditions {
-            let testContext = item.arrayValue[0].stringValue//jsonPrimitive.content
-            let experiment = item.arrayValue[1].floatValue
+            let seed = item.arrayValue[0].stringValue
+            let testContext = item.arrayValue[1].stringValue//jsonPrimitive.content
             let hashVersion = item.arrayValue[2].floatValue
-            let seed = item.arrayValue[3].stringValue
+            let experiment = item.arrayValue[3].floatValue
             
             let result = Utils.hash(seed: seed, value: testContext, version: hashVersion) ?? 0.0
                         
-            let status = item[0].stringValue + "\nExpected Result - " + item[1].stringValue + "\nActual result - " + String(result) + "\n"
+            let status = item[0].stringValue + "\nExpected Result - " + item[3].stringValue + "\nActual result - " + String(result) + "\n"
                         
             if experiment == result {
                 passedScenarios.append(status)
