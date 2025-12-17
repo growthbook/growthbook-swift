@@ -147,6 +147,7 @@ class ExperimentEvaluator {
 
         // If context.qaMode is true, return immediately (not in experiment, variationId 0)
         if context.options.isQaMode {
+            logger.info("Skip because QA mode")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
         
