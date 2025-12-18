@@ -224,7 +224,7 @@ import Foundation
     /// If sticky bucketing was used to assign a variation
     public let stickyBucketUsed: Bool?
 
-    init(inExperiment: Bool,
+    public init(inExperiment: Bool,
          variationId: Int,
          value: JSON,
          hashAttribute: String? = nil,
