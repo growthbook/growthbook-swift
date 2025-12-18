@@ -364,7 +364,7 @@ public struct GrowthBookModel {
         evaluationLock.unlock()
         refreshStickyBucketService()
         if isRemote {
-            refreshHandler?(true)
+            refreshHandler?(nil)
         }
     }
     
@@ -382,18 +382,18 @@ public struct GrowthBookModel {
     
     @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
         if isRemote {
-            refreshHandler?(false)
+            refreshHandler?(error)
         }
     }
     
     
     @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
-        refreshHandler?(false)
+        refreshHandler?(error)
     }
     
     public func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         gbContext.savedGroups = savedGroups
-        refreshHandler?(true)
+        refreshHandler?(nil)
     }
     
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation

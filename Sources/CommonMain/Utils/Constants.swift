@@ -31,7 +31,7 @@ public struct ParentConditionInterface: Codable {
 /// Handler for Refresh Cache Request
 /// 
 /// It updates back whether cache was refreshed or not
-public typealias CacheRefreshHandler = @Sendable (Bool) -> Void
+public typealias CacheRefreshHandler = @Sendable (SDKError?) -> Void
 
 /// Handler for experiment result
 public typealias TrackingCallback = (Experiment, ExperimentResult) -> Void
@@ -65,14 +65,35 @@ public struct BucketRange: Codable {
     }
 }
 
+public enum SDKErrorCode: String {
+    case failedToLoadData
+    case failedParsedData
+    case failedMissingKey
+    case failedEncryptedFeatures
+    case failedEncryptedSavedGroups
+    case failedParsedEncryptedData
+    case failedToFetchData
+}
+
 /// GrowthBook Error Class to handle any error / exception scenario
-@objc public enum SDKError: NSInteger, Error {
-    case failedToLoadData = 0
-    case failedParsedData = 1
-    case failedMissingKey = 2
-    case failedEncryptedFeatures = 3
-    case failedEncryptedSavedGroups = 4
-    case failedParsedEncryptedData = 5
+@objc public final class SDKError: NSObject, Error {
+    static let failedToLoadData = SDKError(code: .failedToLoadData)
+    static let failedParsedData = SDKError(code: .failedParsedData)
+    static let failedMissingKey = SDKError(code: .failedMissingKey)
+    static let failedEncryptedFeatures = SDKError(code: .failedEncryptedFeatures)
+    static let failedEncryptedSavedGroups = SDKError(code: .failedEncryptedSavedGroups)
+    static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
+    static let failedToFetchData = SDKError(code: .failedToFetchData)
+    
+    static func failedToFetchData(_ error: Error?) -> SDKError { .init(code: .failedToFetchData, underlying: error) }
+    
+    public let code: SDKErrorCode
+    public let underlying: Error?
+    
+    init(code: SDKErrorCode, underlying: Error? = nil) {
+        self.code = code
+        self.underlying = underlying
+    }
 }
 
 /// Meta info about the variations
