@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		231FB2292910F78D0035546E /* json.json in Resources */ = {isa = PBXBuildFile; fileRef = 84391F2628016C85003309DC /* json.json */; };
+		5D5EAD1D2EF1DEA70049F432 /* LruETagCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5EAD1C2EF1DEA70049F432 /* LruETagCache.swift */; };
+		5D5EAD1F2EF1DED60049F432 /* LruETagCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5EAD1E2EF1DED60049F432 /* LruETagCacheTests.swift */; };
 		84095C792817EC7800ADDF19 /* JsonManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C772817EAB700ADDF19 /* JsonManager.swift */; };
 		84095C8C281823BC00ADDF19 /* LoggingManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8A281822B900ADDF19 /* LoggingManager.swift */; };
 		84095C902818245700ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
@@ -79,6 +81,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5D5EAD1C2EF1DEA70049F432 /* LruETagCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LruETagCache.swift; sourceTree = "<group>"; };
+		5D5EAD1E2EF1DED60049F432 /* LruETagCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LruETagCacheTests.swift; sourceTree = "<group>"; };
 		84095C772817EAB700ADDF19 /* JsonManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JsonManager.swift; sourceTree = "<group>"; };
 		84095C8A281822B900ADDF19 /* LoggingManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoggingManager.swift; sourceTree = "<group>"; };
 		84095C8E2818245100ADDF19 /* Formatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatter.swift; sourceTree = "<group>"; };
@@ -193,6 +197,7 @@
 		843363F727F845EB0072BFDC /* Network */ = {
 			isa = PBXGroup;
 			children = (
+				5D5EAD1C2EF1DEA70049F432 /* LruETagCache.swift */,
 				843363F827F845EB0072BFDC /* NetworkClient.swift */,
 				849952502ACDB676003BBCF7 /* SSEHandler.swift */,
 				849952562ADD6D66003BBCF7 /* EventModel.swift */,
@@ -268,6 +273,7 @@
 		849114BE280DA71E00C0B9A5 /* GrowthBookTests */ = {
 			isa = PBXGroup;
 			children = (
+				5D5EAD1E2EF1DED60049F432 /* LruETagCacheTests.swift */,
 				84391F2528016C5C003309DC /* Source */,
 				84391F0827FD64EB003309DC /* FeaturesViewModelTests.swift */,
 				84E82C3C2BD2AF8F003F000B /* StickyBucketingTests.swift */,
@@ -443,6 +449,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				849114C7280DA73000C0B9A5 /* FeaturesViewModelTests.swift in Sources */,
+				5D5EAD1F2EF1DED60049F432 /* LruETagCacheTests.swift in Sources */,
 				849114C8280DA73000C0B9A5 /* ConditionTests.swift in Sources */,
 				849114C9280DA73000C0B9A5 /* ExperimentRunTests.swift in Sources */,
 				849114CA280DA73100C0B9A5 /* FeatureValueTests.swift in Sources */,
@@ -481,6 +488,7 @@
 				84CDE33D2812F454008B3E6F /* ExperimentEvaluator.swift in Sources */,
 				8483E6FA2ABC60B900306B55 /* DecryptionUtils.swift in Sources */,
 				84CDE33E2812F454008B3E6F /* FeatureEvaluator.swift in Sources */,
+				5D5EAD1D2EF1DEA70049F432 /* LruETagCache.swift in Sources */,
 				84CDE33F2812F454008B3E6F /* ConditionEvaluator.swift in Sources */,
 				84CDE3402812F454008B3E6F /* CachingManager.swift in Sources */,
 				846A7A562D6CAE56007CCFD1 /* GlobalContext.swift in Sources */,
