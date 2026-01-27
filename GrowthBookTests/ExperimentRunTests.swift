@@ -28,7 +28,8 @@ class ExperimentRunTests: XCTestCase {
                                     trackingClosure: { _, _ in }, 
                                     features: testContext.features,
                                     backgroundSync: false,
-                                    savedGroups: testContext.savedGroups)
+                                    savedGroups: testContext.savedGroups,
+                                    url: testContext.url)
 
             let evaluator = ExperimentEvaluator()
             let result = evaluator.evaluateExperiment(context: Utils.initializeEvalContext(context: gbContext), experiment: experiment)

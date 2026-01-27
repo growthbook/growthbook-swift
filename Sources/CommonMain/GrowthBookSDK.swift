@@ -174,7 +174,7 @@ public struct GrowthBookModel {
     ///
     /// By default log level is set to `info`
     @objc public func setLogLevel(_ level: LoggerLevel) -> GrowthBookBuilder {
-        growthBookBuilderModel.logLevel = Logger.getLoggingLevel(from: level)
+        growthBookBuilderModel.logLevel = GBLogger.getLoggingLevel(from: level)
         return self
     }
     
@@ -338,7 +338,7 @@ public struct GrowthBookModel {
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
         gbContext.features = features
         if isRemote {
-            refreshHandler?(true)
+            refreshHandler?(.none)
         }
     }
     
@@ -352,17 +352,17 @@ public struct GrowthBookModel {
 
     @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
         if isRemote {
-            refreshHandler?(false)
+            refreshHandler?(.failedToFetchData)
         }
     }
     
     @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
-        refreshHandler?(false)
+        refreshHandler?(.failedToFetchData)
     }
 
     public func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         gbContext.savedGroups = savedGroups
-        refreshHandler?(true)
+        refreshHandler?(.failedToFetchData)
     }
     
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation

@@ -2,7 +2,7 @@
 import Foundation
 
 // GrowthBook default logger
-var logger = Logger()
+var logger = GBLogger()
 
 @objc public enum LoggerLevel: NSInteger {
     case trace = 0
@@ -12,7 +12,7 @@ var logger = Logger()
     case error = 4
 }
 
-extension Logger {
+extension GBLogger {
     static func getLoggingLevel(from level: LoggerLevel) -> Level {
         switch level {
         case .trace:

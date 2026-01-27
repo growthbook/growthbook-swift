@@ -328,8 +328,6 @@ class ConditionEvaluator {
             default: break
             }
         } else {
-            let targetPrimitiveValue = conditionValue
-            let sourcePrimitiveValue = attributeValue
             switch operatorKey {
             case "$veq":
                 if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
@@ -371,32 +369,105 @@ class ConditionEvaluator {
                 return  attributeValue != conditionValue
             // Evaluate LT operator - whether attribute less than to condition
             case "$lt":
-                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
-                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
-                    return attributeDoubleOrNull < conditionDoubleOrNull
+                if attributeValue == .null {
+                    if let cond = conditionValue.double {
+                        return 0.0 < cond
+                    } else if let condStr = conditionValue.string, let cond = Double(condStr) {
+                        return 0.0 < cond
+                    }
+                    return false
                 }
-                return sourcePrimitiveValue < targetPrimitiveValue
+
+                var attrNum: Double? = attributeValue.double
+                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
+                    attrNum = num
+                }
+
+                var condNum: Double? = conditionValue.double
+                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
+                    condNum = num
+                }
+
+                if let attrNum, let condNum {
+                    return attrNum < condNum
+                }
+
+                if let str = attributeValue.string, let cond = conditionValue.string {
+                    return str < cond
+                }
+
+                return false
+
             // Evaluate LTE operator - whether attribute less than or equal to condition
             case "$lte":
-                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
-                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
-                    return attributeDoubleOrNull <= conditionDoubleOrNull
+                if attributeValue == .null {
+                        if let cond = conditionValue.double {
+                            return 0.0 <= cond
+                        }
+                        return false
+                    }
+                var attrNum: Double? = attributeValue.double
+                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
+                    attrNum = num
                 }
-                return  sourcePrimitiveValue <= targetPrimitiveValue
+
+                var condNum: Double? = conditionValue.double
+                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
+                    condNum = num
+                }
+
+                if let attrNum, let condNum {
+                    return attrNum <= condNum
+                }
+                    if let str = attributeValue.string, let cond = conditionValue.string {
+                        return str <= cond
+                    }
+                    return false
             // Evaluate GT operator - whether attribute greater than to condition
             case "$gt":
-                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
-                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
-                    return attributeDoubleOrNull > conditionDoubleOrNull
+                if attributeValue == .null {
+                        if let cond = conditionValue.double {
+                            return 0.0 > cond
+                        }
+                        return false
+                    }
+                var attrNum: Double? = attributeValue.double
+                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
+                    attrNum = num
                 }
-                return  sourcePrimitiveValue > targetPrimitiveValue
+
+                var condNum: Double? = conditionValue.double
+                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
+                    condNum = num
+                }
+
+                if let attrNum, let condNum {
+                    return attrNum > condNum
+                }
+                    if let str = attributeValue.string {
+                        return str > conditionValue.stringValue
+                    }
+                    return false
             // Evaluate GTE operator - whether attribute greater than or equal to condition
             case "$gte":
-                if let attributeDoubleOrNull = Utils.convertJsonToDouble(from: attributeValue),
-                       let conditionDoubleOrNull = Utils.convertJsonToDouble(from: conditionValue) {
-                    return attributeDoubleOrNull >= conditionDoubleOrNull
-                }
-                return  sourcePrimitiveValue >= targetPrimitiveValue
+                if attributeValue == .null {
+                        if let cond = conditionValue.double {
+                            return 0.0 >= cond
+                        }
+                        return false
+                    }
+                    if let num = attributeValue.double {
+                        if let cond = conditionValue.double {
+                                    return num >= cond
+                                } else if let condStr = conditionValue.string, let condNum = Double(condStr) {
+                                    return num > condNum
+                                }
+                                return false
+                    }
+                    if let str = attributeValue.string, let cond = conditionValue.string {
+                        return str >= cond
+                    }
+                    return false
             // Evaluate REGEX operator - whether attribute contains condition regex
             case "$regex":
                 let targetPrimitiveValueString = conditionValue.stringValue

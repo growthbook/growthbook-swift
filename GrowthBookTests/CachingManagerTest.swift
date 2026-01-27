@@ -3,7 +3,7 @@ import XCTest
 @testable import GrowthBook
 
 class CachingManagerTest: XCTestCase {
-    let manager = CachingManager()
+    let manager = CachingManager(apiKey: "caching-test-api-key")
 
     func testCachingFileName() throws {
 
@@ -52,4 +52,9 @@ class CachingManagerTest: XCTestCase {
             logger.error("Failed get raw data or parse json error: \(error.localizedDescription)")
         }
     }
+    
+    override func tearDown() {
+           manager.clearCache()
+           super.tearDown()
+       }
 }

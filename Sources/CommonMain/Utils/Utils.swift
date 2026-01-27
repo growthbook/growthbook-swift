@@ -72,59 +72,59 @@ public class Utils {
             return true
         }
     }
-
+    
     /// This checks if a userId is within an experiment namespace or not.
     static func inNamespace(userId: String, namespace: NameSpace) -> Bool {
         guard let hash = hash(seed: namespace.0, value: userId + "__", version: 1.0) else { return false }
         return inRange(n: hash, range: BucketRange(number1: namespace.1, number2: namespace.2))
     }
-
+    
     /// Returns an array of floats with numVariations items that are all equal and sum to 1. For example, getEqualWeights(2) would return [0.5, 0.5].
     static func getEqualWeights(numVariations: Int) -> [Float] {
         if numVariations <= 0 { return [] }
         return Array(repeating: 1.0 / Float(numVariations), count: numVariations)
     }
-
+    
     /// This converts and experiment's coverage and variation weights into an array of bucket ranges.
     static func getBucketRanges(numVariations: Int, coverage: Float, weights: [Float]?) -> [BucketRange] {
         var bucketRange: [BucketRange]
-
+        
         var targetCoverage = coverage
-
+        
         // Clamp the value of coverage to between 0 and 1 inclusive.
         if coverage < 0 { targetCoverage = 0 }
         if coverage > 1 { targetCoverage = 1 }
-
+        
         // Default to equal weights if the weights don't match the number of variations.
         let equal = getEqualWeights(numVariations: numVariations)
         var targetWeights = weights ?? equal
         if targetWeights.count != numVariations {
             targetWeights = equal
         }
-
+        
         // Default to equal weights if the sum is not equal 1 (or close enough when rounding errors are factored in):
         let weightsSum = targetWeights.sum()
         if weightsSum < 0.99 || weightsSum > 1.01 {
             targetWeights = equal
         }
-
+        
         // Convert weights to ranges and return
         var cumulative: Float = 0
-
+        
         bucketRange = targetWeights.map { weight in
             let start = cumulative
             cumulative += weight
-
+            
             return BucketRange(number1: start.roundTo(numFractionDigits: 4), number2: (start + (targetCoverage * weight)).roundTo(numFractionDigits: 4))
         }
-
+        
         return bucketRange
     }
     
     static func inRange(n: Float, range: BucketRange) -> Bool {
         return n >= range.number1 && n < range.number2
     }
-
+    
     /// Choose Variation from List of ranges which matches particular number
     static func chooseVariation(n: Float, ranges: [BucketRange]) -> Int {
         for (index, range) in ranges.enumerated() {
@@ -134,23 +134,23 @@ public class Utils {
         }
         return -1
     }
-
+    
     /// Convert JsonArray to NameSpace
     static func getGBNameSpace(namespace: [JSON]) -> NameSpace? {
         if namespace.count >= 3 {
-
+            
             let title = namespace[0].string
             let start = namespace[1].float
             let end = namespace[2].float
-
+            
             if let title = title, let start = start, let end = end {
                 return NameSpace(title, start, end)
             }
-
+            
         }
         return nil
     }
-
+    
     static func paddedVersionString(input: String) -> String {
         var parts = input.replacingOccurrences(of: "[v]", with: "", options: .regularExpression)
         
@@ -184,7 +184,7 @@ public class Utils {
         }
         return nil
     }
-
+    
     static private func digest(_ string: String) -> UInt32 {
         return Common.fnv1a(Array(string.utf8), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
     }
@@ -223,7 +223,7 @@ public class Utils {
             return [:]
         }
         
-         let (hashAttribute, hashValue) = getHashAttribute(
+        let (hashAttribute, hashValue) = getHashAttribute(
             attr: expHashAttribute,
             fallback: nil,
             attributes: context.userContext.attributes
@@ -239,14 +239,18 @@ public class Utils {
         
         let fallbackKey = fallbackValue.isEmpty ? nil : "\(fallbackAttribute)||\(fallbackValue)"
         
-        let key = "\(expFallbackAttribute ?? "" )||\(context.userContext.attributes[expFallbackAttribute ?? ""].stringValue)"
-        let leftOperand = stickyBucketAssignmentDocs[key]?.attributeValue
-        
-        if (leftOperand != context.userContext.attributes[expFallbackAttribute ?? ""].stringValue) {
-            context.userContext.stickyBucketAssignmentDocs = [:]
+        if let expFallbackAttribute = expFallbackAttribute {
+            let fallbackAttrValue = context.userContext.attributes[expFallbackAttribute]
             
+            if fallbackAttrValue.type != .null {
+                let key = "\(expFallbackAttribute)||\(fallbackAttrValue.stringValue)"
+                let leftOperand = stickyBucketAssignmentDocs[key]?.attributeValue
+                if leftOperand != fallbackAttrValue.stringValue {
+                    context.userContext.stickyBucketAssignmentDocs = [:]
+                }
+            }
         }
-
+        
         var mergedAssignments: [String: String] = [:]
         
         if let fallbackKey = fallbackKey, let fallbackAssignments = stickyBucketAssignmentDocs[fallbackKey] {
@@ -267,7 +271,9 @@ public class Utils {
         }
         
         let allAttributes = getStickyBucketAttributes(context: context, attributes: attributes, data: data);
-        context.options.stickyBucketAssignmentDocs = stickyBucketService.getAllAssignments(attributes: allAttributes)
+        stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, error in
+            context.options.stickyBucketAssignmentDocs = docs
+        }
     }
     
     // Returns hash value for every attribute
@@ -290,7 +296,7 @@ public class Utils {
         
         let features = data?.features ?? context.globalContext.features
         let experiments = data?.experiments ?? context.globalContext.experiments
-            
+        
         features.keys.forEach({ id in
             let feature = features[id]
             if let rules = feature?.rules {
@@ -304,13 +310,13 @@ public class Utils {
                 }
             }
         })
-        
         experiments?.forEach({ experiment in
             attributes.insert(experiment.hashAttribute ?? "id")
             if let fallbackAttribute = experiment.fallbackAttribute {
-                    attributes.insert(fallbackAttribute)
-                }
+                attributes.insert(fallbackAttribute)
+            }
         })
+        
         return Array(attributes)
     }
     
@@ -358,24 +364,77 @@ public class Utils {
     
     // Create assignment document
     static func generateStickyBucketAssignmentDoc(context: EvalContext, attributeName: String,
-                                           attributeValue: String,
-                                           assignments: [String: String]) -> (key: String, doc: StickyAssignmentsDocument, changed: Bool) {
+                                                  attributeValue: String,
+                                                  assignments: [String: String]) -> (key: String, doc: StickyAssignmentsDocument, changed: Bool) {
         let key = "\(attributeName)||\(attributeValue)"
         let existingAssignments: [String: String] = (context.userContext.stickyBucketAssignmentDocs?[key]?.assignments) ?? [:]
-            var newAssignments = existingAssignments
-            assignments.forEach { newAssignments[$0] = $1 }
+        var newAssignments = existingAssignments
+        assignments.forEach { newAssignments[$0] = $1 }
         
         let changed = NSDictionary(dictionary: existingAssignments).isEqual(to: newAssignments) == false
         
         return (
-                key: key,
-                doc: StickyAssignmentsDocument(
-                    attributeName: attributeName,
-                    attributeValue: attributeValue,
-                    assignments: newAssignments
-                ),
-                changed: changed
-            )
+            key: key,
+            doc: StickyAssignmentsDocument(
+                attributeName: attributeName,
+                attributeValue: attributeValue,
+                assignments: newAssignments
+            ),
+            changed: changed
+        )
+    }
+    
+    static func parseQueryString(_ queryString: String?) -> [String: String] {
+        var map: [String: String] = [:]
+        
+        guard let queryString = queryString, !queryString.isEmpty else {
+            return map
+        }
+        
+        let params = queryString.split(separator: "&")
+        for param in params {
+            let keyValuePair = param.split(separator: "=", maxSplits: 1, omittingEmptySubsequences: false)
+            
+            guard let name = keyValuePair.first?.removingPercentEncoding,
+                  !name.isEmpty else {
+                continue
+            }
+            
+            let value = keyValuePair.count > 1
+            ? keyValuePair[1].removingPercentEncoding ?? ""
+            : ""
+            
+            map[name] = value
+        }
+        
+        return map
+    }
+    
+    static func getQueryStringOverride(id: String, url: URL, numberOfVariations: Int) -> Int? {
+        let queryMap = parseQueryString(url.query)
+        
+        guard let possibleValue = queryMap[id] else {
+            return nil
+        }
+        
+        if let variationValue = Int(possibleValue),
+           variationValue >= 0 && variationValue < numberOfVariations {
+            return variationValue
+        } else {
+            return nil
+        }
+    }
+    
+    static func getQueryStringOverride(id: String, urlString: String?, numberOfVariations: Int) -> Int? {
+        guard let urlString = urlString, !urlString.isEmpty else {
+            return nil
+        }
+        
+        guard let url = URL(string: urlString) else {
+            return nil
+        }
+        
+        return getQueryStringOverride(id: id, url: url, numberOfVariations: numberOfVariations)
     }
     
     static func initializeEvalContext(context: Context) -> EvalContext {
@@ -384,14 +443,39 @@ public class Utils {
                                     stickyBucketIdentifierAttributes: context.stickyBucketIdentifierAttributes,
                                     stickyBucketService: context.stickyBucketService,
                                     isQaMode: context.isQaMode,
+                                    url: context.url,
                                     trackingClosure: context.trackingClosure)
         
         let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
         
         // should create manual force features
-        let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: nil)
+            let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: context.forcedFeatureValues)
         
         let evalContext = EvalContext(globalContext: globalContext, userContext: userContext, stackContext: StackContext(), options: options)
         return evalContext
+    }
+    
+    /// Propagates sticky bucket assignments from child evaluation context to parent context
+    static func propagateStickyAssignments(from childContext: EvalContext, to parentContext: EvalContext) {
+        guard let childAssignments = childContext.userContext.stickyBucketAssignmentDocs,
+              !childAssignments.isEmpty else { return }
+        
+        if parentContext.userContext.stickyBucketAssignmentDocs == nil {
+            parentContext.userContext.stickyBucketAssignmentDocs = [:]
+        }
+        
+        for (key, childDoc) in childAssignments {
+            if let existingDoc = parentContext.userContext.stickyBucketAssignmentDocs?[key] {
+                let mergedAssignments = existingDoc.assignments.merging(childDoc.assignments) { _, new in new }
+                let mergedDoc = StickyAssignmentsDocument(
+                    attributeName: childDoc.attributeName,
+                    attributeValue: childDoc.attributeValue,
+                    assignments: mergedAssignments
+                )
+                parentContext.userContext.stickyBucketAssignmentDocs?[key] = mergedDoc
+            } else {
+                parentContext.userContext.stickyBucketAssignmentDocs?[key] = childDoc
+            }
+        }
     }
 }
