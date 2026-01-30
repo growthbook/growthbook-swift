@@ -51,7 +51,17 @@ import CommonCrypto
     }
     
     @objc public func setSystemCacheDirectory(_ directory: CacheDirectory) {
-        cacheDirectory = directory
+        #if os(tvOS)
+        if directory == .applicationSupport {
+            logger.warning("CacheDirectory.applicationSupport is not supported on tvOS. Falling back to .caches.")
+            self.cacheDirectory = .caches
+        } else {
+            self.cacheDirectory = directory
+        }
+        #else
+        self.cacheDirectory = directory
+        #endif
+
         self.customCachePath = nil
     }
     

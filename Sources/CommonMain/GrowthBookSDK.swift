@@ -3,12 +3,11 @@ import Foundation
 /// GrowthBookBuilder - Root Class for SDK Initializers for GrowthBook SDK
 protocol GrowthBookProtocol: AnyObject {
     var growthBookBuilderModel: GrowthBookModel { get set }
-    
+
     func setForcedVariations(forcedVariations: [String: Int]) -> GrowthBookBuilder
     func setQAMode(isEnabled: Bool) -> GrowthBookBuilder
     func setEnabled(isEnabled: Bool) -> GrowthBookBuilder
     func initializer() -> GrowthBookSDK
-    
 }
 
 public struct GrowthBookModel {
@@ -20,7 +19,6 @@ public struct GrowthBookModel {
     var attributes: JSON
     var trackingClosure: TrackingCallback
     var logLevel: Level = .info
-    
     var isQaMode: Bool = false
     var isEnabled: Bool = true
     var forcedVariations: JSON?
@@ -40,13 +38,12 @@ public struct GrowthBookModel {
 /// - Tracking Closure - Track Events for Experiments
 @objc public class GrowthBookBuilder: NSObject, GrowthBookProtocol {
     var growthBookBuilderModel: GrowthBookModel
-    
+
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
-    
     private var cachingManager: CachingLayer
-    private var evalContext: EvalContext?
-    
+    private var ttlSeconds: Int
+                        
     @objc public init(
         apiHost: String? = nil,
         clientKey: String? = nil,
@@ -57,9 +54,10 @@ public struct GrowthBookModel {
         refreshHandler: CacheRefreshHandler? = nil,
         backgroundSync: Bool = false,
         remoteEval: Bool = false,
+        ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
-        streamingHostRequestHeaders: [String: String]? = nil
-    ) {
+        streamingHostRequestHeaders: [String: String]? = nil) {
+
         growthBookBuilderModel = GrowthBookModel(
             apiHost: apiHost,
             clientKey: clientKey,
@@ -70,14 +68,17 @@ public struct GrowthBookModel {
             backgroundSync: backgroundSync,
             remoteEval: remoteEval,
             apiRequestHeaders: apiRequestHeaders,
-            streamingHostRequestHeaders: streamingHostRequestHeaders)
+            streamingHostRequestHeaders: streamingHostRequestHeaders
+        )
         self.refreshHandler = refreshHandler
         self.networkDispatcher = CoreNetworkClient(
-            apiRequestHeaders: apiRequestHeaders ?? [:],
-            streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-        )
+                    apiRequestHeaders: apiRequestHeaders ?? [:],
+                    streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+                )
         self.cachingManager = CachingManager(apiKey: clientKey)
+        self.ttlSeconds = ttlSeconds
     }
+    
     
     @objc public init(
         features: Data,
@@ -86,9 +87,10 @@ public struct GrowthBookModel {
         refreshHandler: CacheRefreshHandler? = nil,
         backgroundSync: Bool,
         remoteEval: Bool = false,
+        ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
-        streamingHostRequestHeaders: [String: String]? = nil
-    ) {
+        streamingHostRequestHeaders: [String: String]? = nil) {
+            
         growthBookBuilderModel = GrowthBookModel(
             features: features,
             attributes: JSON(attributes),
@@ -98,14 +100,17 @@ public struct GrowthBookModel {
             apiRequestHeaders: apiRequestHeaders,
             streamingHostRequestHeaders: streamingHostRequestHeaders
         )
+            
         self.refreshHandler = refreshHandler
         self.networkDispatcher = CoreNetworkClient(
-            apiRequestHeaders: apiRequestHeaders ?? [:],
-            streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-        )
+                apiRequestHeaders: apiRequestHeaders ?? [:],
+                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+            )
         self.cachingManager = CachingManager()
+        self.ttlSeconds = ttlSeconds
     }
-    
+
+
     init(
         apiHost: String,
         clientKey: String,
@@ -115,6 +120,7 @@ public struct GrowthBookModel {
         refreshHandler: CacheRefreshHandler?,
         backgroundSync: Bool,
         remoteEval: Bool = false,
+        ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
         streamingHostRequestHeaders: [String: String]? = nil
     ) {
@@ -131,104 +137,136 @@ public struct GrowthBookModel {
         )
         self.refreshHandler = refreshHandler
         self.networkDispatcher = CoreNetworkClient(
-            apiRequestHeaders: apiRequestHeaders ?? [:],
-            streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-        )
+                apiRequestHeaders: apiRequestHeaders ?? [:],
+                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+            )
         self.cachingManager = CachingManager(apiKey: clientKey)
+        self.ttlSeconds = ttlSeconds
     }
-    
+
     /// Set Refresh Handler - Will be called when cache is refreshed
+    /// - Parameter refreshHandler: CacheRefreshHandler
+    /// - Returns: GrowthBookBuilder
     @objc public func setRefreshHandler(refreshHandler: @escaping CacheRefreshHandler) -> GrowthBookBuilder {
         self.refreshHandler = refreshHandler
         return self
     }
-    
+
     /// Set Network Client - Network Client for Making API Calls
+    /// - Parameter networkDispatcher: NetworkProtocol
+    /// - Returns: GrowthBookBuilder
     @objc public func setNetworkDispatcher(networkDispatcher: NetworkProtocol) -> GrowthBookBuilder {
         self.networkDispatcher = networkDispatcher
         return self
     }
     
-    /// Set Caching Manager - Caching Client for saving fetched features
+    /// Sets the service instance responsible for handling sticky bucketing operations.
+    /// - Parameter stickyBucketService: StickyBucketServiceProtocol
+    /// - Returns: GrowthBookBuilder
     @objc public func setCachingManager(cachingManager: CachingLayer) -> GrowthBookBuilder {
         self.cachingManager = cachingManager
         return self
     }
     
-    @objc public func setStickyBucketService() -> GrowthBookBuilder {
-        growthBookBuilderModel.stickyBucketService = StickyBucketService(cacheKey: growthBookBuilderModel.clientKey)
-        return self
-    }
-    
-    @objc public func setStickyBucketService(stickyBucketService: StickyBucketServiceProtocol) -> GrowthBookBuilder {
+    @objc public func setStickyBucketService(stickyBucketService: StickyBucketServiceProtocol? = StickyBucketService()) -> GrowthBookBuilder {
         growthBookBuilderModel.stickyBucketService = stickyBucketService
         return self
     }
-    
-    @objc public func setStickyBucketService(cacheKey: String) -> GrowthBookBuilder {
-        growthBookBuilderModel.stickyBucketService = StickyBucketService(cacheKey: cacheKey)
-        return self
-    }
-    
-    /// Set log level for SDK Logger
-    ///
-    /// By default log level is set to `info`
+
+    /// Set log level for SDK Logger. By default log level is set to `info`
+    /// - Parameter level: LoggerLevel
+    /// - Returns: GrowthBookBuilder
     @objc public func setLogLevel(_ level: LoggerLevel) -> GrowthBookBuilder {
         growthBookBuilderModel.logLevel = GBLogger.getLoggingLevel(from: level)
         return self
     }
     
+    /// Forces specific experiments to use designated variations
+    /// - Parameter forcedVariations: [String: Int]
+    /// - Returns: GrowthBookBuilder
     @objc public func setForcedVariations(forcedVariations: [String: Int]) -> GrowthBookBuilder {
         growthBookBuilderModel.forcedVariations = JSON(forcedVariations)
         return self
     }
-    
+    /// If qaMode is true, experiments return immediately (not in experiment, variationId 0)
+    /// - Parameter isEnabled: Bool
+    /// - Returns: GrowthBookBuilder
     @objc public func setQAMode(isEnabled: Bool) -> GrowthBookBuilder {
         growthBookBuilderModel.isQaMode = isEnabled
         return self
     }
-    
+
+    /// If isEnabled is false, return immediately (not in experiment, variationId 0)
+    /// - Parameter isEnabled: Bool
+    /// - Returns: GrowthBookBuilder
     @objc public func setEnabled(isEnabled: Bool) -> GrowthBookBuilder {
         growthBookBuilderModel.isEnabled = isEnabled
         return self
     }
     
+    /// Sets the system directory path used for system-level cache storage.
+    /// - Parameter systemDirectory: CacheDirectory
+    /// - Returns: GrowthBookBuilder
     @objc public func setSystemCacheDirectory(_ systemDirectory: CacheDirectory) -> GrowthBookBuilder {
         cachingManager.setSystemCacheDirectory(systemDirectory)
         return self
     }
     
+    /// Sets the custom directory path for\ cache storage.
+    /// - Parameter customDirectory: String
+    /// - Returns: GrowthBookBuilder
     @objc public func setCustomCacheDirectory(_ customDirectory: String) -> GrowthBookBuilder {
         cachingManager.setCustomCachePath(customDirectory)
         return self
     }
     
+    /// Initialize the SDK with all previously set parameters and methods.
+    /// - Returns: GrowthBookSDK
     @objc public func setStreamingHost(streamingHost: String) -> GrowthBookBuilder {
         growthBookBuilderModel.streamingHost = streamingHost
         return self
     }
-    
-    @objc public func setForcedFeatures(forcedFeatures: [String: Any]) -> GrowthBookBuilder {
-        growthBookBuilderModel.forcedFeatureValues = JSON(forcedFeatures)
-        return self
-    }
-    
+
     @objc public func initializer() -> GrowthBookSDK {
-        let gbContext = Context(
-            apiHost: growthBookBuilderModel.apiHost,
-            streamingHost : growthBookBuilderModel.streamingHost,
-            clientKey: growthBookBuilderModel.clientKey,
-            encryptionKey: growthBookBuilderModel.encryptionKey,
-            isEnabled: growthBookBuilderModel.isEnabled,
-            attributes: growthBookBuilderModel.attributes,
-            forcedVariations: growthBookBuilderModel.forcedVariations,
-            stickyBucketService: growthBookBuilderModel.stickyBucketService,
+        let globalConfig = GlobalConfig(
+            apiHost: growthBookBuilderModel.apiHost, 
+            clientKey: growthBookBuilderModel.clientKey, 
+            encryptionKey: growthBookBuilderModel.encryptionKey, 
+            isEnabled: growthBookBuilderModel.isEnabled, 
             isQaMode: growthBookBuilderModel.isQaMode,
-            trackingClosure: growthBookBuilderModel.trackingClosure,
             backgroundSync: growthBookBuilderModel.backgroundSync,
             remoteEval: growthBookBuilderModel.remoteEval,
+            trackingClosure: growthBookBuilderModel.trackingClosure,
+            stickyBucketService: growthBookBuilderModel.stickyBucketService
+        )
+
+        // Parse features from Data if available
+        var initialFeatures: Features = [:]
+        if let featuresData = growthBookBuilderModel.features {
+            let decoder = JSONDecoder()
+            // Try to decode as FeaturesDataModel first (API format)
+            if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: featuresData),
+               let features = featuresModel.features {
+                initialFeatures = features
+            } else if let features = try? decoder.decode(Features.self, from: featuresData) {
+                // Fallback: try to decode directly as Features dictionary
+                initialFeatures = features
+            }
+        }
+
+        let evaluationData = EvaluationData(
+            streamingHost: growthBookBuilderModel.streamingHost,
+            attributes: growthBookBuilderModel.attributes,
+            forcedVariations: growthBookBuilderModel.forcedVariations,
+            stickyBucketAssignmentDocs: nil,
+            stickyBucketIdentifierAttributes: nil,
+            features: initialFeatures,
+            savedGroups: nil,
+            url: nil,
             forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues
         )
+
+        let contextManager = ContextManager(globalConfig: globalConfig, evalData: evaluationData)
         
         if let clientKey = growthBookBuilderModel.clientKey {
             cachingManager.setCacheKey(clientKey)
@@ -238,7 +276,7 @@ public struct GrowthBookModel {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
 
-        return GrowthBookSDK(context: gbContext, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager)
+        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
     }
 }
 
@@ -249,41 +287,55 @@ public struct GrowthBookModel {
     var refreshHandler: CacheRefreshHandler?
     private var subscriptions: [ExperimentRunCallback] = []
     private var networkDispatcher: NetworkProtocol
-    public var gbContext: Context
+    private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
+    private var forcedFeatures: JSON = JSON()
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
-    private var evalContext: EvalContext!
+    private var evalContext: EvalContext? = nil
     private let evaluationLock = NSLock()
+    private var ttlSeconds: Int
     var cachingManager: CachingLayer
+    // Serial queue for thread-safe access to evalContext and gbContext.features
+    private let syncQueue = DispatchQueue(label: "com.growthbook.sdk.sync", qos: .userInitiated)
     
-    init(context: Context,
+    init(contextManager: ContextManager,
          refreshHandler: CacheRefreshHandler? = nil,
          logLevel: Level = .info,
          networkDispatcher: NetworkProtocol = CoreNetworkClient(),
          features: Features? = nil,
          savedGroups: JSON? = nil,
-         cachingManager: CachingLayer) {
-        gbContext = context
+         cachingManager: CachingLayer,
+         ttlSeconds: Int) {
+        self.contextManager = contextManager
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
         self.savedGroupsValues = savedGroups
         self.cachingManager = cachingManager
+        self.ttlSeconds = ttlSeconds
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager)
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        
+        let evalData = contextManager.getEvaluationData()
+        let globalConfig = contextManager.getGlobalConfig()
+        
         if let features = features {
-            gbContext.features = features
+            contextManager.updateEvalData { data in
+                data.features = features
+            }
         } else {
-            featureVM.encryptionKey = context.encryptionKey ?? ""
+            featureVM.encryptionKey = globalConfig.encryptionKey ?? ""
             refreshCache()
         }
         
         if let savedGroups {
-            context.savedGroups = savedGroups
+            contextManager.updateEvalData { data in
+                data.savedGroups = savedGroups
+            }
         }
         
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
-        if let sseURL = context.getSSEUrl(), context.backgroundSync {
+        if let sseURL = evalData.streamingHost, globalConfig.backgroundSync {
             featureVM.connectBackgroundSync(sseUrl: sseURL)
         }
         
@@ -291,10 +343,16 @@ public struct GrowthBookModel {
         logger.minLevel = logLevel
         
         evaluationLock.lock()
-        evalContext = Utils.initializeEvalContext(context: context)
+            
+        // Initialize evalContext from contextManager
+        self.evalContext = contextManager.getEvalContext()
+        
         evaluationLock.unlock()
-        if let service = gbContext.stickyBucketService,
-           let docs = gbContext.stickyBucketAssignmentDocs {
+        
+        evalContext = contextManager.getEvalContext()
+        
+        if let service = globalConfig.stickyBucketService,
+           let docs = evalData.stickyBucketAssignmentDocs {
             for (_, doc) in docs {
                 service.saveAssignments(doc: doc) { _ in
                     // Ignore hydration errors
@@ -302,15 +360,70 @@ public struct GrowthBookModel {
             }
         }
         refreshStickyBucketService()
-        
     }
     
+    // Convenience init for backward compatibility
+    convenience init(context: Context,
+                     refreshHandler: CacheRefreshHandler? = nil,
+                     logLevel: Level = .info,
+                     networkDispatcher: NetworkProtocol = CoreNetworkClient(),
+                     features: Features? = nil,
+                     savedGroups: JSON? = nil,
+                     cachingManager: CachingLayer,
+                     ttlSeconds: Int
+    ) {
+        // Create GlobalConfig from Context
+        let globalConfig = GlobalConfig(
+            apiHost: context.apiHost,
+            clientKey: context.clientKey,
+            encryptionKey: context.encryptionKey,
+            isEnabled: context.isEnabled,
+            isQaMode: context.isQaMode,
+            backgroundSync: context.backgroundSync,
+            remoteEval: context.remoteEval,
+            trackingClosure: context.trackingClosure,
+            stickyBucketService: context.stickyBucketService
+        )
+        
+        // Create EvaluationData from Context
+        let evaluationData = EvaluationData(
+            streamingHost: context.streamingHost,
+            attributes: context.attributes,
+            forcedVariations: context.forcedVariations,
+            stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs,
+            stickyBucketIdentifierAttributes: context.stickyBucketIdentifierAttributes,
+            features: features ?? context.features,
+            savedGroups: savedGroups ?? context.savedGroups,
+            url: context.url,
+            forcedFeatureValues: context.forcedFeatureValues
+        )
+        
+        // Create ContextManager
+        let contextManager = ContextManager(globalConfig: globalConfig, evalData: evaluationData)
+        
+        // Call main init
+        self.init(
+            contextManager: contextManager,
+            refreshHandler: refreshHandler,
+            logLevel: logLevel,
+            networkDispatcher: networkDispatcher,
+            features: features,
+            savedGroups: savedGroups,
+            cachingManager: cachingManager,
+            ttlSeconds: ttlSeconds
+        )
+    }
+        
     /// Manually Refresh Cache
     @objc public func refreshCache() {
-        if gbContext.remoteEval {
-            refreshForRemoteEval()
-        } else {
-            featureVM.fetchFeatures(apiUrl: gbContext.getFeaturesURL())
+        let globalConfig = contextManager.getGlobalConfig()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            if globalConfig.remoteEval {
+                self.refreshForRemoteEval()
+            } else {
+                self.featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL())
+            }
         }
     }
     
@@ -318,172 +431,246 @@ public struct GrowthBookModel {
     @objc public func clearCache() {
         cachingManager.clearCache()
     }
-    
+
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
+    /// Note: This method is kept for backward compatibility but returns a Context created from ContextManager
     @objc public func getGBContext() -> Context {
-        return gbContext
+        syncQueue.sync {
+            let globalConfig = contextManager.getGlobalConfig()
+            let evalData = contextManager.getEvaluationData()
+            return Context(
+                apiHost: globalConfig.apiHost,
+                streamingHost: evalData.streamingHost,
+                clientKey: globalConfig.clientKey,
+                encryptionKey: globalConfig.encryptionKey,
+                isEnabled: globalConfig.isEnabled,
+                attributes: evalData.attributes,
+                forcedVariations: evalData.forcedVariations,
+                stickyBucketAssignmentDocs: evalData.stickyBucketAssignmentDocs,
+                stickyBucketIdentifierAttributes: evalData.stickyBucketIdentifierAttributes,
+                stickyBucketService: globalConfig.stickyBucketService,
+                isQaMode: globalConfig.isQaMode,
+                trackingClosure: globalConfig.trackingClosure,
+                features: evalData.features,
+                backgroundSync: globalConfig.backgroundSync,
+                remoteEval: globalConfig.remoteEval,
+                savedGroups: evalData.savedGroups,
+                url: evalData.url,
+                forcedFeatureValues: evalData.forcedFeatureValues
+            )
+        }
     }
     
     public func getGBAttributes() -> JSON {
-        return gbContext.attributes
+        syncQueue.sync { contextManager.getEvaluationData().attributes }
     }
     
     /// Get Cached Features
     @objc public func getFeatures() -> [String: Feature] {
-        return gbContext.features
+        syncQueue.sync { contextManager.getEvaluationData().features }
     }
     
+    /// Subscribe to all experiment execution events.
+    /// - Parameter result: ExperimentRunCallback
     @objc public func subscribe(_ result: @escaping ExperimentRunCallback) {
         self.subscriptions.append(result)
     }
     
+    /// Remove all experiment callback functions.
     @objc public func clearSubscriptions() {
         self.subscriptions.removeAll()
     }
-    
+
     /// Get the value of the feature with a fallback
+    /// - Parameters:
+    ///   - id: String
+    ///   - defaultValue: JSON
+    /// - Returns: JSON
     public func getFeatureValue(feature id: String, default defaultValue: JSON) -> JSON {
-        evaluationLock.lock()
-        defer { evaluationLock.unlock() }
-        
-        if evalContext == nil {
-            evalContext = Utils.initializeEvalContext(context: gbContext)
+        syncQueue.sync {
+            evaluationLock.lock()
+            defer { evaluationLock.unlock() }
+            let context = getEvalContext()
+            let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+            // Update evalContext with any sticky bucket changes
+            contextManager.syncFromEvaluation(context)
+            return result.value ?? defaultValue
         }
-        let result = FeatureEvaluator(context: evalContext, featureKey: id).evaluateFeature()
-        // If feature is unknown, return the default value
-        if result.source == "unknownFeature" {
-            return defaultValue
-        }
-        return result.value ?? defaultValue
     }
-    
+
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
-        gbContext.features = features
-        evaluationLock.lock()
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        evaluationLock.unlock()
-        refreshStickyBucketService()
-        if isRemote {
-            refreshHandler?(nil)
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.contextManager.updateEvalData { data in
+                data.features = features
+                self.refreshStickyBucketService()
+            }
+            if isRemote {
+                self.refreshHandler?(.none)
+            }
         }
     }
     
     /// The setEncryptedFeatures method takes an encrypted string with an encryption key and then decrypts it with the default method of decrypting or with a method of decrypting from the user
+    /// - Parameters:
+    ///   - encryptedString: String
+    ///   - encryptionKey: String
+    ///   - subtle: CryptoProtocol
     @objc public func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil) {
         let crypto: CryptoProtocol = subtle ?? Crypto()
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
         
-        gbContext.features = features
-        evaluationLock.lock()
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        evaluationLock.unlock()
-        refreshStickyBucketService()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            
+            self.contextManager.updateEvalData { data in
+                data.features = features
+            }
+            self.evalContext = self.contextManager.getEvalContext()
+            self.refreshStickyBucketService()
+        }
     }
-    
+
     @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
         if isRemote {
-            refreshHandler?(error)
+            refreshHandler?(.failedToFetchData)
         }
     }
     
-    
-    @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
-        refreshHandler?(error)
+    private func getEvalContext() -> EvalContext {
+        contextManager.getEvalContext()
     }
     
+    @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
+        refreshHandler?(.failedToFetchData)
+    }
+
     public func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
-        gbContext.savedGroups = savedGroups
-        refreshHandler?(nil)
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.contextManager.updateEvalData { data in
+                data.savedGroups = savedGroups
+            }
+            self.refreshHandler?(.none)
+        }
     }
     
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation
     @objc public func refreshForRemoteEval() {
-        if !gbContext.remoteEval { return }
-        let forcedFeaturesArray = convertForcedFeaturesToArray(gbContext.forcedFeatureValues)
+        let globalConfig = contextManager.getGlobalConfig()
+        let evalData = contextManager.getEvaluationData()
+        if !globalConfig.remoteEval { return }
+        let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
         let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
         
         
-        let payload = RemoteEvalParams(attributes: gbContext.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: gbContext.forcedVariations )
-        featureVM.fetchFeatures(apiUrl: gbContext.getRemoteEvalUrl(), remoteEval: gbContext.remoteEval, payload: payload)
+        let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations )
+        featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
     }
-    
+
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
+    /// - Parameter id: String
+    /// - Returns: FeatureResult
     @objc public func evalFeature(id: String) -> FeatureResult {
-        evaluationLock.lock()
-        defer { evaluationLock.unlock() }
-        
-        if evalContext == nil {
-            evalContext = Utils.initializeEvalContext(context: gbContext)
+        syncQueue.sync {
+            let context = getEvalContext()
+            let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
+            // Update evalContext with any sticky bucket changes
+            contextManager.syncFromEvaluation(context)
+            return result
         }
-        return FeatureEvaluator(context: evalContext, featureKey: id).evaluateFeature()
     }
-    
+
     /// The isOn method takes a single string argument, which is the unique identifier for the feature and returns the feature state on/off
+    /// - Parameter id: String
+    /// - Returns: Bool
     @objc public func isOn(feature id: String) -> Bool {
-        return evalFeature(id: id).isOn
+        syncQueue.sync { evalFeature(id: id).isOn }
     }
-    
+
     /// The run method takes an Experiment object and returns an experiment result
+    /// - Parameter experiment: Experiment
+    /// - Returns: ExperimentResult
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        evaluationLock.lock()
-        defer { evaluationLock.unlock() }
-        
-        if evalContext == nil {
-            evalContext = Utils.initializeEvalContext(context: gbContext)
+        return syncQueue.sync {
+            let context = getEvalContext()
+            let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
+            // Update evalContext with any sticky bucket changes
+            contextManager.syncFromEvaluation(context)
+            
+            self.subscriptions.forEach { subscription in
+                subscription(experiment, result)
+            }
+            
+            return result
         }
-        let result = ExperimentEvaluator().evaluateExperiment(context: evalContext, experiment: experiment)
-        
-        self.subscriptions.forEach { subscription in
-            subscription(experiment, result)
-        }
-        
-        return result
     }
     
     /// The setForcedFeatures method updates forced features
+    /// - Parameter forcedFeatures: Any
     @objc public func setForcedFeatures(forcedFeatures: Any) {
-        gbContext.forcedFeatureValues = JSON(forcedFeatures)
-        refreshForRemoteEval()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.contextManager.updateEvalData { data in
+                data.forcedFeatureValues = JSON(forcedFeatures)
+            }
+            self.refreshForRemoteEval()
+        }
     }
-    
+
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
+    /// - Parameter attributes: Any
     @objc public func setAttributes(attributes: Any) {
-        gbContext.attributes = JSON(attributes)
-        evaluationLock.lock()
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        evaluationLock.unlock()
-        refreshStickyBucketService()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.contextManager.updateEvalData { data in
+                data.attributes = JSON(attributes)
+            }
+            self.refreshStickyBucketService()
+        }
     }
     
     /// Merges the provided user attributes with the existing ones.
     /// - Throws: `SwiftyJSON.Error.wrongType` if the top-level JSON types differ
     @objc public func appendAttributes(attributes: Any) throws {
-        let updatedAttributes = try gbContext.attributes.merged(with: JSON(attributes))
-        gbContext.attributes = updatedAttributes
-        evaluationLock.lock()
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        evaluationLock.unlock()
-        refreshStickyBucketService()
-    }
-    
-    @objc public func setAttributeOverrides(overrides: Any) {
-        attributeOverrides = JSON(overrides)
-        if gbContext.stickyBucketService != nil {
+        try syncQueue.sync {
+            let evalData = contextManager.getEvaluationData()
+            let updatedAttributes = try evalData.attributes.merged(with: JSON(attributes))
+            contextManager.updateEvalData { data in
+                data.attributes = updatedAttributes
+            }
             refreshStickyBucketService()
         }
-        evaluationLock.lock()
-        evalContext = Utils.initializeEvalContext(context: gbContext)
-        evaluationLock.unlock()
-        refreshForRemoteEval()
+    }
+    
+    /// Sets custom attribute values that override the default ones
+    /// - Parameter overrides: Ant
+    @objc public func setAttributeOverrides(overrides: Any) {
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.attributeOverrides = JSON(overrides)
+            let globalConfig = self.contextManager.getGlobalConfig()
+            if globalConfig.stickyBucketService != nil {
+                self.refreshStickyBucketService()
+            }
+            self.refreshForRemoteEval()
+        }
     }
     
     /// The setForcedVariations method updates forced variations and makes API call if remote eval is enabled
+    /// - Parameter forcedVariations: Any
     @objc public func setForcedVariations(forcedVariations: Any) {
-        gbContext.forcedVariations = JSON(forcedVariations)
-        refreshForRemoteEval()
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            self.contextManager.updateEvalData { data in
+                data.forcedVariations = JSON(forcedVariations)
+            }
+            self.refreshForRemoteEval()
+        }
     }
     
     /// Updates API request headers for dynamic header management
+    /// - Parameter headers: [String: String]
     @objc public func updateApiRequestHeaders(_ headers: [String: String]) {
         if let networkClient = networkDispatcher as? CoreNetworkClient {
             networkClient.apiRequestHeaders = headers
@@ -502,15 +689,15 @@ public struct GrowthBookModel {
     }
     
     @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
-        evaluationLock.lock()
-        guard let currentEvalContext = evalContext,
-              currentEvalContext.options.stickyBucketService != nil else {
-            evaluationLock.unlock()
-            return
+        syncQueue.async { [weak self] in
+            guard let self = self else { return }
+            let context = getEvalContext()
+            let globalConfig = contextManager.getGlobalConfig()
+            if globalConfig.stickyBucketService != nil {
+                let evalData = contextManager.getEvaluationData()
+                Utils.refreshStickyBuckets(context: context, attributes: evalData.attributes, data: data)
+            }
         }
-        let attributes = currentEvalContext.userContext.attributes
-        evaluationLock.unlock()
-        Utils.refreshStickyBuckets(context: currentEvalContext, attributes: attributes, data: data)
     }
     
     private func convertForcedFeaturesToArray(_ forcedFeatures: JSON?) -> [[JSON]]? {
@@ -521,6 +708,7 @@ public struct GrowthBookModel {
         let result = features.map { key, value -> [JSON] in
             return [JSON(key), value]
         }
+        
         
         return result
     }
