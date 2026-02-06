@@ -3,7 +3,7 @@ import Foundation
 /// GrowthBookBuilder - Root Class for SDK Initializers for GrowthBook SDK
 protocol GrowthBookProtocol: AnyObject {
     var growthBookBuilderModel: GrowthBookModel { get set }
-
+    
     func setForcedVariations(forcedVariations: [String: Int]) -> GrowthBookBuilder
     func setQAMode(isEnabled: Bool) -> GrowthBookBuilder
     func setEnabled(isEnabled: Bool) -> GrowthBookBuilder
@@ -38,12 +38,12 @@ public struct GrowthBookModel {
 /// - Tracking Closure - Track Events for Experiments
 @objc public class GrowthBookBuilder: NSObject, GrowthBookProtocol {
     var growthBookBuilderModel: GrowthBookModel
-
+    
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
     private var cachingManager: CachingLayer
     private var ttlSeconds: Int
-                        
+    
     @objc public init(
         apiHost: String? = nil,
         clientKey: String? = nil,
@@ -57,27 +57,27 @@ public struct GrowthBookModel {
         ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
         streamingHostRequestHeaders: [String: String]? = nil) {
-
-        growthBookBuilderModel = GrowthBookModel(
-            apiHost: apiHost,
-            clientKey: clientKey,
-            encryptionKey: encryptionKey,
-            features: features,
-            attributes: JSON(attributes),
-            trackingClosure: trackingCallback,
-            backgroundSync: backgroundSync,
-            remoteEval: remoteEval,
-            apiRequestHeaders: apiRequestHeaders,
-            streamingHostRequestHeaders: streamingHostRequestHeaders
-        )
-        self.refreshHandler = refreshHandler
-        self.networkDispatcher = CoreNetworkClient(
-                    apiRequestHeaders: apiRequestHeaders ?? [:],
-                    streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-                )
-        self.cachingManager = CachingManager(apiKey: clientKey)
-        self.ttlSeconds = ttlSeconds
-    }
+            
+            growthBookBuilderModel = GrowthBookModel(
+                apiHost: apiHost,
+                clientKey: clientKey,
+                encryptionKey: encryptionKey,
+                features: features,
+                attributes: JSON(attributes),
+                trackingClosure: trackingCallback,
+                backgroundSync: backgroundSync,
+                remoteEval: remoteEval,
+                apiRequestHeaders: apiRequestHeaders,
+                streamingHostRequestHeaders: streamingHostRequestHeaders
+            )
+            self.refreshHandler = refreshHandler
+            self.networkDispatcher = CoreNetworkClient(
+                apiRequestHeaders: apiRequestHeaders ?? [:],
+                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+            )
+            self.cachingManager = CachingManager(apiKey: clientKey)
+            self.ttlSeconds = ttlSeconds
+        }
     
     
     @objc public init(
@@ -91,26 +91,26 @@ public struct GrowthBookModel {
         apiRequestHeaders: [String: String]? = nil,
         streamingHostRequestHeaders: [String: String]? = nil) {
             
-        growthBookBuilderModel = GrowthBookModel(
-            features: features,
-            attributes: JSON(attributes),
-            trackingClosure: trackingCallback,
-            backgroundSync: backgroundSync,
-            remoteEval: remoteEval,
-            apiRequestHeaders: apiRequestHeaders,
-            streamingHostRequestHeaders: streamingHostRequestHeaders
-        )
+            growthBookBuilderModel = GrowthBookModel(
+                features: features,
+                attributes: JSON(attributes),
+                trackingClosure: trackingCallback,
+                backgroundSync: backgroundSync,
+                remoteEval: remoteEval,
+                apiRequestHeaders: apiRequestHeaders,
+                streamingHostRequestHeaders: streamingHostRequestHeaders
+            )
             
-        self.refreshHandler = refreshHandler
-        self.networkDispatcher = CoreNetworkClient(
+            self.refreshHandler = refreshHandler
+            self.networkDispatcher = CoreNetworkClient(
                 apiRequestHeaders: apiRequestHeaders ?? [:],
                 streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
             )
-        self.cachingManager = CachingManager()
-        self.ttlSeconds = ttlSeconds
-    }
-
-
+            self.cachingManager = CachingManager()
+            self.ttlSeconds = ttlSeconds
+        }
+    
+    
     init(
         apiHost: String,
         clientKey: String,
@@ -137,13 +137,13 @@ public struct GrowthBookModel {
         )
         self.refreshHandler = refreshHandler
         self.networkDispatcher = CoreNetworkClient(
-                apiRequestHeaders: apiRequestHeaders ?? [:],
-                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-            )
+            apiRequestHeaders: apiRequestHeaders ?? [:],
+            streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+        )
         self.cachingManager = CachingManager(apiKey: clientKey)
         self.ttlSeconds = ttlSeconds
     }
-
+    
     /// Set Refresh Handler - Will be called when cache is refreshed
     /// - Parameter refreshHandler: CacheRefreshHandler
     /// - Returns: GrowthBookBuilder
@@ -151,7 +151,7 @@ public struct GrowthBookModel {
         self.refreshHandler = refreshHandler
         return self
     }
-
+    
     /// Set Network Client - Network Client for Making API Calls
     /// - Parameter networkDispatcher: NetworkProtocol
     /// - Returns: GrowthBookBuilder
@@ -172,7 +172,7 @@ public struct GrowthBookModel {
         growthBookBuilderModel.stickyBucketService = stickyBucketService
         return self
     }
-
+    
     /// Set log level for SDK Logger. By default log level is set to `info`
     /// - Parameter level: LoggerLevel
     /// - Returns: GrowthBookBuilder
@@ -195,7 +195,7 @@ public struct GrowthBookModel {
         growthBookBuilderModel.isQaMode = isEnabled
         return self
     }
-
+    
     /// If isEnabled is false, return immediately (not in experiment, variationId 0)
     /// - Parameter isEnabled: Bool
     /// - Returns: GrowthBookBuilder
@@ -226,20 +226,25 @@ public struct GrowthBookModel {
         growthBookBuilderModel.streamingHost = streamingHost
         return self
     }
-
+    
+    @objc public func setForcedFeatures(forcedFeatures: [String: Any]) -> GrowthBookBuilder {
+        growthBookBuilderModel.forcedFeatureValues = JSON(forcedFeatures)
+        return self
+    }
+    
     @objc public func initializer() -> GrowthBookSDK {
         let globalConfig = GlobalConfig(
-            apiHost: growthBookBuilderModel.apiHost, 
-            clientKey: growthBookBuilderModel.clientKey, 
-            encryptionKey: growthBookBuilderModel.encryptionKey, 
-            isEnabled: growthBookBuilderModel.isEnabled, 
+            apiHost: growthBookBuilderModel.apiHost,
+            clientKey: growthBookBuilderModel.clientKey,
+            encryptionKey: growthBookBuilderModel.encryptionKey,
+            isEnabled: growthBookBuilderModel.isEnabled,
             isQaMode: growthBookBuilderModel.isQaMode,
             backgroundSync: growthBookBuilderModel.backgroundSync,
             remoteEval: growthBookBuilderModel.remoteEval,
             trackingClosure: growthBookBuilderModel.trackingClosure,
             stickyBucketService: growthBookBuilderModel.stickyBucketService
         )
-
+        
         // Parse features from Data if available
         var initialFeatures: Features = [:]
         if let featuresData = growthBookBuilderModel.features {
@@ -253,7 +258,7 @@ public struct GrowthBookModel {
                 initialFeatures = features
             }
         }
-
+        
         let evaluationData = EvaluationData(
             streamingHost: growthBookBuilderModel.streamingHost,
             attributes: growthBookBuilderModel.attributes,
@@ -265,7 +270,7 @@ public struct GrowthBookModel {
             url: nil,
             forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues
         )
-
+        
         let contextManager = ContextManager(globalConfig: globalConfig, evalData: evaluationData)
         
         if let clientKey = growthBookBuilderModel.clientKey {
@@ -275,7 +280,7 @@ public struct GrowthBookModel {
         if let features = growthBookBuilderModel.features {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
-
+        
         return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
     }
 }
