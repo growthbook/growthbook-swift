@@ -16,6 +16,7 @@ class ConditionTests: XCTestCase {
         var passedScenarios: [String] = []
 
         for item in evalConditions {
+            
             let evaluator = ConditionEvaluator()
             
             let result = evaluator.isEvalCondition(attributes: item[2], conditionObj: item[1], savedGroups: item[4])

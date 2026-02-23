@@ -50,8 +50,27 @@ import CommonCrypto
         self.customCachePath = path
     }
     
+    @objc func getData(fileName: String) -> Data? {
+        return getContent(fileName: fileName)
+    }
+
+    @objc func putData(fileName: String, content: Data) {
+        saveContent(fileName: fileName, content: content)
+    }
+    
+    /// Set system cache directory, with tvOS compatibility handling.
     @objc public func setSystemCacheDirectory(_ directory: CacheDirectory) {
-        cacheDirectory = directory
+        #if os(tvOS)
+        if directory == .applicationSupport {
+            logger.warning("CacheDirectory.applicationSupport is not supported on tvOS. Falling back to .caches.")
+            self.cacheDirectory = .caches
+        } else {
+            self.cacheDirectory = directory
+        }
+        #else
+        self.cacheDirectory = directory
+        #endif
+        // Reset custom path when using system directory
         self.customCachePath = nil
     }
     
@@ -71,7 +90,7 @@ import CommonCrypto
                 logger.error("Failed remove error: \(error.localizedDescription)")
             }
         }
-
+        
         // Write contents in file
         fileManager.createFile(atPath: filePath, contents: content, attributes: nil)
     }
@@ -121,7 +140,7 @@ import CommonCrypto
     
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
     @objc public func clearCache() {
-                
+        
         guard let directoryPath = self.customCachePath ?? cacheDirectory.path else {
             logger.error("Failed to retrieve directory path.")
             return
