@@ -265,14 +265,17 @@ public class Utils {
     }
     
     // Update sticky bucketing configuration
-    static func refreshStickyBuckets(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) {
-        guard let stickyBucketService = context.options.stickyBucketService else {
-            return
-        }
+    static func refreshStickyBuckets(stickyBucketService: StickyBucketServiceProtocol,
+                                     context: EvalContext,
+                                     attributes: JSON,
+                                     data: FeaturesDataModel?,
+                                     completion: @escaping ([String: StickyAssignmentsDocument]?) -> Void) {
+        let allAttributes = getStickyBucketAttributes(
+                context: context, attributes: attributes, data: data
+            )
         
-        let allAttributes = getStickyBucketAttributes(context: context, attributes: attributes, data: data);
-        stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, error in
-            context.options.stickyBucketAssignmentDocs = docs
+        stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, _ in
+                completion(docs)
         }
     }
     
@@ -339,7 +342,7 @@ public class Utils {
         )
         
         if minExperimentBucketVersion > 0 {
-            for version in 0...minExperimentBucketVersion {
+            for version in 0..<minExperimentBucketVersion {
                 let blockedKey = getStickyBucketExperimentKey(experimentKey, version)
                 if let _ = assignments[blockedKey] {
                     return (variation: -1, versionIsBlocked: true)
