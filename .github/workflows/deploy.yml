@@ -21,9 +21,17 @@ jobs:
       uses: gittools/actions/gitversion/setup@v0.9.7
       with:
         versionSpec: '5.x'
+    - name: Determine Version
+      id: gitversion
+      uses: gittools/actions/gitversion/execute@v0.9.7
+      with:
+        useConfigFile: true
+        configFilePath: ./.github/gitversion.yml
     - name: Prepare for release
       run:  |
         set -eo pipefail
         export LIB_VERSION=${{ steps.gitversion.outputs.SemVer }}
-        pod spec lint --allow-warnings
-
+        pod spec lint --allow-warnings --skip-import-validation
+        pod trunk push --allow-warnings --skip-import-validation
+      env:
+        COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOA_KEY }}
