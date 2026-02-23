@@ -887,7 +887,6 @@
       },
       false
     ],
-    ,
     [
       "$gt/$lt strings - pass",
       {
@@ -1462,12 +1461,6 @@
         "age": 40
       },
       true
-    ],
-    [
-          "$nor - pass with null value for age",
-          {"$nor": [{"name": "john"}, {"age": {"$lt": 30}}]},
-          {"name": "jim", "age": null},
-          true
     ],
     [
       "$nor - fail both",
@@ -2065,14 +2058,7 @@
       },
       true
     ],
-  "getBucketRange": [
     [
-      "normal 50/50",
-      [2, 1, null],
-      [
-        [0, 0.5],
-        [0.5, 1]
-      ]
       "version 0.9.0 < 0.10.0",
       {
         "version": {
@@ -2085,12 +2071,6 @@
       true
     ],
     [
-      "reduced coverage",
-      [2, 0.5, null],
-      [
-        [0, 0.25],
-        [0.5, 0.75]
-      ]
       "version 1.0.0-0.0 < 1.0.0-0.0.0",
       {
         "version": {
@@ -2103,12 +2083,6 @@
       true
     ],
     [
-      "zero coverage",
-      [2, 0, null],
-      [
-        [0, 0],
-        [0.5, 0.5]
-      ]
       "version 1.0.0-9999 < 1.0.0--",
       {
         "version": {
@@ -2121,14 +2095,6 @@
       true
     ],
     [
-      "4 variations",
-      [4, 1, null],
-      [
-        [0, 0.25],
-        [0.25, 0.5],
-        [0.5, 0.75],
-        [0.75, 1]
-      ]
       "version 1.0.0-99 < 1.0.0-100",
       {
         "version": {
@@ -2141,12 +2107,6 @@
       true
     ],
     [
-      "uneven weights",
-      [2, 1, [0.4, 0.6]],
-      [
-        [0, 0.4],
-        [0.4, 1]
-      ]
       "version 1.0.0-alpha < 1.0.0-alpha.1",
       {
         "version": {
@@ -2159,13 +2119,6 @@
       true
     ],
     [
-      "uneven weights, 3 variations",
-      [3, 1, [0.2, 0.3, 0.5]],
-      [
-        [0, 0.2],
-        [0.2, 0.5],
-        [0.5, 1]
-      ]
       "version 1.0.0-alpha.1 < 1.0.0-alpha.beta",
       {
         "version": {
@@ -2178,13 +2131,6 @@
       true
     ],
     [
-      "uneven weights, reduced coverage, 3 variations",
-      [3, 0.2, [0.2, 0.3, 0.5]],
-      [
-        [0, 0.04],
-        [0.2, 0.26],
-        [0.5, 0.6]
-      ]
       "version 1.0.0-alpha.beta < 1.0.0-beta",
       {
         "version": {
@@ -2197,12 +2143,6 @@
       true
     ],
     [
-      "negative coverage",
-      [2, -0.2, null],
-      [
-        [0, 0],
-        [0.5, 0.5]
-      ]
       "version 1.0.0-beta < 1.0.0-beta.2",
       {
         "version": {
@@ -2215,12 +2155,6 @@
       true
     ],
     [
-      "coverage above 1",
-      [2, 1.5, null],
-      [
-        [0, 0.5],
-        [0.5, 1]
-      ]
       "version 1.0.0-beta.2 < 1.0.0-beta.11",
       {
         "version": {
@@ -2233,12 +2167,6 @@
       true
     ],
     [
-      "weights sum below 1",
-      [2, 1, [0.4, 0.1]],
-      [
-        [0, 0.5],
-        [0.5, 1]
-      ]
       "version 1.0.0-beta.11 < 1.0.0-rc.1",
       {
         "version": {
@@ -2251,12 +2179,6 @@
       true
     ],
     [
-      "weights sum above 1",
-      [2, 1, [0.7, 0.6]],
-      [
-        [0, 0.5],
-        [0.5, 1]
-      ]
       "version 1.0.0-rc.1 < 1.0.0",
       {
         "version": {
@@ -2269,14 +2191,6 @@
       true
     ],
     [
-      "weights.length not equal to num variations",
-      [4, 1, [0.4, 0.4, 0.2]],
-      [
-        [0, 0.25],
-        [0.25, 0.5],
-        [0.5, 0.75],
-        [0.75, 1]
-      ]
       "version 1.0.0-0 < 1.0.0--1",
       {
         "version": {
@@ -2289,27 +2203,8 @@
       true
     ],
     [
-      "weights sum almost equals 1",
-      [2, 1, [0.4, 0.5999]],
-      [
-        [0, 0.4],
-        [0.4, 0.9999]
-      ]
-    ]
-  ],
-  "feature": [
-    [
-      "unknown feature key",
-      {},
-      "my-feature",
       "version 1.0.0-0 < 1.0.0-1",
       {
-        "value": null,
-        "on": false,
-        "off": true,
-        "source": "unknownFeature",
-        "ruleId": ""
-      }
         "version": {
           "$vlt": "1.0.0-1"
         }
@@ -2320,17 +2215,8 @@
       true
     ],
     [
-      "defaults when empty",
-      { "features": { "feature": {} } },
-      "feature",
       "version 1.0.0-1.0 < 1.0.0-1.-1",
       {
-        "value": null,
-        "on": false,
-        "off": true,
-        "source": "defaultValue",
-        "ruleId": ""
-      }
         "version": {
           "$vlt": "1.0.0-1.-1"
         }
@@ -2341,17 +2227,8 @@
       true
     ],
     [
-      "uses defaultValue - number",
-      { "features": { "feature": { "defaultValue": 1 } } },
-      "feature",
       "version 1.2.3-a.b.c < 1.2.3-a.b.c.d",
       {
-        "value": 1,
-        "on": true,
-        "off": false,
-        "source": "defaultValue",
-        "ruleId": ""
-      }
         "version": {
           "$vlt": "1.2.3-a.b.c.d"
         }
@@ -2362,7 +2239,6 @@
       true
     ],
     [
-      "uses custom values - string",
       "version 0.0.0 > 0.0.0-foo",
       {
         "version": {
@@ -3278,30 +3154,6 @@
       }
     ],
     [
-      "force rule with rule id",
-      {
-        "features": {
-          "feature": {
-            "defaultValue": 2,
-            "rules": [
-              {
-                "id": "a",
-                "force": 1
-              }
-            ]
-          }
-        }
-      },
-      "feature",
-      {
-        "value": 1,
-        "on": true,
-        "off": false,
-        "source": "force",
-        "ruleId": "a"
-      }
-  ],
-    [
       "force rules - force false",
       {
         "features": {
@@ -3458,34 +3310,6 @@
         "source": "defaultValue",
         "ruleId": ""
       }
-    ],
-    [
-        "force rules - coverage 0",
-        {
-            "attributes": {
-                "id": "d0bc0a5a"
-            },
-            "features": {
-                "8d156": {
-                    "defaultValue": 0,
-                    "rules": [
-                        {
-                            "force": 1,
-                            "coverage": 0,
-                            "hashVersion": 2
-                        }
-                    ]
-                }
-            }
-        },
-        "8d156",
-        {
-            "value": 0,
-            "on": false,
-            "off": true,
-            "source": "defaultValue",
-            "ruleId": ""
-        }
     ],
     [
       "force rules - condition pass",
@@ -4772,59 +4596,6 @@
       }
     ],
     [
-        "Prerequisite experiment flag in target bucket, evaluate skip dependent flag if not bucketed",
-        {
-            "attributes": {
-                "id": "1234",
-                "memberType": "basic",
-                "country": "USA"
-            },
-            "features": {
-                "parentExperimentFlag": {
-                    "defaultValue": 0,
-                    "rules": [
-                        {
-                            "key": "experiment",
-                            "variations": [0, 1],
-                            "hashAttribute": "id",
-                            "hashVersion": 2,
-                            "ranges": [
-                                [0, 0.5],
-                                [0.5, 1.0]
-                            ]
-                        }
-                    ]
-                },
-                "childFlag": {
-                    "defaultValue": "default",
-                    "rules": [
-                        {
-                            "parentConditions": [
-                                {
-                                    "id": "parentExperimentFlag",
-                                    "condition": { "value": 0 },
-                                    "gate": true
-                                }
-                            ]
-                        },
-                        {
-                            "condition": { "memberType": "basic" },
-                            "force": "success"
-                        }
-                    ]
-                }
-            }
-        },
-        "childFlag",
-        {
-            "value": null,
-            "on": false,
-            "off": true,
-            "source": "prerequisite",
-            "ruleId": ""
-        }
-    ],
-    [
       "Prerequisite cycle detected, break",
       {
         "attributes": {
@@ -5022,159 +4793,6 @@
         },
         "ruleId": ""
       }
-    ],
-    [
-        "Multiple references to same prerequisite, do not break",
-        {
-            "attributes": {
-                "id": "123",
-                "browser": "edge"
-            },
-            "features": {
-                "childFlag": {
-                    "defaultValue": true,
-                    "rules": [
-                        {
-                            "parentConditions": [
-                                {
-                                    "id": "parentFlag",
-                                    "condition": { "value": { "$ne": false } },
-                                    "gate": true
-                                },
-                                {
-                                    "id": "parentFlag",
-                                    "condition": { "value": true },
-                                    "gate": true
-                                }
-                            ]
-                        },
-                        {
-                            "condition": {
-                                "browser": "safari"
-                            },
-                            "parentConditions": [
-                                {
-                                    "id": "parentFlag",
-                                    "condition": { "value": true }
-                                }
-                            ],
-                            "force": "C"
-                        },
-                        {
-                            "condition": {
-                                "browser": { "$ne": "safari" }
-                            },
-                            "parentConditions": [
-                                {
-                                    "id": "parentFlag",
-                                    "condition": { "value": true }
-                                }
-                            ],
-                            "force": "T"
-                        }
-                    ]
-                },
-                "parentFlag": {
-                    "defaultValue": true
-                }
-            }
-        },
-        "childFlag",
-        {
-            "value": "T",
-            "on": true,
-            "off": false,
-            "source": "force",
-            "ruleId": ""
-        }
-    ],
-    [
-        "SavedGroups correctly pulled from context for force rule",
-        {
-            "attributes": {
-                "id": 123
-            },
-            "features": {
-                "inGroup_force_rule": {
-                    "defaultValue": false,
-                    "rules": [
-                        {
-                            "force": true,
-                            "condition": { "id": { "$inGroup": "group_id" } }
-                        }
-                    ]
-                }
-            },
-            "savedGroups": {
-                "group_id": [123, 456]
-            }
-        },
-        "inGroup_force_rule",
-        {
-          "value": true,
-          "on": true,
-          "off": false,
-          "source": "force",
-          "ruleId": ""
-        }
-    ],
-    [
-        "SavedGroups correctly pulled from context for experiment rule",
-        {
-            "attributes": {
-                "id": 123
-            },
-            "features": {
-                "inGroup_experiment_rule": {
-                    "defaultValue": 0,
-                    "rules": [
-                        {
-                            "key": "experiment",
-                            "condition": { "id": { "$inGroup": "group_id" } },
-                            "hashVersion": 2,
-                            "variations": [1, 2],
-                            "ranges": [
-                                [0, 0.5],
-                                [0.5, 1.0]
-                            ]
-                        }
-                    ]
-                }
-            },
-            "savedGroups": {
-                "group_id": [123, 456]
-            }
-        },
-        "inGroup_experiment_rule",
-        {
-            "value": 1,
-            "on": true,
-            "off": false,
-            "source": "experiment",
-            "experiment": {
-                "hashVersion": 2,
-                "condition": { "id": { "$inGroup": "group_id" } },
-                "variations": [1, 2],
-                "ranges": [
-                    [0, 0.5],
-                    [0.5, 1.0]
-                ],
-                "key": "experiment"
-            },
-            "experimentResult": {
-                "featureId": "inGroup_experiment_rule",
-                "hashAttribute": "id",
-                "hashUsed": true,
-                "hashValue": 123,
-                "inExperiment": true,
-                "key": "0",
-                "value": 1,
-                "variationId": 0,
-                "bucket": 0.1736,
-                "stickyBucketUsed": false
-            },
-            "ruleId": ""
-        }
     ]
   ],
   "run": [
@@ -6327,21 +5945,18 @@
     ]
   ],
   "stickyBucket": [
-      [
-          "use fallbackAttribute when missing hashAttribute",
-          {
-              "attributes": { "anonymousId": "123" },
-              "features": {
-                  "feature": {
-                      "defaultValue": 0,
-                      "rules": [
-                          {
-                              "variations": [0, 1, 2, 3],
-                              "hashAttribute": "id",
-                              "fallbackAttribute": "anonymousId"
-                          }
-                      ]
-                  }
+    [
+      "use fallbackAttribute when missing hashAttribute",
+      {
+        "attributes": { "anonymousId": "123" },
+        "features": {
+          "feature": {
+            "defaultValue": 0,
+            "rules": [
+              {
+                "variations": [0, 1, 2, 3],
+                "hashAttribute": "id",
+                "fallbackAttribute": "anonymousId"
               }
             ]
           }
@@ -6740,12 +6355,39 @@
             "feature-exp__0": "1",
             "feature-exp__3": "2"
           },
-          {
-              "anonymousId||123": {
-                  "assignments": { "feature__0": "3" },
-                  "attributeName": "anonymousId",
-                  "attributeValue": "123"
+          "attributeName": "id",
+          "attributeValue": "i123"
+        }
+      }
+    ],
+    [
+      "stops test enrollment when and existing sticky bucket is blocked by version",
+      {
+        "attributes": {
+          "id": "i123",
+          "foo": "bar",
+          "country": "USA"
+        },
+        "features": {
+          "exp1": {
+            "defaultValue": "control",
+            "rules": [
+              {
+                "key": "feature-exp",
+                "seed": "feature-exp",
+                "hashAttribute": "id",
+                "fallbackAttribute": "deviceId",
+                "hashVersion": 2,
+                "bucketVersion": 3,
+                "minBucketVersion": 3,
+                "condition": { "country": "USA" },
+                "variations": ["control", "red", "blue"],
+                "meta": [{ "key": "0" }, { "key": "1" }, { "key": "2" }],
+                "coverage": 1,
+                "weights": [0.3334, 0.3333, 0.3333],
+                "phase": "0"
               }
+            ]
           }
         }
       },
@@ -6763,26 +6405,39 @@
           "assignments": {
             "feature-exp__0": "1"
           },
-          [],
-          "exp1",
-          {
-              "bucket": 0.6468,
-              "featureId": "exp1",
-              "hashAttribute": "deviceId",
-              "hashUsed": true,
-              "hashValue": "d123",
-              "inExperiment": true,
-              "key": "1",
-              "stickyBucketUsed": false,
-              "value": "red",
-              "variationId": 1
-          },
-          {
-              "deviceId||d123": {
-                  "assignments": { "feature-exp__0": "1" },
-                  "attributeName": "deviceId",
-                  "attributeValue": "d123"
+          "attributeName": "id",
+          "attributeValue": "i123"
+        }
+      }
+    ],
+    [
+      "disables sticky bucketing when disabled by experiment",
+      {
+        "attributes": {
+          "id": "i123",
+          "foo": "bar",
+          "country": "USA"
+        },
+        "features": {
+          "exp1": {
+            "defaultValue": "control",
+            "rules": [
+              {
+                "key": "feature-exp",
+                "seed": "feature-exp",
+                "hashAttribute": "id",
+                "fallbackAttribute": "deviceId",
+                "hashVersion": 2,
+                "bucketVersion": 1,
+                "disableStickyBucketing": true,
+                "condition": { "country": "USA" },
+                "variations": ["control", "red", "blue"],
+                "meta": [{ "key": "0" }, { "key": "1" }, { "key": "2" }],
+                "coverage": 1,
+                "weights": [0.3334, 0.3333, 0.3333],
+                "phase": "0"
               }
+            ]
           }
         }
       },
