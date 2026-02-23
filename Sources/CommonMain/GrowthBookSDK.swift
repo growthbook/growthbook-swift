@@ -339,7 +339,7 @@ public struct GrowthBookModel {
         }
         
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
-        if let sseURL = evalData.streamingHost, globalConfig.backgroundSync {
+        if let sseURL = contextManager.getSSEUrl(), globalConfig.backgroundSync {
             featureVM.connectBackgroundSync(sseUrl: sseURL)
         }
         
