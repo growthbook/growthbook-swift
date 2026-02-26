@@ -11,10 +11,10 @@ import Foundation
         self.defaultValue = defaultValue
         self.rules = rules
     }
-    
+
     init(json: [String: JSON]) {
         defaultValue = json["defaultValue"]
-        
+
         rules = json["rules"]?.map({ key, value in
             FeatureRule(json: value.dictionaryValue)
         })
@@ -116,50 +116,50 @@ public struct FeatureRule: Codable, Sendable {
         self.phase = phase
         self.tracks = tracks
     }
-    
-    init(json: [String: JSON]) {        
+
+    init(json: [String: JSON]) {
         id = json["id"]?.stringValue ?? ""
-        
+
         condition = json["condition"]
 
         parentConditions = json["parentConditions"]?.map({ key, value in
             ParentConditionInterface(json: value.dictionaryValue)
         })
-        
+
         coverage = json["coverage"]?.floatValue
-        
+
         force = json["force"]
-        
+
         variations = json["variations"]?.arrayValue
-        
+
         key = json["key"]?.stringValue
- 
+
         if let weights = json["weights"]?.arrayValue {
             self.weights = JSON.convertToArrayFloat(jsonArray: weights)
         } else {
             self.weights = nil
         }
-        
+
         namespace = json["namespace"]?.arrayValue
-        
+
         hashAttribute = json["hashAttribute"]?.stringValue
-        
+
         hashVersion = json["hashVersion"]?.floatValue
 
         fallbackAttribute = json["fallbackAttribute"]?.stringValue
-        
+
         disableStickyBucketing = json["disableStickyBucketing"]?.boolValue
-        
+
         bucketVersion = json["bucketVersion"]?.intValue
-        
+
         minBucketVersion = json["minBucketVersion"]?.intValue
-        
+
         if let range = json["range"] {
             self.range = BucketRange(json: range)
         } else {
             self.range = nil
         }
-        
+
         if let ranges = json["ranges"] {
             self.ranges = ranges.map({ key, value in
                 BucketRange(json: value)
@@ -167,21 +167,21 @@ public struct FeatureRule: Codable, Sendable {
         } else {
             self.ranges = nil
         }
-        
+
         meta = json["meta"]?.map({ key, value in
             VariationMeta(json: value.dictionaryValue)
         })
-                
+
         filters = json["filters"]?.map({ key, value in
             Filter(json: value.dictionaryValue)
         })
-    
+
         seed = json["seed"]?.stringValue
-        
+
         name = json["name"]?.stringValue
-        
+
         phase = json["phase"]?.stringValue
-        
+
         tracks = json["tracks"]?.map({ key, value in
             Track(json: value.dictionaryValue)
         })
@@ -232,7 +232,7 @@ enum FeatureSource: String {
         self.experimentResult = result
         self.ruleId = ruleId
     }
-    
+
     init(json: [String: JSON]) {
         if let value = json["value"] {
             self.value = value
@@ -270,7 +270,7 @@ enum FeatureSource: String {
             self.ruleId = ""
         }
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case value, isOn = "on", isOff = "off", source, experiment, experimentResult, ruleId
     }

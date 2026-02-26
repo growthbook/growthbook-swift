@@ -6,7 +6,7 @@ public enum Constants {
     public static let idAttributeKey = "id"
     /// Identifier for Caching Feature Data in Internal Storage File
     public static let featureCache = "FeatureCache"
-    
+
     public static let savedGroupsCache = "SavedGroupsCache"
 }
 
@@ -20,7 +20,7 @@ public struct ParentConditionInterface: Codable {
     public let id: String
     public let condition: JSON
     public let gate: Bool?
-    
+
     init(json: [String: JSON]) {
         self.id = json["id"]?.stringValue ?? ""
         self.condition = json["condition"] ?? JSON()
@@ -29,7 +29,7 @@ public struct ParentConditionInterface: Codable {
 }
 
 /// Handler for Refresh Cache Request
-/// 
+///
 /// It updates back whether cache was refreshed or not
 public typealias CacheRefreshHandler = @Sendable (SDKError?) -> Void
 
@@ -48,12 +48,12 @@ typealias NameSpace = (String, Float, Float)
 public struct BucketRange: Codable {
     let number1: Float
     let number2: Float
-    
+
     init(number1: Float, number2: Float) {
         self.number1 = number1
         self.number2 = number2
     }
-    
+
     init(json: JSON) {
         if json.arrayValue.isEmpty {
             number1 = 0
@@ -84,12 +84,12 @@ public enum SDKErrorCode: String {
     static let failedEncryptedSavedGroups = SDKError(code: .failedEncryptedSavedGroups)
     static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
     static let failedToFetchData = SDKError(code: .failedToFetchData)
-    
+
     static func failedToFetchData(_ error: Error?) -> SDKError { .init(code: .failedToFetchData, underlying: error) }
-    
+
     public let code: SDKErrorCode
     public let underlying: Error?
-    
+
     init(code: SDKErrorCode, underlying: Error? = nil) {
         self.code = code
         self.underlying = underlying
@@ -104,7 +104,7 @@ public struct VariationMeta: Codable {
     let key: String?
     /// A human-readable name for this variation
     let name: String?
-    
+
     init(json: [String: JSON]) {
         self.passthrough = json["passthrough"]?.boolValue
         self.key = json["key"]?.stringValue
@@ -114,11 +114,11 @@ public struct VariationMeta: Codable {
 
 public struct Track: Codable {
     public let experiment: Experiment?
-    public let result: FeatureResult?
-    
+    public let result: ExperimentResult?
+
     init(json: [String: JSON]) {
         experiment = Experiment(json: json["experiment"]?.dictionaryValue ?? [:])
-        result = FeatureResult(json: json["result"]?.dictionaryValue ?? [:])
+        result = ExperimentResult(json: json["result"]?.dictionaryValue ?? [:])
     }
 }
 
@@ -126,7 +126,7 @@ public struct Track: Codable {
 public struct TrackData: Codable {
     let experiment: Experiment
     let result: ExperimentResult
-    
+
     init(json: [String: JSON]) {
         // TODO: - Need to check it
         experiment = Experiment(json: json["experiment"]?.dictionaryValue ?? [:])
@@ -144,9 +144,9 @@ public struct TrackData: Codable {
     var hashVersion: Float
     /// Array of ranges that are included
     var ranges: [BucketRange]
-    
+
     var fallbackAttribute: String?
-    
+
     init(attribute: String?, seed: String, hashVersion: Float, ranges: [BucketRange], fallbackAttribute: String?) {
         self.attribute = attribute
         self.seed = seed
@@ -154,7 +154,7 @@ public struct TrackData: Codable {
         self.ranges = ranges
         self.fallbackAttribute = fallbackAttribute
     }
-    
+
     init(json: [String: JSON]) {
         self.attribute = json["attribute"]?.stringValue
         self.seed = json["seed"]?.stringValue ?? ""

@@ -158,25 +158,25 @@ class ConditionEvaluator {
         if conditionValue.type == .null {
             return attributeValue == nil || attributeValue?.type == .null
         }
-        
+
         // Protection from nil values
         let unwrappedAttribute = attributeValue ?? .null
-        
+
         // String comparison
         if conditionValue.type == .string && unwrappedAttribute.type == .string {
             return conditionValue.stringValue == unwrappedAttribute.stringValue
         }
-        
+
         // Number comparison
         if conditionValue.type == .number && unwrappedAttribute.type == .number {
             return conditionValue.doubleValue == unwrappedAttribute.doubleValue
         }
-        
+
         // Boolean comparison
         if conditionValue.type == .bool && unwrappedAttribute.type == .bool {
             return conditionValue.boolValue == unwrappedAttribute.boolValue
         }
-        
+
         // Array comparison - more detailed with deep equality check
         if let conditionArray = conditionValue.array {
             if let attributeArray = unwrappedAttribute.array {
@@ -197,7 +197,7 @@ class ConditionEvaluator {
                 return false
             }
         }
-        
+
         // Processing condition objects
         if let _ = conditionValue.dictionary {
             if isOperatorObject(obj: conditionValue) {
@@ -219,7 +219,7 @@ class ConditionEvaluator {
                 return false
             }
         }
-        
+
         // If nothing worked, return to simple comparison
         return conditionValue == unwrappedAttribute
     }
@@ -357,7 +357,7 @@ class ConditionEvaluator {
                 if attributeValue != .null, let conditionString = conditionValue.string {
                     return Common.isIn(actual: attributeValue, expected: savedGroups?[conditionString].array ?? [] )
                 }
-            case "$notInGroup": 
+            case "$notInGroup":
                 if attributeValue != .null, let conditionString = conditionValue.string {
                     return !Common.isIn(actual: attributeValue, expected: savedGroups?[conditionString].array ?? [])
                 }
@@ -485,12 +485,12 @@ class ConditionEvaluator {
 
     private func isContains(source: String, target: String) -> Bool {
         let convertedItem = target.replacingOccurrences(of: "([^\\\\])\\/", with: "$1\\/")
-        
+
         do {
             let regex = try NSRegularExpression(pattern: convertedItem)
             let range = NSRange(location: 0, length: source.utf16.count)
             let isMatch = regex.firstMatch(in: source, options: [], range: range) != nil
-            
+
             return isMatch
         } catch {
             return false
@@ -498,11 +498,11 @@ class ConditionEvaluator {
     }
 
     private func isPrimitive(value: JSON) -> Bool {
-        
+
         if value.number != nil || value.string != nil || value.bool != nil || value.int != nil || value == .null {
             return true
         }
         return false
     }
-    
+
 }
