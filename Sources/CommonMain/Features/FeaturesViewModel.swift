@@ -31,6 +31,7 @@ class FeaturesViewModel {
     }
 
 
+
     private func isCacheExpired() -> Bool {
         guard let expiresAt = expiresAt else {
             return true
@@ -41,6 +42,7 @@ class FeaturesViewModel {
     private func refreshExpiresAt() {
         expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
     }
+
 
     func connectBackgroundSync(sseUrl: String) {
         guard let url = URL(string: sseUrl) else { return }
@@ -67,6 +69,7 @@ class FeaturesViewModel {
     deinit {
         sseHandler?.disconnect()
     }
+
 
     private func fetchCachedFeatures(logging: Bool = false) {
         // Check for cache data
@@ -174,6 +177,7 @@ class FeaturesViewModel {
                 logger.error("Failed get encrypted features or it's empty")
                 return
             }
+
 
             if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                 let crypto = Crypto()

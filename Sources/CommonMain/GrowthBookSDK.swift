@@ -47,6 +47,7 @@ public struct GrowthBookModel {
 
     private var ttlSeconds: Int
 
+
     @objc public init(
         apiHost: String? = nil,
         clientKey: String? = nil,
@@ -86,6 +87,7 @@ public struct GrowthBookModel {
     }
 
 
+
     @objc public init(
         features: Data,
         attributes: [String: Any],
@@ -115,6 +117,8 @@ public struct GrowthBookModel {
         self.cachingManager = CachingManager()
         self.ttlSeconds = ttlSeconds
     }
+
+
 
     init(
         apiHost: String,
@@ -311,6 +315,7 @@ public struct GrowthBookModel {
 
     private let lock = NSRecursiveLock()
 
+
     init(contextManager: ContextManager,
          refreshHandler: CacheRefreshHandler? = nil,
          logLevel: Level = .info,
@@ -331,6 +336,7 @@ public struct GrowthBookModel {
 
         let evalData = contextManager.getEvaluationData()
         let globalConfig = contextManager.getGlobalConfig()
+
 
         if let features = features {
             contextManager.updateEvalData { data in
@@ -354,6 +360,7 @@ public struct GrowthBookModel {
 
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
+
 
         if let service = globalConfig.stickyBucketService,
            let docs = evalData.stickyBucketAssignmentDocs {

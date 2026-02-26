@@ -118,7 +118,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: .failedToLoadData)), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
 
         viewModel.manager.clearCache()
-
+        
         viewModel.fetchFeatures(apiUrl: "")
 
         XCTAssertFalse(isSuccess)

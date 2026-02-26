@@ -37,7 +37,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     }
 
     func testApiURL() throws {
-        var gbContext = Context(apiHost: testApiHost,
+        let gbContext = Context(apiHost: testApiHost,
                                 streamingHost: testStreamingHost,
                                 clientKey: testClientKey,
                                 encryptionKey: nil,
@@ -258,6 +258,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
                                             backgroundSync: false).setRefreshHandler(refreshHandler: { _ in
 
         }).setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
+            .setSystemCacheDirectory(.applicationSupport)
             .initializer()
 
         let fileName = "gb-features.txt"
