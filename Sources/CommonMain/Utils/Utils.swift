@@ -265,14 +265,17 @@ public class Utils {
     }
     
     // Update sticky bucketing configuration
-    static func refreshStickyBuckets(context: EvalContext, attributes: JSON, data: FeaturesDataModel?) {
-        guard let stickyBucketService = context.options.stickyBucketService else {
-            return
-        }
+    static func refreshStickyBuckets(stickyBucketService: StickyBucketServiceProtocol,
+                                     context: EvalContext,
+                                     attributes: JSON,
+                                     data: FeaturesDataModel?,
+                                     completion: @escaping ([String: StickyAssignmentsDocument]?) -> Void) {
+        let allAttributes = getStickyBucketAttributes(
+                context: context, attributes: attributes, data: data
+            )
         
-        let allAttributes = getStickyBucketAttributes(context: context, attributes: attributes, data: data);
-        stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, error in
-            context.options.stickyBucketAssignmentDocs = docs
+        stickyBucketService.getAllAssignments(attributes: allAttributes) { docs, _ in
+                completion(docs)
         }
     }
     
@@ -339,7 +342,7 @@ public class Utils {
         )
         
         if minExperimentBucketVersion > 0 {
-            for version in 0...minExperimentBucketVersion {
+            for version in 0..<minExperimentBucketVersion {
                 let blockedKey = getStickyBucketExperimentKey(experimentKey, version)
                 if let _ = assignments[blockedKey] {
                     return (variation: -1, versionIsBlocked: true)
@@ -437,6 +440,15 @@ public class Utils {
         return getQueryStringOverride(id: id, url: url, numberOfVariations: numberOfVariations)
     }
     
+    /// Creates an EvalContext from a Context object.
+    /// 
+    /// - Deprecated: This method is deprecated. Use `ContextManager.getEvalContext()` instead.
+    ///   The logic has been moved to `ContextManager.buildEvalContext()` for better encapsulation.
+    ///   This method is kept for backward compatibility with existing tests.
+    /// 
+    /// - Parameter context: The Context object to create EvalContext from
+    /// - Returns: A new EvalContext instance
+    @available(*, deprecated, message: "Use ContextManager.getEvalContext() instead. This method is kept for backward compatibility with tests.")
     static func initializeEvalContext(context: Context) -> EvalContext {
         let options = ClientOptions(isEnabled: context.isEnabled,
                                     stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs,

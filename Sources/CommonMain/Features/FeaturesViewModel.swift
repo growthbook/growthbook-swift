@@ -102,9 +102,9 @@ class FeaturesViewModel {
                 switch result {
                 case .success(let data):
                     self.prepareFeaturesData(data: data)
-
                 case .failure(let error):
                     logger.info("Failed to get features from remote: \(error.localizedDescription)")
+                    self.delegate?.featuresFetchFailed(error: .failedToFetchData, isRemote: true)
                     self.fetchCachedFeatures()
                 }
             }
