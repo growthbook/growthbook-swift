@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import os
 
 public enum Level: Int {
     case trace, debug, info, warning, error
@@ -21,7 +22,7 @@ extension Level: Comparable {
     }
 }
 
-open class Logger {
+open class GBLogger {
     /// The logger state.
     open var enabled: Bool = true
 
@@ -48,7 +49,14 @@ open class Logger {
 
     /// The queue used for logging.
     private let queue = DispatchQueue(label: "delba.log")
-
+    
+    private var osLogger: Any? = {
+        if #available(iOS 14.0, macCatalyst 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *) {
+            return Logger(subsystem: "com.growthbook.sdk", category: "GrowthBook")
+        } else {
+            return OSLog(subsystem: "com.growthbook.sdk", category: "GrowthBook")
+        }
+    }()
     /**
      Creates and returns a new logger.
 
@@ -153,11 +161,12 @@ open class Logger {
      - parameter column:     The column at which the log happens.
      - parameter function:   The function in which the log happens.
      */
-    private func log(_ level: Level, _ items: [Any], _ separator: String, _ terminator: String, _ file: String, _ line: Int, _ column: Int, _ function: String) {
+    private func log(_ level: Level, _ items: [Any], _ separator: String, _ terminator: String,
+                     _ file: String, _ line: Int, _ column: Int, _ function: String) {
         guard enabled && level >= minLevel else { return }
-
+        
         let date = Date()
-
+        
         let result = formatter.format(
             level: level,
             items: items,
@@ -169,9 +178,27 @@ open class Logger {
             function: function,
             date: date
         )
-
+        
         queue.async {
-            Swift.print(result, separator: "", terminator: "")
+            if #available(iOS 14.0, macCatalyst 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *) {
+                guard let logger = self.osLogger as? Logger else { return }
+                switch level {
+                case .trace, .debug:
+                    logger.debug("\(result)")
+                case .info:
+                    logger.info("\(result)")
+                case .warning:
+                    logger.warning("\(result)")
+                case .error:
+                    logger.error("\(result)")
+                }
+            } else {
+                if let logger = self.osLogger as? OSLog {
+                    os_log("%@", logger, result)
+                } else {
+                    Swift.print(result, separator: "", terminator: "")
+                }
+            }
         }
     }
 }

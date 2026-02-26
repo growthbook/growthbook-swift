@@ -2,9 +2,11 @@ import Foundation
 
 /// Defines the GrowthBook context.
 @objc public class Context: NSObject {
-    /// your api host
+    /// Your api host
     public let apiHost: String?
-    /// unique client key
+    /// Your streaming host
+    public var streamingHost: String?
+    /// Unique client key
     public let clientKey: String?
     /// Encryption key for encrypted features.
     public let encryptionKey: String?
@@ -28,13 +30,18 @@ import Foundation
     public var stickyBucketIdentifierAttributes: [String]?
     /// Enable to use remote evaluation
     public let remoteEval: Bool
-    // Keys are unique identifiers for the features and the values are Feature objects.
-    // Feature definitions - To be pulled from API / Cache
+    /// Keys are unique identifiers for the features and the values are Feature objects.
+    /// Feature definitions - To be pulled from API / Cache
     var features: Features
-    
+    /// Target the same group of users across multiple features and experiments with Saved Groups
     public var savedGroups: JSON?
+    
+    public var url: String? = nil
+    
+    public var forcedFeatureValues: JSON? = nil
 
     init(apiHost: String?,
+         streamingHost: String?,
          clientKey: String?,
          encryptionKey: String?,
          isEnabled: Bool,
@@ -48,8 +55,11 @@ import Foundation
          features: Features = [:],
          backgroundSync: Bool = false,
          remoteEval: Bool = false,
-         savedGroups: JSON? = nil) {
+         savedGroups: JSON? = nil,
+         url: String? = nil,
+         forcedFeatureValues: JSON? = nil) {
         self.apiHost = apiHost
+        self.streamingHost = streamingHost
         self.clientKey = clientKey
         self.encryptionKey = encryptionKey
         self.isEnabled = isEnabled
@@ -64,9 +74,11 @@ import Foundation
         self.backgroundSync = backgroundSync
         self.remoteEval = remoteEval
         self.savedGroups = savedGroups
+        self.url = url
+        self.forcedFeatureValues = forcedFeatureValues
     }
     
-    @objc public func getFeaturesURL() -> String? {
+    @objc func getFeaturesURL() -> String? {
         if let apiHost = apiHost, let clientKey = clientKey {
             return "\(apiHost)/api/features/\(clientKey)"
         } else {
@@ -74,7 +86,7 @@ import Foundation
         }
     }
     
-    @objc public func getRemoteEvalUrl() -> String? {
+    @objc func getRemoteEvalUrl() -> String? {
         if let apiHost = apiHost, let clientKey = clientKey {
             return  "\(apiHost)/api/eval/\(clientKey)"
         } else {
@@ -82,9 +94,9 @@ import Foundation
         }
     }
     
-    @objc public func getSSEUrl() -> String? {
-        if let apiHost = apiHost, let clientKey = clientKey {
-            return "\(apiHost)/sub/\(clientKey)"
+    @objc func getSSEUrl() -> String? {
+        if let host = streamingHost ?? apiHost, let clientKey = clientKey {
+            return "\(host)/sub/\(clientKey)"
         } else {
             return nil
         }

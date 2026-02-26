@@ -33,6 +33,10 @@ class FeatureEvaluator {
         context.stackContext.evaluatedFeatures.insert(featureKey)
         context.stackContext.id = featureKey
         
+        defer {
+            context.stackContext.evaluatedFeatures.remove(featureKey)
+        }
+        
         if context.userContext.forcedFeatureValues?.dictionaryValue[featureKey] != nil {
             let value = context.userContext.forcedFeatureValues?[featureKey] ?? "nil"
             logger.info("Global override for forced feature with key: \(featureKey) and value \(value)")
@@ -55,11 +59,13 @@ class FeatureEvaluator {
                     for parentCondition in parentConditions {
                         context.stackContext.evaluatedFeatures = Set(evaluatedFeatures)
 
-                        let parentResult = FeatureEvaluator(
+                        let parentEvaluator = FeatureEvaluator(
                             context: context,
                             featureKey: parentCondition.id
                         )
-                        .evaluateFeature()
+                        let parentResult = parentEvaluator.evaluateFeature()
+                        // Propagate any sticky bucket assignments from parent evaluation
+                        Utils.propagateStickyAssignments(from: parentEvaluator.context, to: context)
                         
                         if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
                             let featureResultWhenCircularDependencyDetected =  prepareResult(
@@ -74,7 +80,7 @@ class FeatureEvaluator {
                         
                         let evalCondition = ConditionEvaluator().isEvalCondition(
                             attributes: evalObjc,
-                            conditionObj: parentCondition.condition, 
+                            conditionObj: parentCondition.condition,
                             savedGroups: context.globalContext.savedGroups
                         )
                         
@@ -131,8 +137,7 @@ class FeatureEvaluator {
                     
                     if let tracks = rule.tracks {
                         tracks.forEach { track in
-                            if let experiment = track.result?.experiment, let result = track.result?.experimentResult {
-                                // Only track if experiment is active and user is in experiment
+                            if let experiment = track.experiment, let result = track.result {
                                 let experimentIsActive = experiment.isActive ?? true
                                 let userInExperiment = result.inExperiment
                                 if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
@@ -218,7 +223,7 @@ class FeatureEvaluator {
     /// This is a helper method to create a FeatureResult object.
     ///
     /// Besides the passed-in arguments, there are two derived values - on and off, which are just the value cast to booleans.
-    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = nil) -> FeatureResult {
+    private func prepareResult(value: JSON?, source: FeatureSource, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = "") -> FeatureResult {
         var isFalse = false
         if let value = value {
             isFalse = value.stringValue == "false" || value.stringValue == "0" || (value.stringValue.isEmpty && value.dictionary == nil && value.array == nil)
@@ -240,3 +245,4 @@ struct FeatureEvalContext {
     var id: String?
     var evaluatedFeatures: Set<String>
 }
+

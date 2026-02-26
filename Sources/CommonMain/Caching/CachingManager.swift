@@ -2,20 +2,29 @@ import Foundation
 import CommonCrypto
 
 /// Interface for Caching Layer
-public protocol CachingLayer: AnyObject {
+@objc public protocol CachingLayer: AnyObject {
     func saveContent(fileName: String, content: Data)
     func getContent(fileName: String) -> Data?
     func setCacheKey(_ key: String)
+    func clearCache()
+    func setSystemCacheDirectory(_ directory: CacheDirectory)
+    func setCustomCachePath(_ path: String)
 }
 
 /// This is actual implementation of Caching Layer in iOS
 @objc public class CachingManager: NSObject, CachingLayer {
     
-    private var cacheDirectory = CacheDirectory.applicationSupport
+    private var cacheDirectory: CacheDirectory = {
+        #if os(tvOS)
+        return .caches
+        #else
+        return .applicationSupport
+        #endif
+    }()
     private var customCachePath: String?
     private var cacheKey: String = ""
     
-    init(apiKey: String? = nil) {
+    public init(apiKey: String? = nil) {
         super.init()
         if let apiKey {
             self.setCacheKey(apiKey)
@@ -35,14 +44,6 @@ public protocol CachingLayer: AnyObject {
         let key = hash.map { String(format: "%02x", $0) }.joined()
         return String(key.prefix(5))
     }
-    
-    @objc func getData(fileName: String) -> Data? {
-        return getContent(fileName: fileName)
-    }
-
-    @objc func putData(fileName: String, content: Data) {
-        saveContent(fileName: fileName, content: content)
-    }
 
     /// Set a custom cache saving directory
     @objc public func setCustomCachePath(_ path: String) {
@@ -50,7 +51,17 @@ public protocol CachingLayer: AnyObject {
     }
     
     @objc public func setSystemCacheDirectory(_ directory: CacheDirectory) {
-        cacheDirectory = directory
+        #if os(tvOS)
+        if directory == .applicationSupport {
+            logger.warning("CacheDirectory.applicationSupport is not supported on tvOS. Falling back to .caches.")
+            self.cacheDirectory = .caches
+        } else {
+            self.cacheDirectory = directory
+        }
+        #else
+        self.cacheDirectory = directory
+        #endif
+
         self.customCachePath = nil
     }
     

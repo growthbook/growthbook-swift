@@ -70,7 +70,7 @@ public struct FeatureRule: Codable, Sendable {
     /// Array of tracking calls to fire
     public let tracks: [Track]?
 
-    init(id: String? = nil, condition: Condition? = nil,
+    init(id: String? = "", condition: Condition? = nil,
          coverage: Float? = nil,
          parentConditions: [ParentConditionInterface]? = nil,
          force: JSON? = nil,
@@ -118,7 +118,7 @@ public struct FeatureRule: Codable, Sendable {
     }
     
     init(json: [String: JSON]) {        
-        id = json["id"]?.stringValue
+        id = json["id"]?.stringValue ?? ""
         
         condition = json["condition"]
 
@@ -223,7 +223,7 @@ enum FeatureSource: String {
     /// Unique identifier of rule
     public let ruleId: String?
 
-    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = nil) {
+    init(value: JSON? = JSON.null, isOn: Bool = false, source: String, experiment: Experiment? = nil, result: ExperimentResult? = nil, ruleId: String? = "") {
         self.isOn = isOn
         self.isOff = !isOn
         self.value = value

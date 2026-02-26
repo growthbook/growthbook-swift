@@ -31,6 +31,7 @@ class StickyBucketingFeatureTests: XCTestCase {
             }
             
             let gbContext = Context(apiHost: nil,
+                                    streamingHost: nil,
                                     clientKey: nil,
                                     encryptionKey: nil,
                                     isEnabled: true,

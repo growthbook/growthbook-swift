@@ -1,7 +1,7 @@
 import Foundation
 
 /// Experiment Evaluator Class
-/// 
+///
 /// Takes Context & Experiment & returns Experiment Result
 class ExperimentEvaluator {
     
@@ -14,8 +14,19 @@ class ExperimentEvaluator {
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
         
+        // Query string overrides
+        let override = Utils.getQueryStringOverride(
+            id: experiment.key,
+            urlString: context.options.url,
+            numberOfVariations:experiment.variations.count
+        )
+        if (override != nil) {
+            return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: override!, hashUsed: false, featureId: featureId)
+        }
+        
         // If context.forcedVariations[experiment.trackingKey] is defined, return immediately (not in experiment, forced variation)
         if let forcedVariation = context.userContext.forcedVariations?.dictionaryValue[experiment.key] {
+            logger.trace("Forced variation found for experiment \(experiment.key). \nForced variation: \(forcedVariation)")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: forcedVariation.intValue, hashUsed: false, featureId: featureId)
         }
         
@@ -82,7 +93,10 @@ class ExperimentEvaluator {
                     context.stackContext.evaluatedFeatures = Set(originalEvaluatedFeatures)
                     
                     // TODO: option is to not pass attributeOverrides
-                    let parentResult = FeatureEvaluator(context: context, featureKey: parentCondition.id).evaluateFeature()
+                    let parentEvaluator = FeatureEvaluator(context: context, featureKey: parentCondition.id)
+                    let parentResult = parentEvaluator.evaluateFeature()
+                    // Propagate any sticky bucket assignments from parent evaluation
+                    Utils.propagateStickyAssignments(from: parentEvaluator.context, to: context)
                     
                     if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
                         return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
@@ -91,7 +105,7 @@ class ExperimentEvaluator {
                     let evalObj = ["value": parentResult.value]
                     let evalCondition = ConditionEvaluator().isEvalCondition(
                         attributes: JSON(evalObj),
-                        conditionObj: parentCondition.condition, 
+                        conditionObj: parentCondition.condition,
                         savedGroups: context.globalContext.savedGroups
                     )
                     
@@ -133,6 +147,7 @@ class ExperimentEvaluator {
 
         // If context.qaMode is true, return immediately (not in experiment, variationId 0)
         if context.options.isQaMode {
+            logger.info("Skip because QA mode")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
         
@@ -148,7 +163,11 @@ class ExperimentEvaluator {
             if changed {
                 context.userContext.stickyBucketAssignmentDocs = context.userContext.stickyBucketAssignmentDocs ?? [:]
                 context.userContext.stickyBucketAssignmentDocs?[key] = doc
-                context.options.stickyBucketService?.saveAssignments(doc: doc)
+                context.options.stickyBucketService?.saveAssignments(doc: doc, completion: { error in
+                    if let error {
+                        logger.error("Sticky bucketing error: \(error.localizedDescription)")
+                    }
+                })
             }
         }
         
