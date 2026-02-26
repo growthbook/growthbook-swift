@@ -230,8 +230,15 @@ class GrowthBookSDKBuilderTests: XCTestCase {
             XCTFail()
             return
         }
-        XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].condition == features["testfeature1"]?.rules?[0].condition)
-        XCTAssertTrue(sdkInstance.gbContext.features["testfeature1"]?.rules?[0].force == features["testfeature1"]?.rules?[0].force)
+        XCTAssertTrue(sdkInstance.getGBContext().features["testfeature1"]?.rules?[0].condition == features["testfeature1"]?.rules?[0].condition)
+        XCTAssertTrue(sdkInstance.getGBContext().features["testfeature1"]?.rules?[0].force == features["testfeature1"]?.rules?[0].force)
+
+        if let feature = sdkInstance.getGBContext().features["testfeature1"] {
+            XCTAssertTrue(feature.rules?[0].condition == feature.rules?[0].condition)
+            XCTAssertTrue(feature.rules?[0].force == feature.rules?[0].force)
+        } else {
+            XCTFail()
+        }
     }
     
     func testClearCache() throws {
