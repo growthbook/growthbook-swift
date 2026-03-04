@@ -22,3 +22,4 @@ Pod::Spec.new do |spec|
   spec.swift_version = '5.2'
 
 end
+
