@@ -239,7 +239,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         }
         XCTAssertTrue(sdkInstance.getGBContext().features["testfeature1"]?.rules?[0].condition == features["testfeature1"]?.rules?[0].condition)
         XCTAssertTrue(sdkInstance.getGBContext().features["testfeature1"]?.rules?[0].force == features["testfeature1"]?.rules?[0].force)
-        
+
         if let feature = sdkInstance.getGBContext().features["testfeature1"] {
             XCTAssertTrue(feature.rules?[0].condition == feature.rules?[0].condition)
             XCTAssertTrue(feature.rules?[0].force == feature.rules?[0].force)
