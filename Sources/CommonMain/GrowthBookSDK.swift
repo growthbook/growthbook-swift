@@ -16,6 +16,7 @@ public struct GrowthBookModel {
     var clientKey: String?
     var encryptionKey: String?
     var features: Data?
+    var fallbackFeatures: Data?
     var attributes: JSON
     var trackingClosure: TrackingCallback
     var logLevel: Level = .info
@@ -41,7 +42,9 @@ public struct GrowthBookModel {
 
     private var refreshHandler: CacheRefreshHandler?
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
+
     private var cachingManager: CachingLayer
+
     private var ttlSeconds: Int
 
     @objc public init(
@@ -56,28 +59,29 @@ public struct GrowthBookModel {
         remoteEval: Bool = false,
         ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
-        streamingHostRequestHeaders: [String: String]? = nil) {
+        streamingHostRequestHeaders: [String: String]? = nil
+    ) {
+        growthBookBuilderModel = GrowthBookModel(
+            apiHost: apiHost,
+            clientKey: clientKey,
+            encryptionKey: encryptionKey,
+            features: features,
+            attributes: JSON(attributes),
+            trackingClosure: trackingCallback,
+            backgroundSync: backgroundSync,
+            remoteEval: remoteEval,
+            apiRequestHeaders: apiRequestHeaders,
+            streamingHostRequestHeaders: streamingHostRequestHeaders
+        )
 
-            growthBookBuilderModel = GrowthBookModel(
-                apiHost: apiHost,
-                clientKey: clientKey,
-                encryptionKey: encryptionKey,
-                features: features,
-                attributes: JSON(attributes),
-                trackingClosure: trackingCallback,
-                backgroundSync: backgroundSync,
-                remoteEval: remoteEval,
-                apiRequestHeaders: apiRequestHeaders,
-                streamingHostRequestHeaders: streamingHostRequestHeaders
-            )
-            self.refreshHandler = refreshHandler
-            self.networkDispatcher = CoreNetworkClient(
-                apiRequestHeaders: apiRequestHeaders ?? [:],
-                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-            )
-            self.cachingManager = CachingManager(apiKey: clientKey)
-            self.ttlSeconds = ttlSeconds
-        }
+        self.refreshHandler = refreshHandler
+        self.networkDispatcher = CoreNetworkClient(
+            apiRequestHeaders: apiRequestHeaders ?? [:],
+            streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+        )
+        self.cachingManager = CachingManager(apiKey: clientKey)
+        self.ttlSeconds = ttlSeconds
+    }
 
 
     @objc public init(
@@ -91,24 +95,24 @@ public struct GrowthBookModel {
         apiRequestHeaders: [String: String]? = nil,
         streamingHostRequestHeaders: [String: String]? = nil) {
 
-            growthBookBuilderModel = GrowthBookModel(
-                features: features,
-                attributes: JSON(attributes),
-                trackingClosure: trackingCallback,
-                backgroundSync: backgroundSync,
-                remoteEval: remoteEval,
-                apiRequestHeaders: apiRequestHeaders,
-                streamingHostRequestHeaders: streamingHostRequestHeaders
-            )
+        growthBookBuilderModel = GrowthBookModel(
+            features: features,
+            attributes: JSON(attributes),
+            trackingClosure: trackingCallback,
+            backgroundSync: backgroundSync,
+            remoteEval: remoteEval,
+            apiRequestHeaders: apiRequestHeaders,
+            streamingHostRequestHeaders: streamingHostRequestHeaders
+        )
 
-            self.refreshHandler = refreshHandler
-            self.networkDispatcher = CoreNetworkClient(
-                apiRequestHeaders: apiRequestHeaders ?? [:],
-                streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-            )
-            self.cachingManager = CachingManager()
-            self.ttlSeconds = ttlSeconds
-        }
+        self.refreshHandler = refreshHandler
+        self.networkDispatcher = CoreNetworkClient(
+            apiRequestHeaders: apiRequestHeaders ?? [:],
+            streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+        )
+        self.cachingManager = CachingManager()
+        self.ttlSeconds = ttlSeconds
+    }
 
 
     init(
@@ -160,9 +164,7 @@ public struct GrowthBookModel {
         return self
     }
 
-    /// Sets the service instance responsible for handling sticky bucketing operations.
-    /// - Parameter stickyBucketService: StickyBucketServiceProtocol
-    /// - Returns: GrowthBookBuilder
+    /// Set Caching Manager - Caching Client for saving fetched features
     @objc public func setCachingManager(cachingManager: CachingLayer) -> GrowthBookBuilder {
         self.cachingManager = cachingManager
         return self
@@ -212,7 +214,7 @@ public struct GrowthBookModel {
         return self
     }
 
-    /// Sets the custom directory path for\ cache storage.
+    /// Sets the custom directory path for cache storage.
     /// - Parameter customDirectory: String
     /// - Returns: GrowthBookBuilder
     @objc public func setCustomCacheDirectory(_ customDirectory: String) -> GrowthBookBuilder {
@@ -229,6 +231,15 @@ public struct GrowthBookModel {
 
     @objc public func setForcedFeatures(forcedFeatures: [String: Any]) -> GrowthBookBuilder {
         growthBookBuilderModel.forcedFeatureValues = JSON(forcedFeatures)
+        return self
+    }
+
+    /// Set fallback features used when cache is empty and API fetch fails.
+    /// Accepts both raw Features JSON and API-format FeaturesDataModel JSON.
+    /// - Parameter data: JSON-encoded features data
+    /// - Returns: GrowthBookBuilder
+    @objc public func setFallbackFeatures(_ data: Data) -> GrowthBookBuilder {
+        growthBookBuilderModel.fallbackFeatures = data
         return self
     }
 
@@ -281,7 +292,20 @@ public struct GrowthBookModel {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
 
-        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        var fallbackFeatures: Features? = nil
+        if let fallbackData = growthBookBuilderModel.fallbackFeatures {
+            let decoder = JSONDecoder()
+            if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: fallbackData),
+               let features = featuresModel.features {
+                fallbackFeatures = features
+            } else if let features = try? decoder.decode(Features.self, from: fallbackData) {
+                fallbackFeatures = features
+            } else {
+                logger.error("Failed to decode fallbackFeatures data — check JSON format (expected Features dict or FeaturesDataModel)")
+            }
+        }
+
+        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds, fallbackFeatures: fallbackFeatures)
     }
 }
 
@@ -310,7 +334,8 @@ public struct GrowthBookModel {
          features: Features? = nil,
          savedGroups: JSON? = nil,
          cachingManager: CachingLayer,
-         ttlSeconds: Int) {
+         ttlSeconds: Int,
+         fallbackFeatures: Features? = nil) {
         self.contextManager = contextManager
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
@@ -318,7 +343,7 @@ public struct GrowthBookModel {
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, fallbackFeatures: fallbackFeatures)
 
         let evalData = contextManager.getEvaluationData()
         let globalConfig = contextManager.getGlobalConfig()
