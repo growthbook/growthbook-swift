@@ -9,44 +9,44 @@ class FeatureEvaluator {
 
     var context: EvalContext
     var featureKey: String
-
+    
     init(context: EvalContext, featureKey: String) {
         self.context = context
         self.featureKey = featureKey
     }
-
+    
     /// Takes Context and Feature Key
     ///
     /// Returns Calculated Feature Result against that key
     func evaluateFeature() -> FeatureResult {
-
+        
         if (context.stackContext.evaluatedFeatures.contains(featureKey)) {
             logger.info("evaluateFeature: circular dependency detected:")
-
+            
             let featureResultWhenCircularDependencyDetected = prepareResult(
                 value: .null,
                 source: FeatureSource.cyclicPrerequisite
             )
-
+                        
             return featureResultWhenCircularDependencyDetected
         }
         context.stackContext.evaluatedFeatures.insert(featureKey)
         context.stackContext.id = featureKey
-
+        
         defer {
             context.stackContext.evaluatedFeatures.remove(featureKey)
         }
-
+        
         if context.userContext.forcedFeatureValues?.dictionaryValue[featureKey] != nil {
             let value = context.userContext.forcedFeatureValues?[featureKey] ?? "nil"
             logger.info("Global override for forced feature with key: \(featureKey) and value \(value)")
-
+            
             return prepareResult(value: context.userContext.forcedFeatureValues?.dictionaryValue[featureKey], source: FeatureSource.override)
         }
-
+        
         guard let targetFeature: Feature = context.globalContext.features[featureKey] else {
             let emptyFeatureResult = prepareResult(value: JSON.null, source: FeatureSource.unknownFeature)
-
+            
             return emptyFeatureResult
         }
 
@@ -66,24 +66,24 @@ class FeatureEvaluator {
                         let parentResult = parentEvaluator.evaluateFeature()
                         // Propagate any sticky bucket assignments from parent evaluation
                         Utils.propagateStickyAssignments(from: parentEvaluator.context, to: context)
-
+                        
                         if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
                             let featureResultWhenCircularDependencyDetected =  prepareResult(
                                 value: .null,
                                 source: FeatureSource.cyclicPrerequisite
                             )
-
+                                                        
                             return featureResultWhenCircularDependencyDetected
                         }
-
+                        
                         let evalObjc = JSON(["value": parentResult.value])
-
+                        
                         let evalCondition = ConditionEvaluator().isEvalCondition(
                             attributes: evalObjc,
                             conditionObj: parentCondition.condition,
                             savedGroups: context.globalContext.savedGroups
                         )
-
+                        
                         // blocking prerequisite eval failed: feature evaluation fails
                         if !evalCondition {
                             if let _ = parentCondition.gate {
@@ -92,7 +92,7 @@ class FeatureEvaluator {
                                     value: .null,
                                     source: FeatureSource.prerequisite
                                 )
-
+                                                                
                                 return featureResultWhenBlockedByPrerequisite
                             }
                             // non-blocking prerequisite eval failed: break out of parentConditions loop, jump to the next rule
@@ -100,7 +100,7 @@ class FeatureEvaluator {
                         }
                     }
                 }
-
+                
                 // If there are filters for who is included
                 if let filters = rule.filters {
                     if Utils.isFilteredOut(filters: filters, attributes: context.userContext.attributes
@@ -121,7 +121,7 @@ class FeatureEvaluator {
                     ) {
                         continue
                     }
-
+                    
                     if !Utils.isIncludedInRollout(
                         attributes: context.userContext.attributes,
                         seed: rule.seed ?? featureKey,
@@ -134,7 +134,7 @@ class FeatureEvaluator {
                         logger.info("Skip rule because user not included in rollout")
                         continue
                     }
-
+                    
                     if let tracks = rule.tracks {
                         tracks.forEach { track in
                             if let experiment = track.experiment, let result = track.result {
@@ -146,12 +146,12 @@ class FeatureEvaluator {
                             }
                         }
                     }
-
+                    
                     // Ignore coverage if the rule has a range
                     if rule.range == nil {
                         // If rule.coverage is set
                         if let coverage = rule.coverage {
-
+                            
                             let key = rule.hashAttribute ?? Constants.idAttributeKey
                             // Get the user hash value (context.attributes[rule.hashAttribute || "id"]) and if empty, skip the rule
                             guard let attributeValue = context.userContext.attributes.dictionaryValue[key]?.stringValue,
@@ -159,7 +159,7 @@ class FeatureEvaluator {
                             else {
                                 continue
                             }
-
+                            
                             // Compute a hash using the Fowler–Noll–Vo algorithm (specifically fnv32-1a)
                             let hashFNV = Utils.hash(seed: featureKey, value: attributeValue, version: 1.0) ?? 0.0
                             // If the hash is greater than rule.coverage, skip the rule
@@ -170,16 +170,16 @@ class FeatureEvaluator {
                     }
 
                     // Return (value = forced value, source = force)
-
+                    
                     let forcedFeatureResult = prepareResult(value: force, source: FeatureSource.force, ruleId: rule.id)
-
+                                        
                     return forcedFeatureResult
                 } else {
-
+                    
                     guard let variations = rule.variations else {
                         continue
                     }
-
+                    
                     // Otherwise, convert the rule to an Experiment object
                     let exp = Experiment(key: rule.key ?? featureKey,
                                          variations: variations,
@@ -200,13 +200,13 @@ class FeatureEvaluator {
                                          name: rule.name,
                                          phase: rule.phase
                                          )
-
+                    
                     // Run the experiment.
                     let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: exp, featureId: featureKey)
                     if result.inExperiment && !(result.passthrough ?? false) {
                         // If result.inExperiment is false, skip this rule and continue to the next one.
                         let experimentFeatureResult =  prepareResult(value: result.value, source: FeatureSource.experiment, experiment: exp, result: result, ruleId: rule.id)
-
+                                                
                         return experimentFeatureResult
                     }
                 }
@@ -216,10 +216,10 @@ class FeatureEvaluator {
         // Return (value = defaultValue or null, source = defaultValue)
         let defaultValue = targetFeature.defaultValue ?? .null
         let defaultFeatureResult = prepareResult(value: defaultValue, source: FeatureSource.defaultValue)
-
+                
         return defaultFeatureResult
     }
-
+    
     /// This is a helper method to create a FeatureResult object.
     ///
     /// Besides the passed-in arguments, there are two derived values - on and off, which are just the value cast to booleans.

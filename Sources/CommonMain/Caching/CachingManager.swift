@@ -13,7 +13,7 @@ import CommonCrypto
 
 /// This is actual implementation of Caching Layer in iOS
 @objc public class CachingManager: NSObject, CachingLayer {
-
+    
     private var cacheDirectory: CacheDirectory = {
         #if os(tvOS)
         return .caches
@@ -23,18 +23,18 @@ import CommonCrypto
     }()
     private var customCachePath: String?
     private var cacheKey: String = ""
-
+    
     public init(apiKey: String? = nil) {
         super.init()
         if let apiKey {
             self.setCacheKey(apiKey)
         }
     }
-
+    
     public func setCacheKey(_ key: String) {
         self.cacheKey = sha256Hash(key)
     }
-
+    
     func sha256Hash(_ input: String) -> String {
         guard let data = input.data(using: .utf8) else { return "" }
         var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
@@ -73,7 +73,7 @@ import CommonCrypto
         // Reset custom path when using system directory
         self.customCachePath = nil
     }
-
+    
     /// Save content in cache
     @objc public func saveContent(fileName: String, content: Data) {
         let fileManager = FileManager.default
@@ -137,7 +137,7 @@ import CommonCrypto
         // Create complete filePath for targetFileName & internal Memory Folder
         return "\(targetFolderPath)/\(file).txt"
     }
-
+    
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
     @objc public func clearCache() {
         
@@ -145,10 +145,10 @@ import CommonCrypto
             logger.error("Failed to retrieve directory path.")
             return
         }
-
+        
         let targetFolderPath = directoryPath + "/GrowthBook-Cache-\(cacheKey)"
         let fileManager = FileManager.default
-
+        
         // Check if folder exists
         if fileManager.fileExists(atPath: targetFolderPath) {
             do {
@@ -169,7 +169,7 @@ import CommonCrypto
     case documents
     case library
     case developerLibrary
-
+    
     /// Converts the enumeration case into the corresponding `FileManager.SearchPathDirectory` value, if applicable.
     var searchPathDirectory: FileManager.SearchPathDirectory? {
         switch self {
@@ -185,7 +185,7 @@ import CommonCrypto
             return .developerDirectory
         }
     }
-
+    
     /// Retrieves the path to the cache directory represented by the enumeration case.
     var path: String? {
         switch self {

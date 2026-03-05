@@ -25,7 +25,7 @@ class ExperimentRunTests: XCTestCase {
                                     attributes: testContext.attributes,
                                     forcedVariations: testContext.forcedVariations,
                                     isQaMode: testContext.isQaMode,
-                                    trackingClosure: { _, _ in },
+                                    trackingClosure: { _, _ in }, 
                                     features: testContext.features,
                                     backgroundSync: false,
                                     savedGroups: testContext.savedGroups,

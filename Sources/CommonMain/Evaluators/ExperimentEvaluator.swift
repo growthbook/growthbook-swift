@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Takes Context & Experiment & returns Experiment Result
 class ExperimentEvaluator {
-
+    
     /// Takes Context & Experiment & returns Experiment Result
     func evaluateExperiment(context: EvalContext, experiment: Experiment, featureId: String? = nil) -> ExperimentResult {
         // If experiment.variations has fewer than 2 variations, return immediately (not in experiment, variationId 0)
@@ -13,7 +13,7 @@ class ExperimentEvaluator {
         if experiment.variations.count < 2 || !context.options.isEnabled {
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
-
+        
         // Query string overrides
         let override = Utils.getQueryStringOverride(
             id: experiment.key,
@@ -23,24 +23,24 @@ class ExperimentEvaluator {
         if (override != nil) {
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: override!, hashUsed: false, featureId: featureId)
         }
-
+        
         // If context.forcedVariations[experiment.trackingKey] is defined, return immediately (not in experiment, forced variation)
         if let forcedVariation = context.userContext.forcedVariations?.dictionaryValue[experiment.key] {
             logger.trace("Forced variation found for experiment \(experiment.key). \nForced variation: \(forcedVariation)")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: forcedVariation.intValue, hashUsed: false, featureId: featureId)
         }
-
+        
         // If experiment.action is set to false, return immediately (not in experiment, variationId 0)
         if let isActive = experiment.isActive, !isActive {
             // TODO: check status == draft scenario
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
-
+        
         var fallback: String? = nil
         if (isStickyBucketingEnabledForExperiment(context: context, experiment: experiment)) {
             fallback = experiment.fallbackAttribute
         }
-
+        
         let (hashAttribute, hashValue) = Utils.getHashAttribute(attr: experiment.hashAttribute, fallback: fallback, attributes: context.userContext.attributes)
 
         if hashValue.isEmpty {
@@ -50,7 +50,7 @@ class ExperimentEvaluator {
         var assigned = -1
         var foundStickyBucket = false
         var stickyBucketVersionIsBlocked = false
-
+        
         if isStickyBucketingEnabledForExperiment(context: context, experiment: experiment) {
             let (variation, versionIsBlocked) = Utils.getStickyBucketVariation(context: context,
                                                                                experimentKey: experiment.key,
@@ -59,12 +59,12 @@ class ExperimentEvaluator {
                                                                                meta: experiment.meta ?? [],
                                                                                expFallBackAttribute: experiment.fallbackAttribute,
                                                                                expHashAttribute: experiment.hashAttribute)
-
+            
             foundStickyBucket = variation >= 0;
             assigned = variation
             stickyBucketVersionIsBlocked = versionIsBlocked == true
         }
-
+        
         // Some checks are not needed if we already have a sticky bucket
         if !foundStickyBucket {
             if let filters = experiment.filters {
@@ -78,37 +78,37 @@ class ExperimentEvaluator {
                 return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
             }
             //TODO: check what is include
-
+            
             // If experiment.condition is set and the condition evaluates to false, return immediately (not in experiment, variationId 0)
             if let condition = experiment.condition {
                 if !ConditionEvaluator().isEvalCondition(attributes: context.userContext.attributes, conditionObj: condition, savedGroups: context.globalContext.savedGroups) {
                     return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
                 }
             }
-
+            
             if let parentConditions = experiment.parentConditions {
                 let originalEvaluatedFeatures = Set(context.stackContext.evaluatedFeatures)
 
                 for parentCondition in parentConditions {
                     context.stackContext.evaluatedFeatures = Set(originalEvaluatedFeatures)
-
+                    
                     // TODO: option is to not pass attributeOverrides
                     let parentEvaluator = FeatureEvaluator(context: context, featureKey: parentCondition.id)
                     let parentResult = parentEvaluator.evaluateFeature()
                     // Propagate any sticky bucket assignments from parent evaluation
                     Utils.propagateStickyAssignments(from: parentEvaluator.context, to: context)
-
+                    
                     if parentResult.source == FeatureSource.cyclicPrerequisite.rawValue {
                         return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
                     }
-
+                    
                     let evalObj = ["value": parentResult.value]
                     let evalCondition = ConditionEvaluator().isEvalCondition(
                         attributes: JSON(evalObj),
                         conditionObj: parentCondition.condition,
                         savedGroups: context.globalContext.savedGroups
                     )
-
+                    
                     // blocking prerequisite eval failed: feature evaluation fails
                     if !evalCondition {
                         return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
@@ -116,24 +116,24 @@ class ExperimentEvaluator {
                 }
             }
         }
-
+        
         let hash = Utils.hash(seed: experiment.seed ?? experiment.key, value: hashValue, version: experiment.hashVersion ?? 1)
-
+        
         guard let hash = hash else {
             logger.info("Skip because of invalid hash version")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
-
+        
         if !foundStickyBucket {
             let ranges = experiment.ranges ?? Utils.getBucketRanges(numVariations: experiment.variations.count, coverage: experiment.coverage ?? 1, weights: experiment.weights)
             assigned = Utils.chooseVariation(n: hash, ranges: ranges)
         }
-
+        
         if stickyBucketVersionIsBlocked {
             logger.info("Skip because sticky bucket version is blocked")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId, bucket: nil, stickyBucketUsed: true)
         }
-
+        
         // If not assigned a variation (assigned === -1), return immediately (not in experiment, variationId 0)
         if assigned < 0 {
             logger.info("Skip because of coverage")
@@ -150,7 +150,7 @@ class ExperimentEvaluator {
             logger.info("Skip because QA mode")
             return getExperimentResult(gbContext: context, experiment: experiment, variationIndex: -1, hashUsed: false, featureId: featureId)
         }
-
+        
         let result = getExperimentResult(gbContext: context, experiment: experiment, variationIndex: assigned, hashUsed: true, featureId: featureId, bucket: hash, stickyBucketUsed: foundStickyBucket)
         logger.info("ExperimentResult: \(result)")
         if isStickyBucketingEnabledForExperiment(context: context, experiment: experiment) {
@@ -170,7 +170,7 @@ class ExperimentEvaluator {
                 })
             }
         }
-
+        
         // Fire context.trackingClosure if set and the combination of hashAttribute, hashValue, experiment.key, and variationId has not been tracked before
         let experimentIsActive = experiment.isActive ?? true
         let userInExperiment = result.inExperiment
@@ -191,17 +191,17 @@ class ExperimentEvaluator {
             variationIndex = 0
             inExperiment = false
         }
-
+        
         var fallback: String? = nil
         if (isStickyBucketingEnabledForExperiment(context: gbContext, experiment: experiment)) {
             fallback = experiment.fallbackAttribute
         }
-
+        
         let (hastAttribute, hashValue) = Utils.getHashAttribute(attr: experiment.hashAttribute, fallback: fallback, attributes: gbContext.userContext.attributes)
-
+        
         let experimentMeta = experiment.meta ?? []
         let meta = experimentMeta.count > variationIndex ? experimentMeta[variationIndex] : nil
-
+        
         let result = ExperimentResult(inExperiment: inExperiment,
                                       variationId: variationIndex,
                                       value: experiment.variations.count > variationIndex ? experiment.variations[variationIndex] : JSON(),
@@ -211,22 +211,22 @@ class ExperimentEvaluator {
                                       hashUsed: hashUsed,
                                       featureId: featureId,
                                       stickyBucketUsed: stickyBucketUsed ?? false)
-
+        
         if let name = meta?.name {
             result.name = name
         }
-
+        
         if let bucket = bucket {
             result.bucket = bucket
         }
-
+        
         if let passthrough = meta?.passthrough {
             result.passthrough = passthrough
         }
-
+        
         return result
     }
-
+    
     private func isStickyBucketingEnabledForExperiment(context: EvalContext, experiment: Experiment) -> Bool {
         return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? true))
     }
