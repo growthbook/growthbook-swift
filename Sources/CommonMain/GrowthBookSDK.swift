@@ -25,6 +25,7 @@ public struct GrowthBookModel {
     var cacheDirectory: CacheDirectory = .applicationSupport
     var stickyBucketService: StickyBucketServiceProtocol?
     var backgroundSync: Bool
+    var stableSession: Bool
     var remoteEval: Bool
     var apiRequestHeaders: [String: String]? = nil
     var streamingHostRequestHeaders: [String: String]? = nil
@@ -53,6 +54,7 @@ public struct GrowthBookModel {
         trackingCallback: @escaping TrackingCallback,
         refreshHandler: CacheRefreshHandler? = nil,
         backgroundSync: Bool = false,
+        stableSession: Bool = false,
         remoteEval: Bool = false,
         ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
@@ -66,6 +68,7 @@ public struct GrowthBookModel {
                 attributes: JSON(attributes),
                 trackingClosure: trackingCallback,
                 backgroundSync: backgroundSync,
+                stableSession: stableSession,
                 remoteEval: remoteEval,
                 apiRequestHeaders: apiRequestHeaders,
                 streamingHostRequestHeaders: streamingHostRequestHeaders
@@ -86,6 +89,7 @@ public struct GrowthBookModel {
         trackingCallback: @escaping TrackingCallback,
         refreshHandler: CacheRefreshHandler? = nil,
         backgroundSync: Bool,
+        stableSession: Bool = false,
         remoteEval: Bool = false,
         ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
@@ -96,6 +100,7 @@ public struct GrowthBookModel {
                 attributes: JSON(attributes),
                 trackingClosure: trackingCallback,
                 backgroundSync: backgroundSync,
+                stableSession: stableSession,
                 remoteEval: remoteEval,
                 apiRequestHeaders: apiRequestHeaders,
                 streamingHostRequestHeaders: streamingHostRequestHeaders
@@ -131,6 +136,7 @@ public struct GrowthBookModel {
             attributes: JSON(attributes),
             trackingClosure: trackingCallback,
             backgroundSync: backgroundSync,
+            stableSession: false,
             remoteEval: remoteEval,
             apiRequestHeaders: apiRequestHeaders,
             streamingHostRequestHeaders: streamingHostRequestHeaders
@@ -240,6 +246,7 @@ public struct GrowthBookModel {
             isEnabled: growthBookBuilderModel.isEnabled,
             isQaMode: growthBookBuilderModel.isQaMode,
             backgroundSync: growthBookBuilderModel.backgroundSync,
+            stableSession: growthBookBuilderModel.stableSession,
             remoteEval: growthBookBuilderModel.remoteEval,
             trackingClosure: growthBookBuilderModel.trackingClosure,
             stickyBucketService: growthBookBuilderModel.stickyBucketService
@@ -281,7 +288,11 @@ public struct GrowthBookModel {
             cachingManager.saveContent(fileName: Constants.featureCache, content: features)
         }
 
-        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        // Pass parsed features directly when available so GrowthBookSDK.init() skips
+        // the automatic refreshCache() call — eliminating the disk round-trip and any
+        // unintended network fetch when the developer has supplied their own payload.
+        let preloadedFeatures: Features? = initialFeatures.isEmpty ? nil : initialFeatures
+        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
     }
 }
 
@@ -318,7 +329,7 @@ public struct GrowthBookModel {
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
         super.init()
-        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, preloadedFeatures: features)
 
         let evalData = contextManager.getEvaluationData()
         let globalConfig = contextManager.getGlobalConfig()
@@ -494,6 +505,15 @@ public struct GrowthBookModel {
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
         withLock {
+            // In stableSession mode, remote updates are cached (handled by FeaturesViewModel)
+            // but not applied to the running SDK. The refreshHandler still fires so the
+            // developer knows a refresh occurred. Features are applied on next SDK init.
+            if isRemote && contextManager.getGlobalConfig().stableSession {
+                logger.info("stableSession is enabled: new features cached, will apply on next SDK initialization")
+                self.refreshHandler?(.none)
+                return
+            }
+
             self.contextManager.updateEvalData { data in
                 data.features = features
             }
