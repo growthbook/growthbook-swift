@@ -15,6 +15,7 @@ class FeatureValueTests: XCTestCase {
         var failedScenarios: [String] = []
         var passedScenarios: [String] = []
         for item in evalConditions {
+            
             let testData = FeaturesTest(json: item[1].dictionaryValue)
 
             let gbContext = Context(apiHost: nil,

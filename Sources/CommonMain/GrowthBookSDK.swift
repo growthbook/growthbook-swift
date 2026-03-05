@@ -47,13 +47,11 @@ public struct GrowthBookModel {
 
     private var ttlSeconds: Int
 
-
     @objc public init(
         apiHost: String? = nil,
         clientKey: String? = nil,
         encryptionKey: String? = nil,
         attributes: [String: Any],
-        fallbackFeatures: Data? = nil,
         features: Data? = nil,
         trackingCallback: @escaping TrackingCallback,
         refreshHandler: CacheRefreshHandler? = nil,
@@ -68,7 +66,6 @@ public struct GrowthBookModel {
             clientKey: clientKey,
             encryptionKey: encryptionKey,
             features: features,
-            fallbackFeatures: fallbackFeatures,
             attributes: JSON(attributes),
             trackingClosure: trackingCallback,
             backgroundSync: backgroundSync,
@@ -79,13 +76,12 @@ public struct GrowthBookModel {
 
         self.refreshHandler = refreshHandler
         self.networkDispatcher = CoreNetworkClient(
-                    apiRequestHeaders: apiRequestHeaders ?? [:],
-                    streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
-                )
+            apiRequestHeaders: apiRequestHeaders ?? [:],
+            streamingHostRequestHeaders: streamingHostRequestHeaders ?? [:]
+        )
         self.cachingManager = CachingManager(apiKey: clientKey)
         self.ttlSeconds = ttlSeconds
     }
-
 
 
     @objc public init(
@@ -117,7 +113,6 @@ public struct GrowthBookModel {
         self.cachingManager = CachingManager()
         self.ttlSeconds = ttlSeconds
     }
-
 
 
     init(
@@ -239,6 +234,15 @@ public struct GrowthBookModel {
         return self
     }
 
+    /// Set fallback features used when cache is empty and API fetch fails.
+    /// Accepts both raw Features JSON and API-format FeaturesDataModel JSON.
+    /// - Parameter data: JSON-encoded features data
+    /// - Returns: GrowthBookBuilder
+    @objc public func setFallbackFeatures(_ data: Data) -> GrowthBookBuilder {
+        growthBookBuilderModel.fallbackFeatures = data
+        return self
+    }
+
     @objc public func initializer() -> GrowthBookSDK {
         let globalConfig = GlobalConfig(
             apiHost: growthBookBuilderModel.apiHost,
@@ -290,7 +294,15 @@ public struct GrowthBookModel {
 
         var fallbackFeatures: Features? = nil
         if let fallbackData = growthBookBuilderModel.fallbackFeatures {
-            fallbackFeatures = try? JSONDecoder().decode(Features.self, from: fallbackData)
+            let decoder = JSONDecoder()
+            if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: fallbackData),
+               let features = featuresModel.features {
+                fallbackFeatures = features
+            } else if let features = try? decoder.decode(Features.self, from: fallbackData) {
+                fallbackFeatures = features
+            } else {
+                logger.error("Failed to decode fallbackFeatures data — check JSON format (expected Features dict or FeaturesDataModel)")
+            }
         }
 
         return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, cachingManager: cachingManager, ttlSeconds: ttlSeconds, fallbackFeatures: fallbackFeatures)
@@ -315,7 +327,6 @@ public struct GrowthBookModel {
 
     private let lock = NSRecursiveLock()
 
-
     init(contextManager: ContextManager,
          refreshHandler: CacheRefreshHandler? = nil,
          logLevel: Level = .info,
@@ -336,7 +347,6 @@ public struct GrowthBookModel {
 
         let evalData = contextManager.getEvaluationData()
         let globalConfig = contextManager.getGlobalConfig()
-
 
         if let features = features {
             contextManager.updateEvalData { data in
@@ -360,7 +370,6 @@ public struct GrowthBookModel {
 
         // Logger setup. if we have logHandler we have to re-initialise logger
         logger.minLevel = logLevel
-
 
         if let service = globalConfig.stickyBucketService,
            let docs = evalData.stickyBucketAssignmentDocs {

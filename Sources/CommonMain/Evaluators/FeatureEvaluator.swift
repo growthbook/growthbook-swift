@@ -137,8 +137,12 @@ class FeatureEvaluator {
 
                     if let tracks = rule.tracks {
                         tracks.forEach { track in
-                            if let experiment = track.experiment, let result = track.result, !ExperimentHelper.shared.isTracked(experiment, result) {
-                                context.options.trackingClosure(experiment, result)
+                            if let experiment = track.experiment, let result = track.result {
+                                let experimentIsActive = experiment.isActive ?? true
+                                let userInExperiment = result.inExperiment
+                                if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
+                                    context.options.trackingClosure(experiment, result)
+                                }
                             }
                         }
                     }
@@ -241,3 +245,4 @@ struct FeatureEvalContext {
     var id: String?
     var evaluatedFeatures: Set<String>
 }
+
