@@ -459,7 +459,7 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     /// so features are immediately available, with no network call required.
     func testOfflineModeEncryptedPreloadedPayload() throws {
         let ivString      = "vMSg2Bj/IurObDsWVmvkUg=="
-        let featureJSON   = """{"enc-session":{"defaultValue":true}}"""
+        let featureJSON   = "{\"enc-session\":{\"defaultValue\":true}}"
 
         let crypto    = Crypto()
         let keyBytes  = Data(base64Encoded: testKeyString)!.map { $0 }
