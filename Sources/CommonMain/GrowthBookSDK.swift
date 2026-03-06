@@ -338,11 +338,6 @@ public struct GrowthBookModel {
     var cachingManager: CachingLayer
 
     private let lock = NSRecursiveLock()
-    /// True once the session's initial features have been applied.  When
-    /// stableSession is enabled, any later featuresFetchedSuccessfully call
-    /// (whether from cache or from the network) is blocked so the feature set
-    /// never changes beneath the running session.
-    private var sessionFeaturesLocked: Bool = false
 
     init(contextManager: ContextManager,
          refreshHandler: CacheRefreshHandler? = nil,
@@ -367,12 +362,6 @@ public struct GrowthBookModel {
         if let features = features {
             contextManager.updateEvalData { data in
                 data.features = features
-            }
-            // Lock the session immediately so that the very first refreshCache()
-            // call cannot overwrite these features via the cache-read path
-            // (featuresFetchedSuccessfully isRemote:false).
-            if globalConfig.stableSession {
-                sessionFeaturesLocked = true
             }
         } else {
             featureVM.encryptionKey = globalConfig.encryptionKey ?? ""
@@ -543,12 +532,12 @@ public struct GrowthBookModel {
         withLock {
             let stableSession = contextManager.getGlobalConfig().stableSession
 
-            // Once the session is locked, block every subsequent update — both
-            // remote fetches (isRemote:true) and cache reads (isRemote:false).
-            // Without this guard a second refreshCache() call reads the now-warm
-            // cache and applies new features via the isRemote:false path, silently
-            // bypassing the stableSession guarantee.
-            if stableSession && sessionFeaturesLocked {
+            // In stableSession mode, block every update once features are established.
+            // The features dict being non-empty is the signal that the session has been
+            // initialised — no separate flag needed. This covers both the preloaded path
+            // (features set directly in init) and the cache/network path (first apply
+            // populates the dict; all later calls find it non-empty and are blocked).
+            if stableSession && !contextManager.getEvaluationData().features.isEmpty {
                 if isRemote {
                     logger.info("stableSession is enabled: new features cached, will apply on next SDK initialization")
                     self.refreshHandler?(.none)
@@ -560,11 +549,6 @@ public struct GrowthBookModel {
                 data.features = features
             }
             self.refreshStickyBucketService()
-
-            // Lock after the first successful apply so every later call is blocked.
-            if stableSession {
-                sessionFeaturesLocked = true
-            }
 
             if isRemote {
                 self.refreshHandler?(.none)
