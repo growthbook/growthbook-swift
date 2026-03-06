@@ -284,8 +284,13 @@ public struct GrowthBookModel {
             cachingManager.setCacheKey(clientKey)
         }
 
-        if let features = growthBookBuilderModel.features {
-            cachingManager.saveContent(fileName: Constants.featureCache, content: features)
+        // Write the *parsed* features (Features dict format) to cache, not the raw API
+        // envelope. fetchCachedFeatures() decodes the cache as Features ([String: Feature]),
+        // so writing the raw FeaturesDataModel envelope would produce junk on decode and
+        // silently overwrite the live feature set the next time refreshCache() is called.
+        if !initialFeatures.isEmpty,
+           let featureData = try? JSONEncoder().encode(initialFeatures) {
+            cachingManager.saveContent(fileName: Constants.featureCache, content: featureData)
         }
 
         // Pass parsed features directly when available so GrowthBookSDK.init() skips
