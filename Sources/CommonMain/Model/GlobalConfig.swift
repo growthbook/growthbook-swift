@@ -39,6 +39,9 @@ import Foundation
   public let isQaMode: Bool
   /// Disable background streaming connection
   public let backgroundSync: Bool
+  /// When true, features fetched remotely are cached but not applied to the running SDK.
+  /// The updated payload is picked up automatically on next SDK initialization (app restart).
+  public let stableSession: Bool
   /// Enable to use remote evaluation
   public let remoteEval: Bool
   /// A function that takes experiment and result as arguments.
@@ -52,6 +55,7 @@ import Foundation
     isEnabled: Bool,
     isQaMode: Bool,
     backgroundSync: Bool = false,
+    stableSession: Bool = false,
     remoteEval: Bool = false,
     trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
     stickyBucketService: StickyBucketServiceProtocol? = nil) {
@@ -61,6 +65,7 @@ import Foundation
     self.isEnabled = isEnabled
     self.isQaMode = isQaMode
     self.backgroundSync = backgroundSync
+    self.stableSession = stableSession
     self.remoteEval = remoteEval
     self.trackingClosure = trackingClosure
     self.stickyBucketService = stickyBucketService
