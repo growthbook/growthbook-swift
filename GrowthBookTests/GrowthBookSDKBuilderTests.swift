@@ -367,9 +367,9 @@ class GrowthBookSDKBuilderTests: XCTestCase {
             features: initialPayload,
             trackingCallback: { _, _ in },
             backgroundSync: false,
-            stableSession: true,
             ttlSeconds: 0  // expire immediately so the network call fires
         )
+        .setStableSession(true)
         .setRefreshHandler(refreshHandler: { _ in
             DispatchQueue.main.async { refreshExpectation.fulfill() }
         })
@@ -405,9 +405,9 @@ class GrowthBookSDKBuilderTests: XCTestCase {
             features: initialPayload,
             trackingCallback: { _, _ in },
             backgroundSync: false,
-            stableSession: true,
             ttlSeconds: 0
         )
+        .setStableSession(true)
         .setRefreshHandler(refreshHandler: { _ in
             DispatchQueue.main.async {
                 refreshCount += 1
@@ -429,6 +429,37 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         wait(for: [secondRefresh], timeout: 2.0)
         XCTAssertTrue(sdk.getFeatures().keys.contains("session-feature"),  "session-feature must survive second refresh even after cache is warm with new features")
         XCTAssertFalse(sdk.getFeatures().keys.contains("onboarding"),      "onboarding must not apply even after cache-warmed second refresh")
+    }
+
+    /// An empty features payload is invalid in stableSession mode. The SDK must log a warning,
+    /// fall back to a network fetch, apply those features to the session, then lock it.
+    func testStableSessionWithEmptyInitialPayloadFallsBackToNetwork() throws {
+        let emptyPayload = "{}".data(using: .utf8)!
+        let refreshExpectation = XCTestExpectation(description: "refreshHandler called after network fetch")
+
+        let mockClient = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: emptyPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in
+            DispatchQueue.main.async { refreshExpectation.fulfill() }
+        })
+        .setNetworkDispatcher(networkDispatcher: mockClient)
+        .initializer()
+
+        wait(for: [refreshExpectation], timeout: 2.0)
+        XCTAssertGreaterThan(mockClient.callCount, 0,
+            "Empty payload must trigger a network fetch in stableSession mode")
+        XCTAssertTrue(sdk.getFeatures().keys.contains("onboarding"),
+            "Network features should be applied when initial payload was empty")
     }
 
     /// An intentionally empty feature payload { "features": {} } must not trigger a network

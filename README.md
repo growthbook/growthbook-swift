@@ -398,9 +398,9 @@ var sdkInstance = GrowthBookBuilder(
     attributes: userAttributes,
     features: featuresData,           // optional: pre-fetched fallback payload
     trackingCallback: { _, _ in },
-    backgroundSync: false,
-    stableSession: true               // lock features for this session
+    backgroundSync: false
 )
+.setStableSession(true)               // lock features for this session
 .setRefreshHandler { _ in
     // Called when a refresh completes. In stableSession mode the new payload
     // has been written to cache but is NOT yet active. It will become active
@@ -424,7 +424,7 @@ NotificationCenter.default.addObserver(
 // no mid-session surprises.
 ```
 
-> **Note:** `stableSession` works with `backgroundSync: true` as well. SSE-pushed updates will keep the cache fresh in the background, and each new session starts with the latest payload.
+> **Note:** `.setStableSession(true)` works with `backgroundSync: true` as well. SSE-pushed updates will keep the cache fresh in the background, and each new session starts with the latest payload.
 
 ## Streaming updates
 
