@@ -25,7 +25,7 @@ public struct GrowthBookModel {
     var cacheDirectory: CacheDirectory = .applicationSupport
     var stickyBucketService: StickyBucketServiceProtocol?
     var backgroundSync: Bool
-    var stableSession: Bool
+    var stableSession: Bool = false
     var remoteEval: Bool
     var apiRequestHeaders: [String: String]? = nil
     var streamingHostRequestHeaders: [String: String]? = nil
@@ -54,7 +54,6 @@ public struct GrowthBookModel {
         trackingCallback: @escaping TrackingCallback,
         refreshHandler: CacheRefreshHandler? = nil,
         backgroundSync: Bool = false,
-        stableSession: Bool = false,
         remoteEval: Bool = false,
         ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
@@ -68,7 +67,6 @@ public struct GrowthBookModel {
                 attributes: JSON(attributes),
                 trackingClosure: trackingCallback,
                 backgroundSync: backgroundSync,
-                stableSession: stableSession,
                 remoteEval: remoteEval,
                 apiRequestHeaders: apiRequestHeaders,
                 streamingHostRequestHeaders: streamingHostRequestHeaders
@@ -89,7 +87,6 @@ public struct GrowthBookModel {
         trackingCallback: @escaping TrackingCallback,
         refreshHandler: CacheRefreshHandler? = nil,
         backgroundSync: Bool,
-        stableSession: Bool = false,
         remoteEval: Bool = false,
         ttlSeconds: Int = 60,
         apiRequestHeaders: [String: String]? = nil,
@@ -100,7 +97,6 @@ public struct GrowthBookModel {
                 attributes: JSON(attributes),
                 trackingClosure: trackingCallback,
                 backgroundSync: backgroundSync,
-                stableSession: stableSession,
                 remoteEval: remoteEval,
                 apiRequestHeaders: apiRequestHeaders,
                 streamingHostRequestHeaders: streamingHostRequestHeaders
@@ -136,7 +132,6 @@ public struct GrowthBookModel {
             attributes: JSON(attributes),
             trackingClosure: trackingCallback,
             backgroundSync: backgroundSync,
-            stableSession: false,
             remoteEval: remoteEval,
             apiRequestHeaders: apiRequestHeaders,
             streamingHostRequestHeaders: streamingHostRequestHeaders
@@ -210,6 +205,21 @@ public struct GrowthBookModel {
         return self
     }
 
+    /// When true, features fetched remotely are cached but not applied to the running SDK.
+    /// The updated payload is picked up automatically on next SDK initialization (app restart).
+    ///
+    /// - Note: When used together with `backgroundSync: true`, the SSE stream stays open and
+    ///   keeps the on-disk cache warm for the next session. This is correct behaviour, but it
+    ///   maintains an open connection whose sole effect during the current session is writing
+    ///   to disk. Only enable backgroundSync alongside stableSession if you explicitly need
+    ///   the cache to stay fresh between cold starts.
+    /// - Parameter value: Bool
+    /// - Returns: GrowthBookBuilder
+    @objc public func setStableSession(_ value: Bool) -> GrowthBookBuilder {
+        growthBookBuilderModel.stableSession = value
+        return self
+    }
+
     /// Sets the system directory path used for system-level cache storage.
     /// - Parameter systemDirectory: CacheDirectory
     /// - Returns: GrowthBookBuilder
@@ -252,20 +262,22 @@ public struct GrowthBookModel {
             stickyBucketService: growthBookBuilderModel.stickyBucketService
         )
 
-        // Track whether the caller provided a features payload at all.
-        // This is intentionally separate from whether the payload parsed to a
-        // non-empty set: { "features": {} } is a deliberate empty config that
-        // must still suppress the automatic network fetch on init.
-        let hasPreloadedPayload = growthBookBuilderModel.features != nil
+        // TODO: extract parsePreloadedFeatures() and resolveInitialFeatures() helpers to
+        // reduce the length of initializer() — tracked for a follow-up refactoring PR.
 
-        // Parse features from Data if available
+        // Parse features from Data if available.
+        // hasPreloadedPayload is set to true only on successful parse — an
+        // unrecognised or corrupted payload must not suppress the fallback network fetch.
         var initialFeatures: Features = [:]
+        var hasPreloadedPayload = false
+
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
             // Try to decode as FeaturesDataModel first (API format)
             if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: featuresData) {
                 if let features = featuresModel.features {
                     initialFeatures = features
+                    hasPreloadedPayload = true
                 } else if let encryptedString = featuresModel.encryptedFeatures,
                           let encryptionKey = growthBookBuilderModel.encryptionKey,
                           !encryptionKey.isEmpty {
@@ -277,12 +289,26 @@ public struct GrowthBookModel {
                         encryptionKey: encryptionKey
                     ) {
                         initialFeatures = features
+                        hasPreloadedPayload = true
                     }
+                    // decrypt failed → hasPreloadedPayload stays false → fallback fetch fires
                 }
             } else if let features = try? decoder.decode(Features.self, from: featuresData) {
                 // Fallback: try to decode directly as Features dictionary
                 initialFeatures = features
+                hasPreloadedPayload = true
             }
+            // All decode attempts failed → hasPreloadedPayload stays false → fallback fetch fires
+        }
+
+        // In stableSession mode, an empty parsed payload is an invalid config — the session
+        // would be locked with no features. Log a warning and fall back to the normal
+        // cache/network fetch path so the session gets properly established.
+        if globalConfig.stableSession && hasPreloadedPayload && initialFeatures.isEmpty {
+            logger.warning("stableSession is enabled but the provided features payload parsed to an empty set. " +
+                           "The SDK will operate without features until the first network fetch completes. " +
+                           "Falling back to network fetch.")
+            hasPreloadedPayload = false
         }
 
         let evaluationData = EvaluationData(
@@ -307,15 +333,17 @@ public struct GrowthBookModel {
         // envelope. fetchCachedFeatures() decodes the cache as Features ([String: Feature]),
         // so writing the raw FeaturesDataModel envelope would produce junk on decode and
         // silently overwrite the live feature set the next time refreshCache() is called.
+        // Note: when hasPreloadedPayload was reset to false above (stableSession + empty payload),
+        // this block is intentionally skipped. The fallback network fetch will write to cache
+        // on its first successful response.
         if hasPreloadedPayload && !initialFeatures.isEmpty,
            let featureData = try? JSONEncoder().encode(initialFeatures) {
             cachingManager.saveContent(fileName: Constants.featureCache, content: featureData)
         }
 
-        // Pass the parsed features (possibly empty) when the caller supplied a payload,
+        // Pass the parsed features when the caller supplied a valid, non-empty payload,
         // so GrowthBookSDK.init() skips the automatic refreshCache() call.
-        // Passing nil means "no payload was provided — fall back to cache/network as usual."
-        // Passing an empty dict means "the payload was an intentional empty config — honour it."
+        // nil means "no payload provided (or invalid/empty) — fall back to cache/network."
         let preloadedFeatures: Features? = hasPreloadedPayload ? initialFeatures : nil
         return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
     }
@@ -338,6 +366,9 @@ public struct GrowthBookModel {
     var cachingManager: CachingLayer
 
     private let lock = NSRecursiveLock()
+    /// True once the session's initial features have been applied.
+    /// Set once and never reset — used as the stableSession latch.
+    private var sessionEstablished: Bool = false
 
     init(contextManager: ContextManager,
          refreshHandler: CacheRefreshHandler? = nil,
@@ -362,6 +393,11 @@ public struct GrowthBookModel {
         if let features = features {
             contextManager.updateEvalData { data in
                 data.features = features
+            }
+            if globalConfig.stableSession {
+                // Safe to set without withLock: the object has not yet escaped to other
+                // threads at this point in init(), so no concurrent access is possible.
+                sessionEstablished = true
             }
         } else {
             featureVM.encryptionKey = globalConfig.encryptionKey ?? ""
@@ -532,15 +568,17 @@ public struct GrowthBookModel {
         withLock {
             let stableSession = contextManager.getGlobalConfig().stableSession
 
-            // In stableSession mode, block every update once features are established.
-            // The features dict being non-empty is the signal that the session has been
-            // initialised — no separate flag needed. This covers both the preloaded path
-            // (features set directly in init) and the cache/network path (first apply
-            // populates the dict; all later calls find it non-empty and are blocked).
-            if stableSession && !contextManager.getEvaluationData().features.isEmpty {
+            // In stableSession mode, block every update once the session is established.
+            // sessionEstablished is a one-way latch: set on the first apply (or at init when
+            // a preloaded payload is provided) and never reset. Using a dedicated flag rather
+            // than checking features.isEmpty is essential — an empty features response {} is
+            // a valid server response that must also lock the session after it is applied.
+            if stableSession && sessionEstablished {
                 if isRemote {
-                    logger.info("stableSession is enabled: new features cached, will apply on next SDK initialization")
+                    logger.info("stableSession: new features received from network — cached for next session, not applied now")
                     self.refreshHandler?(.none)
+                } else {
+                    logger.debug("stableSession: ignoring cache refresh — session features already established")
                 }
                 return
             }
@@ -549,6 +587,11 @@ public struct GrowthBookModel {
                 data.features = features
             }
             self.refreshStickyBucketService()
+
+            if stableSession {
+                sessionEstablished = true
+                logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
+            }
 
             if isRemote {
                 self.refreshHandler?(.none)
@@ -561,6 +604,10 @@ public struct GrowthBookModel {
     ///   - encryptedString: String
     ///   - encryptionKey: String
     ///   - subtle: CryptoProtocol
+    /// - Note: This method always writes directly to the session's feature set, even when
+    ///   `stableSession` is enabled. It is an explicit, developer-initiated override — not
+    ///   a background network or cache callback — and therefore bypasses the stableSession
+    ///   guard intentionally. Do not call this mid-session if you need session stability.
     @objc public func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil) {
         let crypto: CryptoProtocol = subtle ?? Crypto()
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
@@ -598,15 +645,16 @@ public struct GrowthBookModel {
 
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation
     @objc public func refreshForRemoteEval() {
-        let globalConfig = contextManager.getGlobalConfig()
-        let evalData = contextManager.getEvaluationData()
-        if !globalConfig.remoteEval { return }
-        let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
-        let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
+        withLock {
+            let globalConfig = contextManager.getGlobalConfig()
+            let evalData = contextManager.getEvaluationData()
+            if !globalConfig.remoteEval { return }
+            let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
+            let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
-
-        let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations )
-        featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
+            let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
+            featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
+        }
     }
 
     /// The feature method takes a single string argument, which is the unique identifier for the feature and returns a FeatureResult object.
