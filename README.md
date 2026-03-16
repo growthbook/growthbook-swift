@@ -358,12 +358,80 @@ public struct TrackData {
 ```
 
 
+## Offline Mode
+
+When you supply a pre-fetched features payload directly to the builder, the SDK uses it immediately — no network call is made on initialization and no disk round-trip occurs. This is the right choice when your app controls when it fetches features (for example, as part of app launch sequencing) and you want to drive updates explicitly.
+
+```swift
+// Fetch your payload however you like — from your own cache, a bundled file,
+// a prior API call, etc. — then hand it to the builder.
+let featuresData: Data = ... // your pre-fetched payload
+
+var sdkInstance = GrowthBookBuilder(
+    apiHost: "https://cdn.growthbook.io",
+    clientKey: "sdk-abc123",
+    attributes: userAttributes,
+    features: featuresData,           // supply pre-fetched payload
+    trackingCallback: { _, _ in },
+    backgroundSync: false             // no automatic background sync
+)
+.initializer()
+
+// Features are immediately available — no async wait required.
+let isEnabled = sdkInstance.isOn(feature: "my-feature")
+
+// When you decide it's time to get the latest features, call refreshCache()
+// explicitly. It will fetch, cache, and apply the new payload right away.
+sdkInstance.refreshCache()
+```
+
+## Stable Session Mode
+
+In stable session mode (`stableSession: true`), features are locked in at the moment the SDK is initialized and will not change for the lifetime of that SDK instance — even if `refreshCache()` is called or a streaming update arrives. The updated payload is cached silently and applied the next time the SDK is initialized (i.e. the next app cold start).
+
+This is the right choice for apps where mid-session UI changes are unacceptable — for example, when feature flags control which UI components are rendered on launch.
+
+```swift
+var sdkInstance = GrowthBookBuilder(
+    apiHost: "https://cdn.growthbook.io",
+    clientKey: "sdk-abc123",
+    attributes: userAttributes,
+    features: featuresData,           // optional: pre-fetched fallback payload
+    trackingCallback: { _, _ in },
+    backgroundSync: false
+)
+.setStableSession(true)               // lock features for this session
+.setRefreshHandler { _ in
+    // Called when a refresh completes. In stableSession mode the new payload
+    // has been written to cache but is NOT yet active. It will become active
+    // on the next SDK initialization (next app cold start).
+    print("New features cached — will apply on next launch")
+}
+.initializer()
+
+// Features are stable here. You can call refreshCache() at any safe moment
+// (e.g. when the app goes to background) to warm the cache for the next session.
+NotificationCenter.default.addObserver(
+    forName: UIApplication.didEnterBackgroundNotification,
+    object: nil, queue: .main
+) { _ in
+    sdkInstance.refreshCache()
+    // fetches latest → writes to cache → does NOT change live features
+}
+
+// On the next cold start, the SDK reads the cache written above and the
+// user sees fresh features consistently from the very first frame — with
+// no mid-session surprises.
+```
+
+> **Note:** `.setStableSession(true)` works with `backgroundSync: true` as well. SSE-pushed updates will keep the cache fresh in the background, and each new session starts with the latest payload.
+
 ## Streaming updates
 
 To enable streaming updates set backgroundSync variable to "true"
 
 ```swift
-var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>, clientKey: <GrowthBook/ClientKey>, attributes: <[String: Any]>, trackingCallback: { experiment, experimentResult in 
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(apiHost: <GrowthBook/API_KEY>, clientKey: <GrowthBook/ClientKey>, attributes: <[String: Any]>, trackingCallback: { experiment, experimentResult in
     }, refreshHandler: { error in
     }, backgroundSync: true)
     .initializer()

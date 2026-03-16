@@ -302,6 +302,255 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         XCTAssertEqual(2, countTrackingCallback)
     }
     
+    // MARK: - Offline Mode
+
+    /// When features are supplied at init and backgroundSync is false, the SDK must not
+    /// make any network call on initialization. The developer drives updates manually via
+    /// refreshCache().
+    func testOfflineModeNoNetworkCallOnInit() throws {
+        let featuresPayload = """
+        {"features":{"dark-mode":{"defaultValue":false}}}
+        """.data(using: .utf8)!
+
+        let mockNetwork = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
+
+        let _ = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: featuresPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: mockNetwork)
+        .initializer()
+
+        XCTAssertEqual(mockNetwork.callCount, 0, "No network call should be made when features are provided and backgroundSync is false")
+    }
+
+    /// When features are supplied at init, the SDK should use them immediately without
+    /// going to disk first.
+    func testOfflineModeUsesProvidedFeatures() throws {
+        let featuresPayload = """
+        {"features":{"dark-mode":{"defaultValue":true}}}
+        """.data(using: .utf8)!
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: featuresPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: nil))
+        .initializer()
+
+        XCTAssertTrue(sdk.getFeatures().keys.contains("dark-mode"), "SDK should expose features from the provided payload immediately")
+    }
+
+    // MARK: - Stable Session Mode
+
+    /// In stableSession mode, a remote refresh must update the cache but must NOT change
+    /// the features the SDK evaluates against during the current session.
+    func testStableSessionFeaturesNotAppliedOnRefresh() throws {
+        let initialPayload = """
+        {"features":{"session-feature":{"defaultValue":true}}}
+        """.data(using: .utf8)!
+
+        let refreshExpectation = XCTestExpectation(description: "refreshHandler called after remote refresh")
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: initialPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0  // expire immediately so the network call fires
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in
+            DispatchQueue.main.async { refreshExpectation.fulfill() }
+        })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
+        .initializer()
+
+        // Trigger a manual refresh — network returns features including "onboarding"
+        sdk.refreshCache()
+        wait(for: [refreshExpectation], timeout: 2.0)
+
+        // Session features must be unchanged: "session-feature" present, "onboarding" absent
+        XCTAssertTrue(sdk.getFeatures().keys.contains("session-feature"),   "Original session feature must still be present")
+        XCTAssertFalse(sdk.getFeatures().keys.contains("onboarding"),       "Network-refreshed feature must NOT be applied in stableSession mode")
+    }
+
+    /// After a first refreshCache() warms the on-disk cache with new features, a second
+    /// refreshCache() must NOT apply those cached features to the live session.
+    /// Without the sessionFeaturesLocked guard the cache-read path (isRemote:false) would
+    /// silently bypass the stableSession block on the second call.
+    func testStableSessionSecondRefreshAlsoBlocked() throws {
+        let initialPayload = """
+        {"features":{"session-feature":{"defaultValue":true}}}
+        """.data(using: .utf8)!
+
+        let firstRefresh  = XCTestExpectation(description: "First refresh handler called")
+        let secondRefresh = XCTestExpectation(description: "Second refresh handler called")
+        var refreshCount  = 0
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: initialPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in
+            DispatchQueue.main.async {
+                refreshCount += 1
+                if refreshCount == 1 { firstRefresh.fulfill() }
+                else if refreshCount == 2 { secondRefresh.fulfill() }
+            }
+        })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
+        .initializer()
+
+        // First refresh — network writes "onboarding" to disk cache; live session must not change.
+        sdk.refreshCache()
+        wait(for: [firstRefresh], timeout: 2.0)
+        XCTAssertTrue(sdk.getFeatures().keys.contains("session-feature"),  "session-feature must survive first refresh")
+        XCTAssertFalse(sdk.getFeatures().keys.contains("onboarding"),      "onboarding must not apply after first refresh")
+
+        // Second refresh — cache now contains "onboarding"; must still not leak into live session.
+        sdk.refreshCache()
+        wait(for: [secondRefresh], timeout: 2.0)
+        XCTAssertTrue(sdk.getFeatures().keys.contains("session-feature"),  "session-feature must survive second refresh even after cache is warm with new features")
+        XCTAssertFalse(sdk.getFeatures().keys.contains("onboarding"),      "onboarding must not apply even after cache-warmed second refresh")
+    }
+
+    /// An empty features payload is invalid in stableSession mode. The SDK must log a warning,
+    /// fall back to a network fetch, apply those features to the session, then lock it.
+    func testStableSessionWithEmptyInitialPayloadFallsBackToNetwork() throws {
+        let emptyPayload = "{}".data(using: .utf8)!
+        let refreshExpectation = XCTestExpectation(description: "refreshHandler called after network fetch")
+
+        let mockClient = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: emptyPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in
+            DispatchQueue.main.async { refreshExpectation.fulfill() }
+        })
+        .setNetworkDispatcher(networkDispatcher: mockClient)
+        .initializer()
+
+        wait(for: [refreshExpectation], timeout: 2.0)
+        XCTAssertGreaterThan(mockClient.callCount, 0,
+            "Empty payload must trigger a network fetch in stableSession mode")
+        XCTAssertTrue(sdk.getFeatures().keys.contains("onboarding"),
+            "Network features should be applied when initial payload was empty")
+    }
+
+    /// An intentionally empty feature payload { "features": {} } must not trigger a network
+    /// fetch — it is a deliberate empty config, not a missing config.
+    func testOfflineModeEmptyFeaturesPayloadNoNetworkFetch() {
+        let emptyPayload = """
+        {"features":{}}
+        """.data(using: .utf8)!
+
+        let mockNetwork = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: emptyPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: mockNetwork)
+        .initializer()
+
+        XCTAssertEqual(mockNetwork.callCount, 0,        "An intentionally empty feature payload must not trigger a network fetch")
+        XCTAssertTrue(sdk.getFeatures().isEmpty,         "Feature set should be empty when an empty payload is provided")
+    }
+
+    /// A pre-fetched payload that uses encryptedFeatures must be decrypted at init
+    /// so features are immediately available, with no network call required.
+    func testOfflineModeEncryptedPreloadedPayload() throws {
+        let ivString      = "vMSg2Bj/IurObDsWVmvkUg=="
+        let featureJSON   = "{\"enc-session\":{\"defaultValue\":true}}"
+
+        let crypto    = Crypto()
+        let keyBytes  = Data(base64Encoded: testKeyString)!.map { $0 }
+        let ivBytes   = Data(base64Encoded: ivString)!.map { $0 }
+        let plainBytes = featureJSON.data(using: .utf8)!.map { $0 }
+
+        let cipherBytes     = try crypto.encrypt(key: keyBytes, iv: ivBytes, plainText: plainBytes)
+        let encryptedString = "\(ivString).\(Data(cipherBytes).base64EncodedString())"
+
+        let payload = """
+        {"encryptedFeatures":"\(encryptedString)"}
+        """.data(using: .utf8)!
+
+        let mockNetwork = MockNetworkClient(successResponse: nil, error: nil)
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            encryptionKey: testKeyString,
+            attributes: [:],
+            features: payload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: mockNetwork)
+        .initializer()
+
+        XCTAssertTrue(sdk.getFeatures().keys.contains("enc-session"), "Encrypted preloaded feature must be immediately available")
+        XCTAssertEqual(mockNetwork.callCount, 0,                       "No network call should be made when encrypted payload is preloaded with backgroundSync:false")
+    }
+
+    /// stableSession: false (default) keeps the existing behaviour — refreshCache() applies immediately.
+    func testDefaultModeAppliesFeaturesOnRefresh() throws {
+        let initialPayload = """
+        {"features":{"session-feature":{"defaultValue":true}}}
+        """.data(using: .utf8)!
+
+        let refreshExpectation = XCTestExpectation(description: "refreshHandler called")
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: initialPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setRefreshHandler(refreshHandler: { _ in
+            DispatchQueue.main.async { refreshExpectation.fulfill() }
+        })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil))
+        .initializer()
+
+        sdk.refreshCache()
+        wait(for: [refreshExpectation], timeout: 2.0)
+
+        XCTAssertTrue(sdk.getFeatures().keys.contains("onboarding"), "Network-refreshed features should be applied immediately when stableSession is false")
+    }
+
     func testAppendAttributes() throws {
         let sdkInstance = GrowthBookBuilder(apiHost: testApiHost,
                                             clientKey: testClientKey,
