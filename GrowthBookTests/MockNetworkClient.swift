@@ -4,21 +4,34 @@ import Foundation
 class MockNetworkClient: NetworkProtocol {
     var successResponse: String?
     var error: Error?
-    
+
+    private let countLock = NSLock()
+    private var _callCount: Int = 0
+    var callCount: Int {
+        countLock.lock(); defer { countLock.unlock() }
+        return _callCount
+    }
+    private func incrementCallCount() {
+        countLock.lock(); defer { countLock.unlock() }
+        _callCount += 1
+    }
+
     init(successResponse: String?, error: SDKError?) {
         self.successResponse = successResponse
         self.error = error
     }
-    
+
     func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        incrementCallCount()
         if let successResponse = successResponse {
             successResult(successResponse.data(using: .utf8) ?? Data())
         } else if let error = error {
             errorResult(error)
         }
     }
-    
+
     func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (any Error) -> Void) {
+        incrementCallCount()
         if let successResponse = successResponse {
             successResult(successResponse.data(using: .utf8) ?? Data())
         } else if let error = error {

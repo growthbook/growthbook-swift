@@ -21,13 +21,18 @@ class FeaturesViewModel {
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
 
-    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, fallbackFeatures: Features? = nil) {
-
+    init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, preloadedFeatures: Features? = nil, fallbackFeatures: Features? = nil) {
         self.delegate = delegate
         self.dataSource = dataSource
         self.manager = cachingManager
         self.ttlSeconds = ttlSeconds
         self.fallbackFeatures = fallbackFeatures
+        // Skip the cache read when the caller has already supplied parsed features.
+        // This eliminates the disk round-trip that would otherwise occur on every init
+        // when features are provided directly to the builder.
+        if preloadedFeatures == nil {
+            self.fetchCachedFeatures()
+        }
     }
 
     private func isCacheExpired() -> Bool {
