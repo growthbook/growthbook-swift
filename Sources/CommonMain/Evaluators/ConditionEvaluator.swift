@@ -470,28 +470,52 @@ class ConditionEvaluator {
                     return false
             // Evaluate REGEX operator - whether attribute contains condition regex
             case "$regex":
-                let targetPrimitiveValueString = conditionValue.stringValue
-                let sourcePrimitiveValueString = attributeValue.stringValue
-                if isContains(source: sourcePrimitiveValueString, target: targetPrimitiveValueString) {
-                    return true
-                }
-                return sourcePrimitiveValueString.contains(targetPrimitiveValueString)
-
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: false,
+                    negate: false
+                )
+            case "$regexi":
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: true,
+                    negate: false
+                )
+            case "$notRegex":
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: false,
+                    negate: true
+                )
+            case "$notRegexi":
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: true,
+                    negate: true
+                )
             default: break
             }
         }
         return false
     }
 
-    private func isContains(source: String, target: String) -> Bool {
+    private func isContains(source: String, target: String, insensitive: Bool, negate: Bool) -> Bool {
         let convertedItem = target.replacingOccurrences(of: "([^\\\\])\\/", with: "$1\\/")
         
         do {
-            let regex = try NSRegularExpression(pattern: convertedItem)
+            var options: NSRegularExpression.Options = []
+            if insensitive {
+                        options.insert(.caseInsensitive)
+                    }
+            let regex = try NSRegularExpression(pattern: convertedItem, options: options)
             let range = NSRange(location: 0, length: source.utf16.count)
             let isMatch = regex.firstMatch(in: source, options: [], range: range) != nil
             
-            return isMatch
+            return negate ? !isMatch : isMatch
         } catch {
             return false
         }
