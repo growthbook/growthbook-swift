@@ -153,8 +153,15 @@ class ConditionEvaluator {
     }
 
     /// Evaluates Condition Value against given condition & attributes
-    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil) -> Bool {
+    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false) -> Bool {
         // Processing null values - handling this case separately
+        
+        if insensitive,
+               let condStr = conditionValue.string,
+               let attrStr = attributeValue?.string {
+                return condStr.lowercased() == attrStr.lowercased()
+            }
+        
         if conditionValue.type == .null {
             return attributeValue == nil || attributeValue?.type == .null
         }
@@ -293,28 +300,30 @@ class ConditionEvaluator {
             switch operatorKey {
             case "$in":
                 return Common.isIn(actual: attributeValue, expected: conditionValue)
+            case "$ini":
+                return Common.isIn(actual: attributeValue, expected: conditionValue, insensitive: true)
             case "$nin":
                 return !Common.isIn(actual: attributeValue, expected: conditionValue)
+            case "$nini":
+                return !Common.isIn(actual: attributeValue, expected: conditionValue, insensitive: true)
             case "$all":
-                if let attributeValue = attributeValue.array {
-                    // Loop through conditionValue array
-                    // If none of the elements in the attributeValue array pass evalConditionValue(conditionValue[i], attributeValue[j]), return false
-                    for con in conditionValue {
-                        var result = false
-                        for attribute in attributeValue {
-                            if isEvalConditionValue(conditionValue: con, attributeValue: attribute, savedGroups: savedGroups) {
-                                result = true
-                            }
-                        }
-                        if !result {
-                            return result
-                        }
+                return Common.isInAll(
+                        actual: attributeValue,
+                        expected: conditionValue,
+                        savedGroups: savedGroups,
+                        insensitive: true
+                    ) { con, attr, groups in
+                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: false)
                     }
-                    return true
-                } else {
-                    // If attributeValue is not an array, return false
-                    return false
-                }
+            case "$alli":
+                return Common.isInAll(
+                        actual: attributeValue,
+                        expected: conditionValue,
+                        savedGroups: savedGroups,
+                        insensitive: true
+                    ) { con, attr, groups in
+                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: true)
+                    }
             default: break
             }
         } else if let attribute = attributeValue.array {
