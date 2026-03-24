@@ -71,27 +71,27 @@ class FeaturesViewModel {
         sseHandler?.disconnect()
     }
     
-    private func fetchCachedFeatures(logging: Bool = false) {
+    private func fetchCachedFeatures(logging: Bool = false, isRemote: Bool = false) {
         // Check for cache data
         if let data = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
             if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
                 let crypto: CryptoProtocol = Crypto()
                 if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
                 } else {
-                    delegate?.featuresFetchFailed(error: .failedParsedEncryptedData, isRemote: false)
+                    delegate?.featuresFetchFailed(error: .failedParsedEncryptedData, isRemote: isRemote)
                     if logging { logger.error("Failed get features from cached encrypted features") }
                 }
             } else if let features = try? decoder.decode(Features.self, from: data) {
                 // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+                delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
             } else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: isRemote)
                 if logging { logger.error("Failed parse local data") }
             }
         } else {
-            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: false)
+            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: isRemote)
             if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
         }
     }
@@ -107,6 +107,11 @@ class FeaturesViewModel {
                 case .success(let data):
                     self.prepareFeaturesData(data: data)
                 case .failure(let error):
+                    if (error as NSError).code == 304 {
+                        self.refreshExpiresAt()
+                        self.fetchCachedFeatures(isRemote: true)
+                        return
+                    }
                     logger.info("Failed to get features from remote: \(error.localizedDescription)")
                     self.delegate?.featuresFetchFailed(error: .failedToFetchData, isRemote: true)
                     self.fetchCachedFeatures()
