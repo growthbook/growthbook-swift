@@ -153,8 +153,15 @@ class ConditionEvaluator {
     }
 
     /// Evaluates Condition Value against given condition & attributes
-    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil) -> Bool {
+    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false) -> Bool {
         // Processing null values - handling this case separately
+        
+        if insensitive,
+               let condStr = conditionValue.string,
+               let attrStr = attributeValue?.string {
+                return condStr.lowercased() == attrStr.lowercased()
+            }
+        
         if conditionValue.type == .null {
             return attributeValue == nil || attributeValue?.type == .null
         }
@@ -293,28 +300,30 @@ class ConditionEvaluator {
             switch operatorKey {
             case "$in":
                 return Common.isIn(actual: attributeValue, expected: conditionValue)
+            case "$ini":
+                return Common.isIn(actual: attributeValue, expected: conditionValue, insensitive: true)
             case "$nin":
                 return !Common.isIn(actual: attributeValue, expected: conditionValue)
+            case "$nini":
+                return !Common.isIn(actual: attributeValue, expected: conditionValue, insensitive: true)
             case "$all":
-                if let attributeValue = attributeValue.array {
-                    // Loop through conditionValue array
-                    // If none of the elements in the attributeValue array pass evalConditionValue(conditionValue[i], attributeValue[j]), return false
-                    for con in conditionValue {
-                        var result = false
-                        for attribute in attributeValue {
-                            if isEvalConditionValue(conditionValue: con, attributeValue: attribute, savedGroups: savedGroups) {
-                                result = true
-                            }
-                        }
-                        if !result {
-                            return result
-                        }
+                return Common.isInAll(
+                        actual: attributeValue,
+                        expected: conditionValue,
+                        savedGroups: savedGroups,
+                        insensitive: true
+                    ) { con, attr, groups in
+                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: false)
                     }
-                    return true
-                } else {
-                    // If attributeValue is not an array, return false
-                    return false
-                }
+            case "$alli":
+                return Common.isInAll(
+                        actual: attributeValue,
+                        expected: conditionValue,
+                        savedGroups: savedGroups,
+                        insensitive: true
+                    ) { con, attr, groups in
+                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: true)
+                    }
             default: break
             }
         } else if let attribute = attributeValue.array {
@@ -470,28 +479,52 @@ class ConditionEvaluator {
                     return false
             // Evaluate REGEX operator - whether attribute contains condition regex
             case "$regex":
-                let targetPrimitiveValueString = conditionValue.stringValue
-                let sourcePrimitiveValueString = attributeValue.stringValue
-                if isContains(source: sourcePrimitiveValueString, target: targetPrimitiveValueString) {
-                    return true
-                }
-                return sourcePrimitiveValueString.contains(targetPrimitiveValueString)
-
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: false,
+                    negate: false
+                )
+            case "$regexi":
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: true,
+                    negate: false
+                )
+            case "$notRegex":
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: false,
+                    negate: true
+                )
+            case "$notRegexi":
+                return isContains(
+                    source: attributeValue.stringValue,
+                    target: conditionValue.stringValue,
+                    insensitive: true,
+                    negate: true
+                )
             default: break
             }
         }
         return false
     }
 
-    private func isContains(source: String, target: String) -> Bool {
+    private func isContains(source: String, target: String, insensitive: Bool, negate: Bool) -> Bool {
         let convertedItem = target.replacingOccurrences(of: "([^\\\\])\\/", with: "$1\\/")
         
         do {
-            let regex = try NSRegularExpression(pattern: convertedItem)
+            var options: NSRegularExpression.Options = []
+            if insensitive {
+                        options.insert(.caseInsensitive)
+                    }
+            let regex = try NSRegularExpression(pattern: convertedItem, options: options)
             let range = NSRange(location: 0, length: source.utf16.count)
             let isMatch = regex.firstMatch(in: source, options: [], range: range) != nil
             
-            return isMatch
+            return negate ? !isMatch : isMatch
         } catch {
             return false
         }

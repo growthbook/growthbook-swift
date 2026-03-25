@@ -37,7 +37,37 @@ extension Common {
         return a == b
     }
 
-    static func isIn<T: Equatable>(actual: Any, expected: [T]) -> Bool {
+    static func isIn<T: Equatable>(actual: Any, expected: [T], insensitive: Bool = false) -> Bool {
+        
+        if insensitive, let expectedJSON = expected as? [JSON] {
+            func caseFold(_ value: JSON) -> String? {
+                return value.string?.lowercased()
+            }
+
+            // actual is JSON array ["d", "a"]
+            if let actualArray = (actual as? JSON)?.arrayValue, !actualArray.isEmpty {
+                return actualArray.contains { actualItem in
+                    expectedJSON.contains { expectedItem in
+                        guard let a = caseFold(actualItem), let e = caseFold(expectedItem) else {
+                            return actualItem == expectedItem
+                        }
+                        return a == e
+                    }
+                }
+            }
+            // actual is JSON string "a"
+            if let actualJSON = actual as? JSON, let actualStr = actualJSON.string?.lowercased() {
+                return expectedJSON.contains { caseFold($0) == actualStr }
+            }
+
+            // actual is  String
+            if let actualStr = (actual as? String)?.lowercased() {
+                return expectedJSON.contains { caseFold($0) == actualStr }
+            }
+
+            return false
+        }
+            
         // Check if actual is an array
         if let actualArray = actual as? [T] {
             return actualArray.contains { expected.contains($0) }
@@ -49,6 +79,25 @@ extension Common {
             return expected.contains(actualValue)
         }
         return false
+    }
+    
+    static func isInAll(
+        actual: JSON,
+        expected: [JSON],
+        savedGroups: JSON?,
+        insensitive: Bool,
+        evalCondtitionValue: (JSON, JSON, JSON?) -> Bool
+    ) -> Bool {
+        guard let actualArray = actual.array else { return false }
+        
+        for expectedItem in expected {
+            let passed = actualArray.contains { actualItem in
+                evalCondtitionValue(expectedItem, actualItem, savedGroups)
+            }
+            if !passed { return false}
+            
+        }
+        return true
     }
 
 }
