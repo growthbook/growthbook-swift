@@ -21,6 +21,11 @@ class MockNetworkClient: NetworkProtocol {
         self.error = error
     }
 
+    init(successResponse: String?, error: Error?) {
+        self.successResponse = successResponse
+        self.error = error
+    }
+
     func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
         incrementCallCount()
         if let successResponse = successResponse {
