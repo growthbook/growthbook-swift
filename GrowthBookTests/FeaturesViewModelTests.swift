@@ -112,6 +112,23 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertFalse(isError)
     }
     
+    func test304NotModifiedTreatedAsSuccess() throws {
+        // First fetch to populate cache
+        let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        viewModel.fetchFeatures(apiUrl: "")
+        XCTAssertTrue(isSuccess)
+
+        // Second fetch returns 304 — should still be success, not error
+        isSuccess = false
+        isError = true
+        let notModifiedError = NSError(domain: "HTTPError", code: 304, userInfo: [NSLocalizedDescriptionKey: "Not Modified - Use cached data"])
+        let viewModel304 = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: notModifiedError as Error?)), cachingManager: cachingManager, ttlSeconds: 0)
+        viewModel304.fetchFeatures(apiUrl: "https://cdn.growthbook.io/api/features/key")
+
+        XCTAssertTrue(isSuccess)
+        XCTAssertFalse(isError)
+    }
+
     func testError() throws {
         isSuccess = false
         isError = true
