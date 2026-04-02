@@ -10,28 +10,6 @@ protocol GrowthBookProtocol: AnyObject {
     func initializer() -> GrowthBookSDK
 }
 
-public struct GrowthBookModel {
-    var apiHost: String?
-    var streamingHost: String?
-    var clientKey: String?
-    var encryptionKey: String?
-    var features: Data?
-    var attributes: JSON
-    var trackingClosure: TrackingCallback
-    var logLevel: Level = .info
-    var isQaMode: Bool = false
-    var isEnabled: Bool = true
-    var forcedVariations: JSON?
-    var cacheDirectory: CacheDirectory = .applicationSupport
-    var stickyBucketService: StickyBucketServiceProtocol?
-    var backgroundSync: Bool
-    var stableSession: Bool = false
-    var remoteEval: Bool
-    var apiRequestHeaders: [String: String]? = nil
-    var streamingHostRequestHeaders: [String: String]? = nil
-    var forcedFeatureValues: JSON?
-}
-
 /// GrowthBookBuilder - inItializer for GrowthBook SDK for Apps
 /// - HostURL - Server URL
 /// - EncryptionKey - Key for decrypting encrypted feature from API
@@ -44,6 +22,43 @@ public struct GrowthBookModel {
     private var networkDispatcher: NetworkProtocol = CoreNetworkClient()
     private var cachingManager: CachingLayer
     private var ttlSeconds: Int
+
+    @nonobjc public init(
+        growthBookBuilderModel: GrowthBookModel,
+        networkDispatcher: NetworkProtocol,
+        ttlSeconds: Int = 60,
+        cachingManager: CachingLayer,
+        refreshHandler: CacheRefreshHandler? = nil) {
+
+        self.growthBookBuilderModel = growthBookBuilderModel
+        self.refreshHandler = refreshHandler
+        self.networkDispatcher = networkDispatcher
+        self.cachingManager = cachingManager
+        self.ttlSeconds = ttlSeconds
+
+        super.init()
+    }
+
+    @nonobjc public convenience init(
+        growthBookBuilderModel: GrowthBookModel,
+        apiRequestHeaders: [String: String] = [:],
+        streamingHostRequestHeaders: [String: String] = [:],
+        ttlSeconds: Int = 60,
+        refreshHandler: CacheRefreshHandler? = nil,
+        cachingManager: CachingLayer) {
+
+        let networkDispatcher = CoreNetworkClient(
+            apiRequestHeaders: apiRequestHeaders,
+            streamingHostRequestHeaders: streamingHostRequestHeaders
+        )
+        self.init(
+            growthBookBuilderModel: growthBookBuilderModel,
+            networkDispatcher: networkDispatcher,
+            ttlSeconds: ttlSeconds,
+            cachingManager: cachingManager,
+            refreshHandler: refreshHandler
+        )
+    }
 
     @objc public init(
         apiHost: String? = nil,
