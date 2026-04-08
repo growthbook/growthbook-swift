@@ -16,11 +16,11 @@ class FeaturesViewModel {
     var encryptionKey: String?
     /// Caching Manager
     let manager: CachingLayer
-    let fallbackFeatures: Features?
     internal var sseHandler: SSEHandler?
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
-
+    let fallbackFeatures: Features?
+    
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, preloadedFeatures: Features? = nil, fallbackFeatures: Features? = nil) {
         self.delegate = delegate
         self.dataSource = dataSource
@@ -34,79 +34,80 @@ class FeaturesViewModel {
             self.fetchCachedFeatures()
         }
     }
-
+    
     private func isCacheExpired() -> Bool {
         guard let expiresAt = expiresAt else {
             return true
         }
         return Date().timeIntervalSince1970 >= expiresAt
     }
-
+    
     private func refreshExpiresAt() {
         expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
     }
-
+    
     func connectBackgroundSync(sseUrl: String) {
         guard let url = URL(string: sseUrl) else { return }
-
+        
         // Disconnect existing connection if any
         sseHandler?.disconnect()
-
+        
         let streamingUpdate = SSEHandler(url: url)
         sseHandler = streamingUpdate
-
+        
         streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
             guard let jsonData = data?.data(using: .utf8) else { return }
             self?.prepareFeaturesData(data: jsonData)
         }
         streamingUpdate.connect()
-
+        
         streamingUpdate.onDissconnect { [weak streamingUpdate] _, shouldReconnect, _ in
             if let shouldReconnect = shouldReconnect, shouldReconnect {
                 streamingUpdate?.connect()
             }
         }
     }
-
+    
     deinit {
         sseHandler?.disconnect()
     }
-
+    
     @discardableResult
-    private func fetchCachedFeatures(logging: Bool = false) -> Bool {
+    private func fetchCachedFeatures(logging: Bool = false, isRemote: Bool = false) -> Bool {
         // Check for cache data
         if let data = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
             if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
                 let crypto: CryptoProtocol = Crypto()
                 if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+                    delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
                     return true
                 } else {
-                    delegate?.featuresFetchFailed(error: .failedParsedEncryptedData, isRemote: false)
+                    delegate?.featuresFetchFailed(error: .failedParsedEncryptedData, isRemote: isRemote)
                     if logging { logger.error("Failed get features from cached encrypted features") }
                     return false
                 }
             } else if let features = try? decoder.decode(Features.self, from: data) {
                 // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: false)
+                delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
                 return true
             } else {
-                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: false)
+                delegate?.featuresFetchFailed(error: .failedParsedData, isRemote: isRemote)
                 if logging { logger.error("Failed parse local data") }
                 return false
             }
         } else {
+            delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: isRemote)
             if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
             return false
         }
     }
-
+    
     /// Fetch Features
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
         // Load from cache first. Returns true if valid cached features were loaded.
         let cacheLoaded = fetchCachedFeatures(logging: true)
-
+        
         if let apiUrl = apiUrl {
             if remoteEval {
                 dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { result in
@@ -130,6 +131,11 @@ class FeaturesViewModel {
                     case .success(let data):
                         self.prepareFeaturesData(data: data)
                     case .failure(let error):
+                        if (error as NSError).code == 304 {
+                            self.refreshExpiresAt()
+                            self.fetchCachedFeatures(isRemote: true)
+                            return
+                        }
                         logger.info("Failed to get features from remote: \(error.localizedDescription)")
                         // Only use fallback if cache was empty/invalid — cache takes precedence
                         if !cacheLoaded, let fallback = self.fallbackFeatures {
@@ -154,11 +160,11 @@ class FeaturesViewModel {
             }
         }
     }
-
+    
     /// Cache API Response and push success event
     func prepareFeaturesData(data: Data) {
         // Call Success Delegate with mention of data available with remote
-
+        
         let decoder = JSONDecoder()
         if let jsonPetitions = try? decoder.decode(FeaturesDataModel.self, from: data) {
             delegate?.featuresAPIModelSuccessfully(model: jsonPetitions)
@@ -194,7 +200,7 @@ class FeaturesViewModel {
                 logger.error("Failed get encrypted features or it's empty")
                 return
             }
-
+            
             if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                 let crypto = Crypto()
                 if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
