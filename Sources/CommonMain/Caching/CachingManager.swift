@@ -105,18 +105,20 @@ import Foundation
     /// Get Content from cache
     @objc public func getContent(fileName: String) -> Data? {
         lock.withLock {
-            let fileManager = FileManager.default
-
             // Get File Path
             let filePath = getTargetFile(fileName: fileName)
             let fileURL = URL(fileURLWithPath: filePath)
 
             do {
                 return try Data(contentsOf: fileURL)
-            } catch let error as NSError where error.code == NSFileReadNoSuchFileError {
+            } catch let error as NSError
+                where error.code == NSFileReadNoSuchFileError
+            {
                 return nil
             } catch {
-                logger.error("Failed to read cache: \(error.localizedDescription)")
+                logger.error(
+                    "Failed to read cache: \(error.localizedDescription)"
+                )
                 return nil
             }
         }
