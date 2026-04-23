@@ -524,7 +524,7 @@ public struct GrowthBookModel {
 
     @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
         if isRemote {
-            refreshHandler?(.failedToFetchData)
+            refreshHandler?(error)
         }
     }
 
@@ -533,7 +533,7 @@ public struct GrowthBookModel {
     }
 
     @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
-        refreshHandler?(.failedToFetchData)
+        refreshHandler?(error)
     }
 
     public func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
