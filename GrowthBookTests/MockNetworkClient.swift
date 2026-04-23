@@ -199,6 +199,55 @@ class MockResponse {
     }
     """.trimmingCharacters(in: .whitespaces)
     
+    /// Reproduces the payload shape reported by users after multiRange namespace support
+    /// was introduced: feature rules may now carry a `filters` array whose `ranges` items
+    /// are bare JSON arrays `[start, end]` rather than keyed objects.
+    let successResponseWithFilters = """
+    {
+        "status": 200,
+        "features": {
+            "experiment_feature": {
+                "defaultValue": "control",
+                "rules": [
+                    {
+                        "condition": {
+                            "lang": "en"
+                        },
+                        "coverage": 1,
+                        "hashAttribute": "id",
+                        "bucketVersion": 1,
+                        "filters": [
+                            {
+                                "attribute": "id",
+                                "seed": "04a30ae4-80d2-42e5-a9b2-9dea31b6d174",
+                                "hashVersion": 2,
+                                "ranges": [
+                                    [0, 0.75]
+                                ]
+                            }
+                        ],
+                        "seed": "42ace165-6b06-4404-8f98-3f115789d44e",
+                        "hashVersion": 2,
+                        "variations": ["control", "variant"],
+                        "weights": [0.5, 0.5],
+                        "key": "experiment_feature",
+                        "meta": [
+                            {"key": "0", "name": "Control"},
+                            {"key": "1", "name": "Variant"}
+                        ],
+                        "phase": "1",
+                        "name": "Experiment with multiRange filters"
+                    }
+                ]
+            },
+            "simple_feature": {
+                "defaultValue": false
+            }
+        },
+        "savedGroups": {}
+    }
+    """.trimmingCharacters(in: .whitespaces)
+
     let successResponseEncryptedFeatures = """
         {
             "status":200,

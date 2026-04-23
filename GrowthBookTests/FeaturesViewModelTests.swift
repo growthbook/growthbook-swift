@@ -137,6 +137,32 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertFalse(hasFeatures)
     }
 
+    /// Regression test: payloads that include `filters` with array-encoded `ranges`
+    /// (e.g. `[[0, 0.75]]`) were causing a full decode failure because BucketRange's
+    /// synthesised Codable expected a keyed object, not a bare `[Float, Float]` array.
+    func testSuccessWithFiltersPayload() throws {
+        isSuccess = false
+        isError = true
+
+        let viewModel = FeaturesViewModel(
+            delegate: self,
+            dataSource: FeaturesDataSource(
+                dispatcher: MockNetworkClient(
+                    successResponse: MockResponse().successResponseWithFilters,
+                    error: nil
+                )
+            ),
+            cachingManager: cachingManager,
+            ttlSeconds: ttlSeconds
+        )
+
+        viewModel.fetchFeatures(apiUrl: "")
+
+        XCTAssertTrue(isSuccess, "Expected successful feature fetch with filters payload")
+        XCTAssertFalse(isError)
+        XCTAssertTrue(hasFeatures)
+    }
+
     func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
         isSuccess = true
         isError = false
