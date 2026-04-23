@@ -63,6 +63,20 @@ public struct BucketRange: Codable {
             self.number2 = json.arrayValue[1].floatValue
         }
     }
+
+    /// The wire format is a two-element JSON array `[start, end]`, e.g. `[0, 0.75]`.
+    /// Swift's synthesised Codable would look for keyed fields, so we implement manually.
+    public init(from decoder: Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        number1 = try container.decode(Float.self)
+        number2 = try container.decode(Float.self)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.unkeyedContainer()
+        try container.encode(number1)
+        try container.encode(number2)
+    }
 }
 
 public enum SDKErrorCode: String {
