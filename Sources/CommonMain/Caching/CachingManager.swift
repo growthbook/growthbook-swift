@@ -1,5 +1,5 @@
-import Foundation
 import CommonCrypto
+import Foundation
 
 /// Interface for Caching Layer
 @objc public protocol CachingLayer: AnyObject {
@@ -13,28 +13,32 @@ import CommonCrypto
 
 /// This is actual implementation of Caching Layer in iOS
 @objc public class CachingManager: NSObject, CachingLayer {
-    
+
     private var cacheDirectory: CacheDirectory = {
         #if os(tvOS)
-        return .caches
+            return .caches
         #else
-        return .applicationSupport
+            return .applicationSupport
         #endif
     }()
     private var customCachePath: String?
     private var cacheKey: String = ""
-    
+
+    private let lock = NSLock()
+
     public init(apiKey: String? = nil) {
         super.init()
         if let apiKey {
             self.setCacheKey(apiKey)
         }
     }
-    
+
     public func setCacheKey(_ key: String) {
-        self.cacheKey = sha256Hash(key)
+        lock.withLock {
+            self.cacheKey = sha256Hash(key)
+        }
     }
-    
+
     func sha256Hash(_ input: String) -> String {
         guard let data = input.data(using: .utf8) else { return "" }
         var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
@@ -47,9 +51,11 @@ import CommonCrypto
 
     /// Set a custom cache saving directory
     @objc public func setCustomCachePath(_ path: String) {
-        self.customCachePath = path
+        lock.withLock {
+            self.customCachePath = path
+        }
     }
-    
+
     @objc func getData(fileName: String) -> Data? {
         return getContent(fileName: fileName)
     }
@@ -57,65 +63,73 @@ import CommonCrypto
     @objc func putData(fileName: String, content: Data) {
         saveContent(fileName: fileName, content: content)
     }
-    
+
     /// Set system cache directory, with tvOS compatibility handling.
     @objc public func setSystemCacheDirectory(_ directory: CacheDirectory) {
-        #if os(tvOS)
-        if directory == .applicationSupport {
-            logger.warning("CacheDirectory.applicationSupport is not supported on tvOS. Falling back to .caches.")
-            self.cacheDirectory = .caches
-        } else {
-            self.cacheDirectory = directory
+        lock.withLock {
+
+            #if os(tvOS)
+                if directory == .applicationSupport {
+                    logger.warning(
+                        "CacheDirectory.applicationSupport is not supported on tvOS. Falling back to .caches."
+                    )
+                    self.cacheDirectory = .caches
+                } else {
+                    self.cacheDirectory = directory
+                }
+            #else
+                self.cacheDirectory = directory
+            #endif
+            // Reset custom path when using system directory
+            self.customCachePath = nil
         }
-        #else
-        self.cacheDirectory = directory
-        #endif
-        // Reset custom path when using system directory
-        self.customCachePath = nil
     }
-    
+
     /// Save content in cache
     @objc public func saveContent(fileName: String, content: Data) {
-        let fileManager = FileManager.default
+        lock.withLock {
+            // Get File Path
+            let filePath = getTargetFile(fileName: fileName)
+            let fileURL = URL(fileURLWithPath: filePath)
 
-        // Get File Path
-        let filePath = getTargetFile(fileName: fileName)
-        let fileURL = NSURL.fileURL(withPath: filePath)
-
-        // Check if file already exists and delete if so
-        if fileManager.fileExists(atPath: filePath) {
             do {
-                try fileManager.removeItem(at: fileURL)
+                try content.write(to: fileURL, options: .atomic)
             } catch {
-                logger.error("Failed remove error: \(error.localizedDescription)")
+                logger.error(
+                    "Failed to write cache: \(error.localizedDescription)"
+                )
             }
         }
-        
-        // Write contents in file
-        fileManager.createFile(atPath: filePath, contents: content, attributes: nil)
     }
 
     /// Get Content from cache
     @objc public func getContent(fileName: String) -> Data? {
-        let fileManager = FileManager.default
+        lock.withLock {
+            // Get File Path
+            let filePath = getTargetFile(fileName: fileName)
+            let fileURL = URL(fileURLWithPath: filePath)
 
-        // Get File Path
-        let filePath = getTargetFile(fileName: fileName)
-
-        // Check if file exists
-        if fileManager.fileExists(atPath: filePath) {
-            // Read File Contents
-            if let jsonContents = fileManager.contents(atPath: filePath) {
-                return jsonContents
+            do {
+                return try Data(contentsOf: fileURL)
+            } catch let error as NSError
+                where error.code == NSFileReadNoSuchFileError
+            {
+                return nil
+            } catch {
+                logger.error(
+                    "Failed to read cache: \(error.localizedDescription)"
+                )
+                return nil
             }
         }
-        return nil
     }
 
     /// Get Target File Path in internal memory
     @objc func getTargetFile(fileName: String) -> String {
         // Get Documents Directory Path
-        guard let directoryPath = customCachePath ?? cacheDirectory.path else { return "" }
+        guard let directoryPath = customCachePath ?? cacheDirectory.path else {
+            return ""
+        }
         // Append Folder name
         let targetFolderPath = directoryPath + "/GrowthBook-Cache-\(cacheKey)"
 
@@ -124,10 +138,14 @@ import CommonCrypto
         if !fileManager.fileExists(atPath: targetFolderPath) {
             // Create folder for GrowthBook
             do {
-                try fileManager.createDirectory(at: NSURL.fileURL(withPath: targetFolderPath),
-                                                withIntermediateDirectories: true)
+                try fileManager.createDirectory(
+                    at: NSURL.fileURL(withPath: targetFolderPath),
+                    withIntermediateDirectories: true
+                )
             } catch {
-                logger.error("Failed created directory: \(error.localizedDescription)")
+                logger.error(
+                    "Failed created directory: \(error.localizedDescription)"
+                )
             }
         }
 
@@ -137,27 +155,35 @@ import CommonCrypto
         // Create complete filePath for targetFileName & internal Memory Folder
         return "\(targetFolderPath)/\(file).txt"
     }
-    
+
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
     @objc public func clearCache() {
-        
-        guard let directoryPath = self.customCachePath ?? cacheDirectory.path else {
-            logger.error("Failed to retrieve directory path.")
-            return
-        }
-        
-        let targetFolderPath = directoryPath + "/GrowthBook-Cache-\(cacheKey)"
-        let fileManager = FileManager.default
-        
-        // Check if folder exists
-        if fileManager.fileExists(atPath: targetFolderPath) {
-            do {
-                try fileManager.removeItem(atPath: targetFolderPath)
-            } catch {
-                logger.error("Failed to clear cache: \(error.localizedDescription)")
+        lock.withLock {
+            guard
+                let directoryPath = self.customCachePath ?? cacheDirectory.path
+            else {
+                logger.error("Failed to retrieve directory path.")
+                return
             }
-        } else {
-            logger.warning("Cache directory does not exist. Nothing to clear.")
+
+            let targetFolderPath =
+                directoryPath + "/GrowthBook-Cache-\(cacheKey)"
+            let fileManager = FileManager.default
+
+            // Check if folder exists
+            if fileManager.fileExists(atPath: targetFolderPath) {
+                do {
+                    try fileManager.removeItem(atPath: targetFolderPath)
+                } catch {
+                    logger.error(
+                        "Failed to clear cache: \(error.localizedDescription)"
+                    )
+                }
+            } else {
+                logger.warning(
+                    "Cache directory does not exist. Nothing to clear."
+                )
+            }
         }
     }
 }
@@ -169,7 +195,7 @@ import CommonCrypto
     case documents
     case library
     case developerLibrary
-    
+
     /// Converts the enumeration case into the corresponding `FileManager.SearchPathDirectory` value, if applicable.
     var searchPathDirectory: FileManager.SearchPathDirectory? {
         switch self {
@@ -185,11 +211,12 @@ import CommonCrypto
             return .developerDirectory
         }
     }
-    
+
     /// Retrieves the path to the cache directory represented by the enumeration case.
     var path: String? {
         switch self {
-        case .applicationSupport, .caches, .documents, .library, .developerLibrary:
+        case .applicationSupport, .caches, .documents, .library,
+            .developerLibrary:
             return NSSearchPathForDirectoriesInDomains(
                 searchPathDirectory ?? .cachesDirectory,
                 .userDomainMask,

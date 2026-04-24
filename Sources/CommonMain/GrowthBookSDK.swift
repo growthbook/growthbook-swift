@@ -516,7 +516,9 @@ protocol GrowthBookProtocol: AnyObject {
 
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
     @objc public func clearCache() {
-        cachingManager.clearCache()
+        withLock {
+            cachingManager.clearCache()
+        }
     }
 
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
