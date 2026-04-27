@@ -94,6 +94,17 @@ class FeaturesViewModel {
             delegate?.featuresFetchFailed(error: .failedToLoadData, isRemote: isRemote)
             if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
         }
+
+        if let savedGroupsData = manager.getContent(fileName: Constants.savedGroupsCache) {
+            if let encryptionKey, !encryptionKey.isEmpty {
+                if let encryptedString = String(data: savedGroupsData, encoding: .utf8),
+                   let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
+                    delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
+                }
+            } else if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
+                delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
+            }
+        }
     }
     
     

@@ -112,6 +112,32 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertFalse(isError)
     }
     
+    func testSavedGroupsRestoredFromCacheOnRestart() throws {
+        // Simulate first launch: fetch from network, savedGroups written to cache
+        let firstVM = FeaturesViewModel(
+            delegate: self,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)),
+            cachingManager: cachingManager,
+            ttlSeconds: ttlSeconds
+        )
+        firstVM.fetchFeatures(apiUrl: "")
+        XCTAssertTrue(isSuccess)
+
+        // Simulate app restart: new VM reads only from cache, no network
+        var savedGroupsFromCache: JSON? = nil
+        let captureDelegate = SavedGroupsCapture { savedGroupsFromCache = $0 }
+        let restartVM = FeaturesViewModel(
+            delegate: captureDelegate,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData)),
+            cachingManager: cachingManager,
+            ttlSeconds: ttlSeconds
+        )
+        _ = restartVM
+
+        XCTAssertNotNil(savedGroupsFromCache, "savedGroups should be restored from cache on restart")
+        XCTAssertFalse(savedGroupsFromCache?.dictionaryValue.isEmpty ?? true, "savedGroups should not be empty")
+    }
+
     func test304NotModifiedTreatedAsSuccess() throws {
         // First fetch to populate cache
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
@@ -203,6 +229,22 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     }
     
     func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
-        
+
+    }
+}
+
+private class SavedGroupsCapture: FeaturesFlowDelegate {
+    private let onSavedGroups: (JSON) -> Void
+
+    init(_ onSavedGroups: @escaping (JSON) -> Void) {
+        self.onSavedGroups = onSavedGroups
+    }
+
+    func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {}
+    func featuresAPIModelSuccessfully(model: FeaturesDataModel) {}
+    func featuresFetchFailed(error: SDKError, isRemote: Bool) {}
+    func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
+    func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
+        onSavedGroups(savedGroups)
     }
 }
