@@ -16,6 +16,21 @@
 		84095C902818245700ADDF19 /* Formatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C8E2818245100ADDF19 /* Formatter.swift */; };
 		84095C932818254400ADDF19 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C91281824DB00ADDF19 /* Theme.swift */; };
 		840E386F2B88BD75003DFC9F /* ExperimentHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 840E386E2B88BD75003DFC9F /* ExperimentHelper.swift */; };
+		843315FD2FA22A1B00D1C388 /* UtilsExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843315FC2FA22A1B00D1C388 /* UtilsExtendedTests.swift */; };
+		843315FE2FA22A1B00D1C388 /* FeatureModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843315FA2FA22A1B00D1C388 /* FeatureModelTests.swift */; };
+		843315FF2FA22A1B00D1C388 /* CommonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843315F82FA22A1B00D1C388 /* CommonTests.swift */; };
+		843316002FA22A1B00D1C388 /* StickyBucketServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843315FB2FA22A1B00D1C388 /* StickyBucketServiceTests.swift */; };
+		843316012FA22A1B00D1C388 /* DecryptionUtilsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843315F92FA22A1B00D1C388 /* DecryptionUtilsTests.swift */; };
+		843316062FA252B300D1C388 /* GrowthBookSDKTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316052FA252B300D1C388 /* GrowthBookSDKTests.swift */; };
+		843316082FA2704B00D1C388 /* FeatureModelInitJsonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316072FA2704B00D1C388 /* FeatureModelInitJsonTests.swift */; };
+		8433160C2FA2B6AD00D1C388 /* ExtensionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433160A2FA2B6AD00D1C388 /* ExtensionsTests.swift */; };
+		8433160D2FA2B6AD00D1C388 /* UtilsStickyBucketTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433160B2FA2B6AD00D1C388 /* UtilsStickyBucketTests.swift */; };
+		8433160E2FA2B6AD00D1C388 /* ConstantsAndModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316092FA2B6AD00D1C388 /* ConstantsAndModelTests.swift */; };
+		843316102FA3F3AE00D1C388 /* ConditionEvaluatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433160F2FA3F3AE00D1C388 /* ConditionEvaluatorTests.swift */; };
+		843316122FA3F76100D1C388 /* FeatureEvaluatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316112FA3F76100D1C388 /* FeatureEvaluatorTests.swift */; };
+		843316142FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316132FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift */; };
+		843316162FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */; };
+		843316182FA3FD1800D1C388 /* MiscCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */; };
 		844838362E054AD200784A36 /* NetworkRetryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844838342E054AD200784A36 /* NetworkRetryHandler.swift */; };
 		846A7A562D6CAE56007CCFD1 /* GlobalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A7A552D6CAE53007CCFD1 /* GlobalContext.swift */; };
 		8483E6FA2ABC60B900306B55 /* DecryptionUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8483E6F92ABC60B900306B55 /* DecryptionUtils.swift */; };
@@ -94,6 +109,21 @@
 		84095C8E2818245100ADDF19 /* Formatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatter.swift; sourceTree = "<group>"; };
 		84095C91281824DB00ADDF19 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		840E386E2B88BD75003DFC9F /* ExperimentHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentHelper.swift; sourceTree = "<group>"; };
+		843315F82FA22A1B00D1C388 /* CommonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonTests.swift; sourceTree = "<group>"; };
+		843315F92FA22A1B00D1C388 /* DecryptionUtilsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecryptionUtilsTests.swift; sourceTree = "<group>"; };
+		843315FA2FA22A1B00D1C388 /* FeatureModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureModelTests.swift; sourceTree = "<group>"; };
+		843315FB2FA22A1B00D1C388 /* StickyBucketServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StickyBucketServiceTests.swift; sourceTree = "<group>"; };
+		843315FC2FA22A1B00D1C388 /* UtilsExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilsExtendedTests.swift; sourceTree = "<group>"; };
+		843316052FA252B300D1C388 /* GrowthBookSDKTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookSDKTests.swift; sourceTree = "<group>"; };
+		843316072FA2704B00D1C388 /* FeatureModelInitJsonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureModelInitJsonTests.swift; sourceTree = "<group>"; };
+		843316092FA2B6AD00D1C388 /* ConstantsAndModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstantsAndModelTests.swift; sourceTree = "<group>"; };
+		8433160A2FA2B6AD00D1C388 /* ExtensionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExtensionsTests.swift; sourceTree = "<group>"; };
+		8433160B2FA2B6AD00D1C388 /* UtilsStickyBucketTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilsStickyBucketTests.swift; sourceTree = "<group>"; };
+		8433160F2FA3F3AE00D1C388 /* ConditionEvaluatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConditionEvaluatorTests.swift; sourceTree = "<group>"; };
+		843316112FA3F76100D1C388 /* FeatureEvaluatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureEvaluatorTests.swift; sourceTree = "<group>"; };
+		843316132FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentEvaluatorTests.swift; sourceTree = "<group>"; };
+		843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesViewModelExtendedTests.swift; sourceTree = "<group>"; };
+		843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscCoverageTests.swift; sourceTree = "<group>"; };
 		843363F627F845EB0072BFDC /* GrowthBookSDK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookSDK.swift; sourceTree = "<group>"; };
 		843363F827F845EB0072BFDC /* NetworkClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkClient.swift; sourceTree = "<group>"; };
 		843363FA27F845EB0072BFDC /* FeaturesDataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesDataModel.swift; sourceTree = "<group>"; };
@@ -288,6 +318,21 @@
 		849114BE280DA71E00C0B9A5 /* GrowthBookTests */ = {
 			isa = PBXGroup;
 			children = (
+				843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */,
+				843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */,
+				843316132FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift */,
+				843316112FA3F76100D1C388 /* FeatureEvaluatorTests.swift */,
+				8433160F2FA3F3AE00D1C388 /* ConditionEvaluatorTests.swift */,
+				843316092FA2B6AD00D1C388 /* ConstantsAndModelTests.swift */,
+				8433160A2FA2B6AD00D1C388 /* ExtensionsTests.swift */,
+				8433160B2FA2B6AD00D1C388 /* UtilsStickyBucketTests.swift */,
+				843316072FA2704B00D1C388 /* FeatureModelInitJsonTests.swift */,
+				843316052FA252B300D1C388 /* GrowthBookSDKTests.swift */,
+				843315F82FA22A1B00D1C388 /* CommonTests.swift */,
+				843315F92FA22A1B00D1C388 /* DecryptionUtilsTests.swift */,
+				843315FA2FA22A1B00D1C388 /* FeatureModelTests.swift */,
+				843315FB2FA22A1B00D1C388 /* StickyBucketServiceTests.swift */,
+				843315FC2FA22A1B00D1C388 /* UtilsExtendedTests.swift */,
 				5D5EAD1E2EF1DED60049F432 /* LruETagCacheTests.swift */,
 				84391F2528016C5C003309DC /* Source */,
 				84391F0827FD64EB003309DC /* FeaturesViewModelTests.swift */,
@@ -465,14 +510,29 @@
 			files = (
 				849114C7280DA73000C0B9A5 /* FeaturesViewModelTests.swift in Sources */,
 				5D5EAD1F2EF1DED60049F432 /* LruETagCacheTests.swift in Sources */,
+				843316162FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift in Sources */,
+				843316062FA252B300D1C388 /* GrowthBookSDKTests.swift in Sources */,
 				849114C8280DA73000C0B9A5 /* ConditionTests.swift in Sources */,
 				849114C9280DA73000C0B9A5 /* ExperimentRunTests.swift in Sources */,
 				849114CA280DA73100C0B9A5 /* FeatureValueTests.swift in Sources */,
 				848B8044294B5CB900B22168 /* CryptoTests.swift in Sources */,
+				843315FD2FA22A1B00D1C388 /* UtilsExtendedTests.swift in Sources */,
+				843316182FA3FD1800D1C388 /* MiscCoverageTests.swift in Sources */,
+				843316122FA3F76100D1C388 /* FeatureEvaluatorTests.swift in Sources */,
+				843315FE2FA22A1B00D1C388 /* FeatureModelTests.swift in Sources */,
+				843315FF2FA22A1B00D1C388 /* CommonTests.swift in Sources */,
+				8433160C2FA2B6AD00D1C388 /* ExtensionsTests.swift in Sources */,
+				8433160D2FA2B6AD00D1C388 /* UtilsStickyBucketTests.swift in Sources */,
+				8433160E2FA2B6AD00D1C388 /* ConstantsAndModelTests.swift in Sources */,
+				843316002FA22A1B00D1C388 /* StickyBucketServiceTests.swift in Sources */,
+				843316012FA22A1B00D1C388 /* DecryptionUtilsTests.swift in Sources */,
+				843316082FA2704B00D1C388 /* FeatureModelInitJsonTests.swift in Sources */,
 				849114CB280DA73100C0B9A5 /* TestHelper.swift in Sources */,
 				849114CC280DA73100C0B9A5 /* UtilsTests.swift in Sources */,
 				84E82C3D2BD2AF8F003F000B /* StickyBucketingTests.swift in Sources */,
+				843316142FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift in Sources */,
 				849114CD280DA73100C0B9A5 /* GrowthBookSDKBuilderTests.swift in Sources */,
+				843316102FA3F3AE00D1C388 /* ConditionEvaluatorTests.swift in Sources */,
 				849114CE280DA73100C0B9A5 /* MockNetworkClient.swift in Sources */,
 				849114CF280DA73100C0B9A5 /* CachingManagerTest.swift in Sources */,
 			);
