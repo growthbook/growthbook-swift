@@ -124,8 +124,8 @@ class FeaturesViewModel {
                         return
                     }
                     logger.info("Failed to get features from remote: \(error.localizedDescription)")
-                    self.delegate?.featuresFetchFailed(error: .failedToFetchData, isRemote: true)
-                    self.fetchCachedFeatures()
+                    self.delegate?.featuresFetchFailed(error: .failedToFetchData(error), isRemote: true)
+                    self.fetchCachedFeatures(isRemote: true)
                 }
             }
         }
