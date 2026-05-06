@@ -156,10 +156,10 @@ class FeaturesViewModel {
                         return
                     }
                     logger.info("Failed to get features from remote: \(error.localizedDescription)")
-                    let error: SDKError = .failedToFetchData
-                    self.delegate?.featuresFetchFailed(error: error, isRemote: true)
-                    self.fetchCachedFeatures()
-                    self.delegate?.featuresUpdateIsComplete(error: error, isRemote: true)
+                    let sdkError: SDKError = .failedToFetchData(error)
+                    self.delegate?.featuresFetchFailed(error: sdkError, isRemote: true)
+                    self.fetchCachedFeatures(isRemote: true)
+                    self.delegate?.featuresUpdateIsComplete(error: sdkError, isRemote: true)
                 }
             }
         }
