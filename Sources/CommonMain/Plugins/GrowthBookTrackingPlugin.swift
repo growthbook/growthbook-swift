@@ -23,7 +23,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     public static let defaultBatchSize    = 100
     public static let defaultBatchTimeout: TimeInterval = 10.0
 
-    private static let sdkVersion = "1.0.0"
+    private static let sdkVersion = gbSdkVersion
 
     // MARK: - State
 
