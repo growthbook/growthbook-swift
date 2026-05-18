@@ -139,11 +139,11 @@ final class GrowthBookPluginIntegrationTests: XCTestCase {
 final class GrowthBookTrackingPluginTests: XCTestCase {
 
     private func makePlugin(
-        batchSize: Int = GrowthBookTrackingPlugin.defaultBatchSize,
-        batchTimeout: TimeInterval = GrowthBookTrackingPlugin.defaultBatchTimeout,
+        batchSize: Int = GrowthBookTrackingPlugin.Config.defaultBatchSize,
+        batchTimeout: TimeInterval = GrowthBookTrackingPlugin.Config.defaultBatchTimeout,
         onRequest: ((URLRequest) -> Void)? = nil
     ) -> GrowthBookTrackingPlugin {
-        GrowthBookTrackingPlugin(batchSize: batchSize, batchTimeout: batchTimeout) { request, completion in
+        GrowthBookTrackingPlugin(config: .init(batchSize: batchSize, batchTimeout: batchTimeout)) { request, completion in
             onRequest?(request)
             completion()
         }
@@ -247,7 +247,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     func testRequestSentToCorrectEndpoint() {
         let expectation = expectation(description: "correct endpoint")
         let plugin = makePlugin(batchSize: 1) { request in
-            XCTAssertEqual(request.url?.absoluteString, "\(GrowthBookTrackingPlugin.defaultIngestorHost)/track?client_key=sdk-test")
+            XCTAssertEqual(request.url?.absoluteString, "\(GrowthBookTrackingPlugin.Config.defaultIngestorHost)/track?client_key=sdk-test")
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
             XCTAssertTrue(request.value(forHTTPHeaderField: "User-Agent")?.hasPrefix("growthbook-swift-sdk/") == true)

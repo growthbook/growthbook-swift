@@ -9,27 +9,37 @@ import Foundation
 /// - Body: `[{ "event": "...", ... }, ...]`  (plain JSON array)
 /// - Headers: `Content-Type: application/json`, `User-Agent: growthbook-swift-sdk/{version}`
 ///
-/// **Batch defaults**
-/// - batchSize: 100 events
-/// - batchTimeout: 10 seconds
-///
 /// If initialised with an empty `clientKey` the plugin degrades to no-op behaviour
 /// so it never crashes the host app.
 public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
-    // MARK: - Configuration
+    // MARK: - Config
 
-    public static let defaultIngestorHost = "https://us1.gb-ingest.com"
-    public static let defaultBatchSize    = 100
-    public static let defaultBatchTimeout: TimeInterval = 10.0
+    public struct Config {
+        public let ingestorHost: String
+        public let batchSize: Int
+        public let batchTimeout: TimeInterval
 
-    private static let sdkVersion = gbSdkVersion
+        public static let defaultIngestorHost = "https://us1.gb-ingest.com"
+        public static let defaultBatchSize    = 100
+        public static let defaultBatchTimeout: TimeInterval = 10.0
+
+        public init(
+            ingestorHost: String = defaultIngestorHost,
+            batchSize: Int = defaultBatchSize,
+            batchTimeout: TimeInterval = defaultBatchTimeout
+        ) {
+            self.ingestorHost = ingestorHost
+            self.batchSize = batchSize
+            self.batchTimeout = batchTimeout
+        }
+    }
 
     // MARK: - State
 
-    private let ingestorHost: String
-    private let batchSize: Int
-    private let batchTimeout: TimeInterval
+    private static let sdkVersion = gbSdkVersion
+
+    private let config: Config
 
     private var clientKey: String = ""
     private var isInitialized = false
@@ -46,34 +56,24 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     // MARK: - Init
 
-    public init(
-        ingestorHost: String = defaultIngestorHost,
-        batchSize: Int = defaultBatchSize,
-        batchTimeout: TimeInterval = defaultBatchTimeout
-    ) {
-        self.ingestorHost = ingestorHost
-        self.batchSize = batchSize
-        self.batchTimeout = batchTimeout
+    public init(config: Config = Config()) {
+        self.config = config
 
-        let config = URLSessionConfiguration.default
-        config.urlCache = nil
-        config.requestCachePolicy = .reloadIgnoringLocalCacheData
-        self.urlSession = URLSession(configuration: config)
+        let sessionConfig = URLSessionConfiguration.default
+        sessionConfig.urlCache = nil
+        sessionConfig.requestCachePolicy = .reloadIgnoringLocalCacheData
+        self.urlSession = URLSession(configuration: sessionConfig)
         self.sendHandler = nil
     }
 
     // Internal — lets tests intercept requests without URLProtocol.
     init(
-        ingestorHost: String = defaultIngestorHost,
-        batchSize: Int = defaultBatchSize,
-        batchTimeout: TimeInterval = defaultBatchTimeout,
+        config: Config = Config(),
         sendHandler: @escaping (URLRequest, @escaping () -> Void) -> Void
     ) {
-        self.ingestorHost = ingestorHost
-        self.batchSize = batchSize
-        self.batchTimeout = batchTimeout
-        let config = URLSessionConfiguration.default
-        self.urlSession = URLSession(configuration: config)
+        self.config = config
+        let sessionConfig = URLSessionConfiguration.default
+        self.urlSession = URLSession(configuration: sessionConfig)
         self.sendHandler = sendHandler
     }
 
@@ -131,7 +131,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         var shouldFlush = false
         lock.lock()
         eventQueue.append(event)
-        if eventQueue.count >= batchSize {
+        if eventQueue.count >= config.batchSize {
             shouldFlush = true
         }
         lock.unlock()
@@ -143,7 +143,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     private func startTimer() {
         let timer = DispatchSource.makeTimerSource(queue: timerQueue)
-        timer.schedule(deadline: .now() + batchTimeout, repeating: batchTimeout)
+        timer.schedule(deadline: .now() + config.batchTimeout, repeating: config.batchTimeout)
         timer.setEventHandler { [weak self] in self?.flushAsync() }
         timer.resume()
         flushTimer = timer
@@ -183,7 +183,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
         guard
             let body = try? JSONEncoder().encode(events),
-            let url = URL(string: "\(ingestorHost)/track?client_key=\(key)")
+            let url = URL(string: "\(config.ingestorHost)/track?client_key=\(key)")
         else {
             completion?()
             return
