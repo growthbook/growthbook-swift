@@ -184,6 +184,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
             plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         }
         wait(for: [expectation], timeout: 3.0)
+        withExtendedLifetime(plugin) {}
     }
 
     func testNoFlushBeforeBatchSizeReached() {
@@ -256,6 +257,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         wait(for: [expectation], timeout: 3.0)
+        withExtendedLifetime(plugin) {}
     }
 
     func testFeatureEvaluatedEventIncludedInPayload() {
@@ -271,6 +273,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         let featureResult = FeatureResult(value: JSON(true), isOn: true, source: "defaultValue")
         plugin.onFeatureEvaluated(featureKey: "my-feature", result: featureResult, attributes: nil)
         wait(for: [expectation], timeout: 3.0)
+        withExtendedLifetime(plugin) {}
     }
 
     func testAttributesIncludedInEventPayload() {
