@@ -48,6 +48,8 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     private var flushTimer: DispatchSourceTimer?
 
     private let queue = DispatchQueue(label: "com.growthbook.tracking-plugin", qos: .utility)
+    // Used to detect re-entrant calls to close() from deinit triggered on the queue thread.
+    private static let queueKey = DispatchSpecificKey<Bool>()
 
     private let urlSession: URLSession
     // Non-nil only in tests — bypasses URLSession entirely.
@@ -63,6 +65,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         sessionConfig.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.urlSession = URLSession(configuration: sessionConfig)
         self.sendHandler = nil
+        queue.setSpecific(key: Self.queueKey, value: true)
     }
 
     // Internal — lets tests intercept requests without URLProtocol.
@@ -74,6 +77,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         let sessionConfig = URLSessionConfiguration.default
         self.urlSession = URLSession(configuration: sessionConfig)
         self.sendHandler = sendHandler
+        queue.setSpecific(key: Self.queueKey, value: true)
     }
 
     deinit {
@@ -118,19 +122,32 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     /// Stops the flush timer and synchronously sends all buffered events before returning.
     public func close() {
-        let semaphore = DispatchSemaphore(value: 0)
-        queue.async {
-            self.flushTimer?.cancel()
-            self.flushTimer = nil
-            let events = self.eventQueue
-            self.eventQueue = []
-            guard !events.isEmpty else {
-                semaphore.signal()
-                return
+        if DispatchQueue.getSpecific(key: Self.queueKey) == true {
+            // Already on the queue (e.g. deinit triggered by a queue closure).
+            // Execute inline to avoid deadlocking on queue.async + semaphore.wait.
+            flushTimer?.cancel()
+            flushTimer = nil
+            let events = eventQueue
+            eventQueue = []
+            guard !events.isEmpty else { return }
+            let semaphore = DispatchSemaphore(value: 0)
+            post(events: events) { semaphore.signal() }
+            semaphore.wait()
+        } else {
+            let semaphore = DispatchSemaphore(value: 0)
+            queue.async {
+                self.flushTimer?.cancel()
+                self.flushTimer = nil
+                let events = self.eventQueue
+                self.eventQueue = []
+                guard !events.isEmpty else {
+                    semaphore.signal()
+                    return
+                }
+                self.post(events: events) { semaphore.signal() }
             }
-            self.post(events: events) { semaphore.signal() }
+            semaphore.wait()
         }
-        semaphore.wait()
     }
 
     // MARK: - Private helpers (called from queue)
