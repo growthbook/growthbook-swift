@@ -41,14 +41,13 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     private let config: Config
 
+    // All mutable state is accessed exclusively from `queue`.
     private var clientKey: String = ""
     private var isInitialized = false
-
     private var eventQueue: [IngestEvent] = []
-    private let lock = NSLock()
-
     private var flushTimer: DispatchSourceTimer?
-    private let timerQueue = DispatchQueue(label: "com.growthbook.tracking-plugin.timer", qos: .utility)
+
+    private let queue = DispatchQueue(label: "com.growthbook.tracking-plugin", qos: .utility)
 
     private let urlSession: URLSession
     // Non-nil only in tests — bypasses URLSession entirely.
@@ -85,21 +84,25 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     public func initialize(clientKey: String) {
         guard !clientKey.isEmpty else { return }
-        lock.lock()
-        self.clientKey = clientKey
-        self.isInitialized = true
-        lock.unlock()
-        startTimer()
+        queue.async {
+            self.clientKey = clientKey
+            self.isInitialized = true
+            self.startTimer()
+        }
     }
 
     public func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
-        guard isReady else { return }
-        enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result, attributes: Self.mergedAttributes(attributes))))
+        queue.async {
+            guard self.isInitialized else { return }
+            self.enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result, attributes: Self.mergedAttributes(attributes))))
+        }
     }
 
     public func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
-        guard isReady else { return }
-        enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: Self.mergedAttributes(attributes))))
+        queue.async {
+            guard self.isInitialized else { return }
+            self.enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: Self.mergedAttributes(attributes))))
+        }
     }
 
     private static func mergedAttributes(_ userAttributes: JSON?) -> JSON {
@@ -115,71 +118,47 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     /// Stops the flush timer and synchronously sends all buffered events before returning.
     public func close() {
-        stopTimer()
-        flushSync()
+        let semaphore = DispatchSemaphore(value: 0)
+        queue.async {
+            self.flushTimer?.cancel()
+            self.flushTimer = nil
+            let events = self.eventQueue
+            self.eventQueue = []
+            guard !events.isEmpty else {
+                semaphore.signal()
+                return
+            }
+            self.post(events: events) { semaphore.signal() }
+        }
+        semaphore.wait()
     }
 
-    // MARK: - Private helpers
-
-    private var isReady: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return isInitialized
-    }
+    // MARK: - Private helpers (called from queue)
 
     private func enqueue(_ event: IngestEvent) {
-        var shouldFlush = false
-        lock.lock()
         eventQueue.append(event)
         if eventQueue.count >= config.batchSize {
-            shouldFlush = true
-        }
-        lock.unlock()
-
-        if shouldFlush {
-            flushAsync()
+            flush()
         }
     }
 
     private func startTimer() {
-        let timer = DispatchSource.makeTimerSource(queue: timerQueue)
+        let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + config.batchTimeout, repeating: config.batchTimeout)
-        timer.setEventHandler { [weak self] in self?.flushAsync() }
+        timer.setEventHandler { [weak self] in self?.flush() }
         timer.resume()
         flushTimer = timer
     }
 
-    private func stopTimer() {
-        flushTimer?.cancel()
-        flushTimer = nil
-    }
-
-    private func flushAsync() {
-        let events = drainQueue()
+    private func flush() {
+        let events = eventQueue
+        eventQueue = []
         guard !events.isEmpty else { return }
         post(events: events, completion: nil)
     }
 
-    private func flushSync() {
-        let events = drainQueue()
-        guard !events.isEmpty else { return }
-        let semaphore = DispatchSemaphore(value: 0)
-        post(events: events) { semaphore.signal() }
-        semaphore.wait()
-    }
-
-    private func drainQueue() -> [IngestEvent] {
-        lock.lock()
-        defer { lock.unlock() }
-        let events = eventQueue
-        eventQueue = []
-        return events
-    }
-
     private func post(events: [IngestEvent], completion: (() -> Void)?) {
-        lock.lock()
         let key = clientKey
-        lock.unlock()
 
         guard
             let body = try? JSONEncoder().encode(events),
