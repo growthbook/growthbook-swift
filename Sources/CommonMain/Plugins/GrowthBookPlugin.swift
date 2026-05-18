@@ -60,6 +60,13 @@ public struct ExperimentViewedEvent: Encodable {
         case attributes
     }
 
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(eventName, forKey: .eventName)
+        try container.encode(properties, forKey: .properties)
+        try container.encode(attributes, forKey: .attributes)
+    }
+
     public init(experiment: Experiment, result: ExperimentResult, attributes: JSON) {
         self.properties = Properties(experimentId: experiment.key, variationId: result.variationId)
         self.attributes = attributes
@@ -82,6 +89,13 @@ public struct FeatureEvaluatedEvent: Encodable {
         case eventName = "event_name"
         case properties
         case attributes
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(eventName, forKey: .eventName)
+        try container.encode(properties, forKey: .properties)
+        try container.encode(attributes, forKey: .attributes)
     }
 
     public init(featureKey: String, result: FeatureResult, attributes: JSON) {

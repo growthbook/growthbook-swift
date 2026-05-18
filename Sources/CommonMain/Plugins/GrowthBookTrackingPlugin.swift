@@ -124,29 +124,12 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     public func close() {
         if DispatchQueue.getSpecific(key: Self.queueKey) == true {
             // Already on the queue (e.g. deinit triggered by a queue closure).
-            // Execute inline to avoid deadlocking on queue.async + semaphore.wait.
-            flushTimer?.cancel()
-            flushTimer = nil
-            let events = eventQueue
-            eventQueue = []
-            guard !events.isEmpty else { return }
-            let semaphore = DispatchSemaphore(value: 0)
-            post(events: events) { semaphore.signal() }
-            semaphore.wait()
+            // Execute inline to avoid deadlocking on queue.sync.
+            closeOnQueue()
         } else {
-            let semaphore = DispatchSemaphore(value: 0)
-            queue.async {
-                self.flushTimer?.cancel()
-                self.flushTimer = nil
-                let events = self.eventQueue
-                self.eventQueue = []
-                guard !events.isEmpty else {
-                    semaphore.signal()
-                    return
-                }
-                self.post(events: events) { semaphore.signal() }
-            }
-            semaphore.wait()
+            // queue.sync waits for all pending work then runs closeOnQueue.
+            // The closure completes fully before sync returns — no retain-after-deinit issue.
+            queue.sync { self.closeOnQueue() }
         }
     }
 
@@ -155,23 +138,34 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     private func enqueue(_ event: IngestEvent) {
         eventQueue.append(event)
         if eventQueue.count >= config.batchSize {
-            flush()
+            flushOnQueue()
         }
     }
 
     private func startTimer() {
         let timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + config.batchTimeout, repeating: config.batchTimeout)
-        timer.setEventHandler { [weak self] in self?.flush() }
+        timer.setEventHandler { [weak self] in self?.flushOnQueue() }
         timer.resume()
         flushTimer = timer
     }
 
-    private func flush() {
+    private func flushOnQueue() {
         let events = eventQueue
         eventQueue = []
         guard !events.isEmpty else { return }
         post(events: events, completion: nil)
+    }
+
+    private func closeOnQueue() {
+        flushTimer?.cancel()
+        flushTimer = nil
+        let events = eventQueue
+        eventQueue = []
+        guard !events.isEmpty else { return }
+        let semaphore = DispatchSemaphore(value: 0)
+        post(events: events) { semaphore.signal() }
+        semaphore.wait()
     }
 
     private func post(events: [IngestEvent], completion: (() -> Void)?) {
