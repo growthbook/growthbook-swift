@@ -38,35 +38,47 @@ public enum IngestEvent: Encodable {
 }
 
 public struct ExperimentViewedEvent: Encodable {
-    public let event: String = "experiment_viewed"
-    public let experimentKey: String
-    public let variationId: Int
-    public let hashAttribute: String?
-    public let hashValue: String?
-    public let attributes: JSON?
+    private struct Properties: Encodable {
+        let experimentId: String
+        let variationId: Int
+    }
 
-    public init(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
-        self.experimentKey = experiment.key
-        self.variationId = result.variationId
-        self.hashAttribute = result.hashAttribute
-        self.hashValue = result.valueHash
+    private let eventName = "Experiment Viewed"
+    private let properties: Properties
+    public let attributes: JSON
+
+    enum CodingKeys: String, CodingKey {
+        case eventName = "event_name"
+        case properties
+        case attributes
+    }
+
+    public init(experiment: Experiment, result: ExperimentResult, attributes: JSON) {
+        self.properties = Properties(experimentId: experiment.key, variationId: result.variationId)
         self.attributes = attributes
     }
 }
 
 public struct FeatureEvaluatedEvent: Encodable {
-    public let event: String = "feature_evaluated"
-    public let featureKey: String
-    public let value: JSON?
-    public let source: String
-    public let ruleId: String?
-    public let attributes: JSON?
+    private struct Properties: Encodable {
+        let feature: String
+        let value: JSON?
+        let source: String
+        let ruleId: String?
+    }
 
-    public init(featureKey: String, result: FeatureResult, attributes: JSON?) {
-        self.featureKey = featureKey
-        self.value = result.value
-        self.source = result.source
-        self.ruleId = result.ruleId
+    private let eventName = "Feature Evaluated"
+    private let properties: Properties
+    public let attributes: JSON
+
+    enum CodingKeys: String, CodingKey {
+        case eventName = "event_name"
+        case properties
+        case attributes
+    }
+
+    public init(featureKey: String, result: FeatureResult, attributes: JSON) {
+        self.properties = Properties(feature: featureKey, value: result.value, source: result.source, ruleId: result.ruleId)
         self.attributes = attributes
     }
 }

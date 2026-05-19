@@ -262,8 +262,9 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         let expectation = expectation(description: "feature event in payload")
         let plugin = makePlugin(batchSize: 1) { request in
             let events = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [[String: Any]]
-            XCTAssertEqual(events.first?["event"] as? String, "feature_evaluated")
-            XCTAssertEqual(events.first?["featureKey"] as? String, "my-feature")
+            XCTAssertEqual(events.first?["event_name"] as? String, "Feature Evaluated")
+            let props = events.first?["properties"] as? [String: Any]
+            XCTAssertEqual(props?["feature"] as? String, "my-feature")
             expectation.fulfill()
         }
         plugin.initialize(clientKey: "sdk-test")
@@ -279,6 +280,8 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
             let attrs = events.first?["attributes"] as? [String: Any]
             XCTAssertEqual(attrs?["id"] as? String, "user-1")
             XCTAssertEqual(attrs?["plan"] as? String, "pro")
+            XCTAssertEqual(attrs?["sdk_language"] as? String, "swift")
+            XCTAssertNotNil(attrs?["sdk_version"])
             expectation.fulfill()
         }
         plugin.initialize(clientKey: "sdk-test")

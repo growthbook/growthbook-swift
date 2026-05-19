@@ -94,12 +94,23 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     public func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
         guard isReady else { return }
-        enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result, attributes: attributes)))
+        enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result, attributes: Self.mergedAttributes(attributes))))
     }
 
     public func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
         guard isReady else { return }
-        enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: attributes)))
+        enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: Self.mergedAttributes(attributes))))
+    }
+
+    private static func mergedAttributes(_ userAttributes: JSON?) -> JSON {
+        var merged: [String: Any] = [
+            "sdk_language": "swift",
+            "sdk_version": sdkVersion
+        ]
+        if let dict = userAttributes?.object as? [String: Any] {
+            for (key, value) in dict { merged[key] = value }
+        }
+        return JSON(merged)
     }
 
     /// Stops the flush timer and synchronously sends all buffered events before returning.
