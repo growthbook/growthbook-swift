@@ -15,18 +15,30 @@ public final class PluginRegistry {
     }
 
     func initialize(clientKey: String) {
-        plugins.forEach { $0.initialize(clientKey: clientKey) }
+        for plugin in plugins {
+            safeCall(plugin, "initialize") { $0.initialize(clientKey: clientKey) }
+        }
     }
 
     func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
-        plugins.forEach { $0.onExperimentViewed(experiment: experiment, result: result, attributes: attributes) }
+        for plugin in plugins {
+            safeCall(plugin, "onExperimentViewed") { $0.onExperimentViewed(experiment: experiment, result: result, attributes: attributes) }
+        }
     }
 
     func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
-        plugins.forEach { $0.onFeatureEvaluated(featureKey: featureKey, result: result, attributes: attributes) }
+        for plugin in plugins {
+            safeCall(plugin, "onFeatureEvaluated") { $0.onFeatureEvaluated(featureKey: featureKey, result: result, attributes: attributes) }
+        }
     }
 
     func close() {
-        plugins.forEach { $0.close() }
+        for plugin in plugins {
+            safeCall(plugin, "close") { $0.close() }
+        }
+    }
+
+    private func safeCall(_ plugin: GrowthBookPlugin, _ method: String, _ block: (GrowthBookPlugin) -> Void) {
+        block(plugin)
     }
 }

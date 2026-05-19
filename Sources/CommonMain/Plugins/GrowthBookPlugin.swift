@@ -22,6 +22,13 @@ public protocol GrowthBookPlugin: AnyObject {
     func close()
 }
 
+public extension GrowthBookPlugin {
+    func initialize(clientKey: String) {}
+    func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {}
+    func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {}
+    func close() {}
+}
+
 // MARK: - Ingest event models
 
 /// Wire format for a single event sent to the GrowthBook ingest endpoint.
