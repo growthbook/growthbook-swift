@@ -142,7 +142,7 @@ class FeatureEvaluator {
                                 let userInExperiment = result.inExperiment
                                 if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
                                     context.options.trackingClosure(experiment, result)
-                                    context.options.plugins.forEach { $0.onExperimentViewed(experiment: experiment, result: result) }
+                                    context.options.pluginRegistry.onExperimentViewed(experiment: experiment, result: result)
                                 }
                             }
                         }

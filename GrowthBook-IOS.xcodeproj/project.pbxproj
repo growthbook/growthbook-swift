@@ -33,6 +33,7 @@
 		843316182FA3FD1800D1C388 /* MiscCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */; };
 		8433161B2FA9479100D1C388 /* GrowthBookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316192FA9479100D1C388 /* GrowthBookPlugin.swift */; };
 		8433161D2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */; };
+		8433162120FB123400D1C388 /* PluginRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433162020FB123400D1C388 /* PluginRegistry.swift */; };
 		8433161F2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433161E2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift */; };
 		844838362E054AD200784A36 /* NetworkRetryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844838342E054AD200784A36 /* NetworkRetryHandler.swift */; };
 		846A7A562D6CAE56007CCFD1 /* GlobalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A7A552D6CAE53007CCFD1 /* GlobalContext.swift */; };
@@ -129,6 +130,7 @@
 		843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscCoverageTests.swift; sourceTree = "<group>"; };
 		843316192FA9479100D1C388 /* GrowthBookPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookPlugin.swift; sourceTree = "<group>"; };
 		8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookTrackingPlugin.swift; sourceTree = "<group>"; };
+		8433162020FB123400D1C388 /* PluginRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginRegistry.swift; sourceTree = "<group>"; };
 		8433161E2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookTrackingPluginTests.swift; sourceTree = "<group>"; };
 		843363F627F845EB0072BFDC /* GrowthBookSDK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookSDK.swift; sourceTree = "<group>"; };
 		843363F827F845EB0072BFDC /* NetworkClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkClient.swift; sourceTree = "<group>"; };
@@ -228,6 +230,7 @@
 			children = (
 				8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */,
 				843316192FA9479100D1C388 /* GrowthBookPlugin.swift */,
+				8433162020FB123400D1C388 /* PluginRegistry.swift */,
 			);
 			path = Plugins;
 			sourceTree = "<group>";
@@ -595,6 +598,7 @@
 				84CDE3432812F454008B3E6F /* Context.swift in Sources */,
 				15147AEF2F7E746400FC9112 /* GrowthBookModel.swift in Sources */,
 				8433161B2FA9479100D1C388 /* GrowthBookPlugin.swift in Sources */,
+				8433162120FB123400D1C388 /* PluginRegistry.swift in Sources */,
 				84A1B2C3D4E5F6A7B8C9D0E1F2 /* ContextManager.swift in Sources */,
 				84B2C3D4E5F6A7B8C9D0E1F2A3 /* GlobalConfig.swift in Sources */,
 				8433161D2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift in Sources */,
