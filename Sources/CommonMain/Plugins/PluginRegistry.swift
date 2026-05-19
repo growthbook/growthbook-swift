@@ -4,13 +4,13 @@ import Foundation
 ///
 /// Every dispatch method iterates the full plugin list so that a failure in one plugin
 /// does not skip subsequent plugins. Add per-plugin error handling here as needed.
-final class PluginRegistry {
+public final class PluginRegistry {
 
-    static let empty = PluginRegistry(plugins: [])
+    public static let empty = PluginRegistry(plugins: [])
 
     private let plugins: [GrowthBookPlugin]
 
-    init(plugins: [GrowthBookPlugin]) {
+    public init(plugins: [GrowthBookPlugin]) {
         self.plugins = plugins
     }
 
@@ -18,12 +18,12 @@ final class PluginRegistry {
         plugins.forEach { $0.initialize(clientKey: clientKey) }
     }
 
-    func onExperimentViewed(experiment: Experiment, result: ExperimentResult) {
-        plugins.forEach { $0.onExperimentViewed(experiment: experiment, result: result) }
+    func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
+        plugins.forEach { $0.onExperimentViewed(experiment: experiment, result: result, attributes: attributes) }
     }
 
-    func onFeatureEvaluated(featureKey: String, result: FeatureResult) {
-        plugins.forEach { $0.onFeatureEvaluated(featureKey: featureKey, result: result) }
+    func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
+        plugins.forEach { $0.onFeatureEvaluated(featureKey: featureKey, result: result, attributes: attributes) }
     }
 
     func close() {

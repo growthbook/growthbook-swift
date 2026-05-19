@@ -703,7 +703,7 @@ protocol GrowthBookProtocol: AnyObject {
         let context = contextManager.getEvalContext()
         let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
         contextManager.syncFromEvaluation(context)
-        pluginRegistry.onFeatureEvaluated(featureKey: id, result: result)
+        pluginRegistry.onFeatureEvaluated(featureKey: id, result: result, attributes: context.userContext.attributes)
         return result
     }
 

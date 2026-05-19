@@ -12,10 +12,10 @@ public protocol GrowthBookPlugin: AnyObject {
 
     /// Called every time a user is exposed to an experiment variation.
     /// Mirrors the existing `TrackingCallback` but is routed through the plugin system.
-    func onExperimentViewed(experiment: Experiment, result: ExperimentResult)
+    func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?)
 
     /// Called every time a feature flag is evaluated.
-    func onFeatureEvaluated(featureKey: String, result: FeatureResult)
+    func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?)
 
     /// Called when the SDK is shut down. Implementations should flush any buffered
     /// data synchronously before returning.
@@ -43,12 +43,14 @@ public struct ExperimentViewedEvent: Encodable {
     public let variationId: Int
     public let hashAttribute: String?
     public let hashValue: String?
+    public let attributes: JSON?
 
-    public init(experiment: Experiment, result: ExperimentResult) {
+    public init(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
         self.experimentKey = experiment.key
         self.variationId = result.variationId
         self.hashAttribute = result.hashAttribute
         self.hashValue = result.valueHash
+        self.attributes = attributes
     }
 }
 
@@ -58,12 +60,14 @@ public struct FeatureEvaluatedEvent: Encodable {
     public let value: JSON?
     public let source: String
     public let ruleId: String?
+    public let attributes: JSON?
 
-    public init(featureKey: String, result: FeatureResult) {
+    public init(featureKey: String, result: FeatureResult, attributes: JSON?) {
         self.featureKey = featureKey
         self.value = result.value
         self.source = result.source
         self.ruleId = result.ruleId
+        self.attributes = attributes
     }
 }
 

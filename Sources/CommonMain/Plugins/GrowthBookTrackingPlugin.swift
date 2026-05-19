@@ -92,14 +92,14 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         startTimer()
     }
 
-    public func onExperimentViewed(experiment: Experiment, result: ExperimentResult) {
+    public func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
         guard isReady else { return }
-        enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result)))
+        enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result, attributes: attributes)))
     }
 
-    public func onFeatureEvaluated(featureKey: String, result: FeatureResult) {
+    public func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
         guard isReady else { return }
-        enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result)))
+        enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: attributes)))
     }
 
     /// Stops the flush timer and synchronously sends all buffered events before returning.

@@ -23,11 +23,11 @@ final class MockPlugin: GrowthBookPlugin {
         lock.lock(); defer { lock.unlock() }
         _initializedWith = clientKey
     }
-    func onExperimentViewed(experiment: Experiment, result: ExperimentResult) {
+    func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
         lock.lock(); defer { lock.unlock() }
         _experimentCallCount += 1
     }
-    func onFeatureEvaluated(featureKey: String, result: FeatureResult) {
+    func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
         lock.lock(); defer { lock.unlock() }
         _featureCallCount += 1
     }
@@ -164,7 +164,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         var requestCount = 0
         let plugin = makePlugin(batchSize: 1) { _ in requestCount += 1 }
         plugin.initialize(clientKey: "")
-        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult())
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         plugin.close()
         XCTAssertEqual(requestCount, 0)
     }
@@ -181,7 +181,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         }
         plugin.initialize(clientKey: "sdk-test")
         for _ in 0..<3 {
-            plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult())
+            plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         }
         wait(for: [expectation], timeout: 3.0)
     }
@@ -191,7 +191,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         let plugin = makePlugin(batchSize: 5, batchTimeout: 60) { _ in requestCount += 1 }
         plugin.initialize(clientKey: "sdk-test")
         for _ in 0..<4 {
-            plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult())
+            plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         }
         Thread.sleep(forTimeInterval: 0.1)
         XCTAssertEqual(requestCount, 0)
@@ -204,7 +204,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         let expectation = expectation(description: "timer flush")
         let plugin = makePlugin(batchSize: 100, batchTimeout: 0.1) { _ in expectation.fulfill() }
         plugin.initialize(clientKey: "sdk-test")
-        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult())
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         wait(for: [expectation], timeout: 3.0)
         withExtendedLifetime(plugin) {}
     }
@@ -215,7 +215,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         var requestSent = false
         let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { _ in requestSent = true }
         plugin.initialize(clientKey: "sdk-test")
-        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult())
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
 
         XCTAssertFalse(requestSent, "no request before close()")
         plugin.close()
@@ -238,7 +238,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         // Here the sendHandler always calls completion, so this just verifies no crash.
         let plugin = makePlugin(batchSize: 100, batchTimeout: 60)
         plugin.initialize(clientKey: "sdk-test")
-        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult())
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         plugin.close()
     }
 
@@ -254,7 +254,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
             expectation.fulfill()
         }
         plugin.initialize(clientKey: "sdk-test")
-        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult())
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         wait(for: [expectation], timeout: 3.0)
     }
 
@@ -268,7 +268,23 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         }
         plugin.initialize(clientKey: "sdk-test")
         let featureResult = FeatureResult(value: JSON(true), isOn: true, source: "defaultValue")
-        plugin.onFeatureEvaluated(featureKey: "my-feature", result: featureResult)
+        plugin.onFeatureEvaluated(featureKey: "my-feature", result: featureResult, attributes: nil)
         wait(for: [expectation], timeout: 3.0)
+    }
+
+    func testAttributesIncludedInEventPayload() {
+        let expectation = expectation(description: "attributes in payload")
+        let plugin = makePlugin(batchSize: 1) { request in
+            let events = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [[String: Any]]
+            let attrs = events.first?["attributes"] as? [String: Any]
+            XCTAssertEqual(attrs?["id"] as? String, "user-1")
+            XCTAssertEqual(attrs?["plan"] as? String, "pro")
+            expectation.fulfill()
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        let attrs = JSON(["id": "user-1", "plan": "pro"])
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: attrs)
+        wait(for: [expectation], timeout: 3.0)
+        withExtendedLifetime(plugin) {}
     }
 }

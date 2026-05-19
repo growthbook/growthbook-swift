@@ -176,7 +176,7 @@ class ExperimentEvaluator {
         let userInExperiment = result.inExperiment
         if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
             context.options.trackingClosure(experiment, result)
-            context.options.pluginRegistry.onExperimentViewed(experiment: experiment, result: result)
+            context.options.pluginRegistry.onExperimentViewed(experiment: experiment, result: result, attributes: context.userContext.attributes)
         }
 
         // Return (in experiment, assigned variation)
