@@ -174,9 +174,9 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     func testFlushWhenBatchSizeReached() {
         let expectation = expectation(description: "flush on batch size")
         let plugin = makePlugin(batchSize: 3, batchTimeout: 60) { request in
-            let body = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
-            XCTAssertEqual(body["client_key"] as? String, "sdk-test")
-            XCTAssertEqual((body["events"] as? [[String: Any]])?.count, 3)
+            XCTAssertTrue(request.url?.absoluteString.contains("client_key=sdk-test") == true)
+            let events = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [[String: Any]]
+            XCTAssertEqual(events.count, 3)
             expectation.fulfill()
         }
         plugin.initialize(clientKey: "sdk-test")
@@ -247,7 +247,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     func testRequestSentToCorrectEndpoint() {
         let expectation = expectation(description: "correct endpoint")
         let plugin = makePlugin(batchSize: 1) { request in
-            XCTAssertEqual(request.url?.absoluteString, "\(GrowthBookTrackingPlugin.defaultIngestorHost)/track")
+            XCTAssertEqual(request.url?.absoluteString, "\(GrowthBookTrackingPlugin.defaultIngestorHost)/track?client_key=sdk-test")
             XCTAssertEqual(request.httpMethod, "POST")
             XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
             XCTAssertTrue(request.value(forHTTPHeaderField: "User-Agent")?.hasPrefix("growthbook-swift-sdk/") == true)
@@ -261,8 +261,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     func testFeatureEvaluatedEventIncludedInPayload() {
         let expectation = expectation(description: "feature event in payload")
         let plugin = makePlugin(batchSize: 1) { request in
-            let body = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [String: Any]
-            let events = body["events"] as! [[String: Any]]
+            let events = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [[String: Any]]
             XCTAssertEqual(events.first?["event"] as? String, "feature_evaluated")
             XCTAssertEqual(events.first?["featureKey"] as? String, "my-feature")
             expectation.fulfill()

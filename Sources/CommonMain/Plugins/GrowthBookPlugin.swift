@@ -67,13 +67,3 @@ public struct FeatureEvaluatedEvent: Encodable {
     }
 }
 
-/// The payload POSTed to `{ingestorHost}/events`.
-public struct IngestPayload: Encodable {
-    public let clientKey: String
-    public let events: [IngestEvent]
-
-    enum CodingKeys: String, CodingKey {
-        case clientKey = "client_key"
-        case events
-    }
-}
