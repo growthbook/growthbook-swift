@@ -288,8 +288,12 @@ protocol GrowthBookProtocol: AnyObject {
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
-            // Try to decode as FeaturesDataModel first (API format)
-            if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: featuresData) {
+            // Try to decode as FeaturesDataModel first (API format).
+            // Guard requires at least one known envelope field to be non-nil: because every field on
+            // FeaturesDataModel is Optional, the decoder accepts any JSON object and always succeeds,
+            // so without this check the else-if fallback for raw-map payloads is unreachable.
+            if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: featuresData),
+               featuresModel.features != nil || featuresModel.encryptedFeatures != nil {
                 if let features = featuresModel.features {
                     initialFeatures = features
                     hasPreloadedPayload = true
