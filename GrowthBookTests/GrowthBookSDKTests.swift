@@ -11,9 +11,10 @@ class GrowthBookSDKTests: XCTestCase {
 
     private func makeSDK(
         features: Data? = nil,
+        refreshHandler: CacheRefreshHandler? = nil,
         networkResponse: String? = nil,
         networkError: Error? = nil,
-        ttlSeconds: Int = 60
+        ttlSeconds: Int = 60,
     ) -> GrowthBookSDK {
         GrowthBookBuilder(
             apiHost: apiHost,
@@ -21,6 +22,7 @@ class GrowthBookSDKTests: XCTestCase {
             attributes: ["id": "user-1", "country": "US"],
             features: features,
             trackingCallback: { _, _ in },
+            refreshHandler: refreshHandler,
             backgroundSync: false,
             ttlSeconds: ttlSeconds
         )
@@ -31,11 +33,11 @@ class GrowthBookSDKTests: XCTestCase {
         .initializer()
     }
 
-    private func makeSDKWithFeatures() -> GrowthBookSDK {
+    private func makeSDKWithFeatures(refreshHandler: CacheRefreshHandler? = nil) -> GrowthBookSDK {
         let payload = """
         {"features":{"flag-a":{"defaultValue":true},"flag-b":{"defaultValue":false}}}
         """.data(using: .utf8)!
-        return makeSDK(features: payload)
+        return makeSDK(features: payload, refreshHandler: refreshHandler)
     }
 
     // MARK: - isOn
@@ -335,5 +337,40 @@ class GrowthBookSDKTests: XCTestCase {
         wait(for: [exp], timeout: 2.0)
         savedGroupsApplied = sdk.getGBContext().savedGroups != nil
         XCTAssertTrue(savedGroupsApplied)
+    }
+
+    func testRunsRefreshHandler() {
+        // GIVEN
+        let expectation = XCTestExpectation(description: "Runs refresh handler even if features are cached")
+        expectation.expectedFulfillmentCount = 2
+        // 1 call - initializer.featuresUpdateIsComplete
+        // 2 call - refreshCache.featuresUpdateIsComplete
+        let cachingManager = CachingManager(apiKey: "isolated-savedgroups-test")
+        cachingManager.clearCache()
+
+        let sdk = GrowthBookBuilder(
+            growthBookBuilderModel: GrowthBookModel(
+                apiHost: apiHost, clientKey: "isolated-savedgroups-test",
+                attributes: JSON([:]), trackingClosure: { _, _ in },
+                backgroundSync: false
+            ),
+            networkDispatcher: MockNetworkClient(
+                successResponse: MockResponse().successResponseNoGroups,
+                error: nil
+            ),
+            ttlSeconds: 60,
+            cachingManager: cachingManager,
+            refreshHandler: { _ in
+                expectation.fulfill()
+            }
+        ).initializer()
+
+        // WHEN
+        sdk.refreshCache()
+
+        // THEN
+        wait(for: [expectation], timeout: 2.0)
+
+        XCTAssertTrue(sdk.isOn(feature: "onboarding"))
     }
 }

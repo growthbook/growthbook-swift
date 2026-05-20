@@ -593,7 +593,6 @@ protocol GrowthBookProtocol: AnyObject {
             if stableSession && sessionEstablished {
                 if isRemote {
                     logger.info("stableSession: new features received from network — cached for next session, not applied now")
-                    self.refreshHandler?(.none)
                 } else {
                     logger.debug("stableSession: ignoring cache refresh — session features already established")
                 }
@@ -608,10 +607,6 @@ protocol GrowthBookProtocol: AnyObject {
             if stableSession {
                 sessionEstablished = true
                 logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
-            }
-
-            if isRemote {
-                self.refreshHandler?(.none)
             }
         }
     }
@@ -637,9 +632,13 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
-    @objc public func featuresFetchFailed(error: SDKError, isRemote: Bool) {
+    func featuresFetchFailed(error: SDKError, isRemote: Bool) {}
+
+    func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {
         if isRemote {
-            refreshHandler?(error)
+            withLock {
+                refreshHandler?(error)
+            }
         }
     }
 
@@ -647,16 +646,13 @@ protocol GrowthBookProtocol: AnyObject {
         contextManager.getEvalContext()
     }
 
-    @objc public func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {
-        refreshHandler?(error)
-    }
+    func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
 
-    public func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
+    func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.savedGroups = savedGroups
             }
-            self.refreshHandler?(.none)
         }
     }
 
@@ -788,7 +784,7 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
-    @objc func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
+    func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
         withLock {
             refreshStickyBucketService(model)
         }

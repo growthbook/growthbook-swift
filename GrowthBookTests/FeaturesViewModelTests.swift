@@ -8,7 +8,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     var isError: Bool = false
     var hasFeatures: Bool = false
     var ttlSeconds = 60
-    
+
     let cachingManager: CachingLayer = CachingManager()
     
     override func setUp() {
@@ -30,6 +30,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
         XCTAssertTrue(hasFeatures)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     func testSuccessForEncryptedFeatures() throws {
@@ -43,6 +46,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
     }
     
     func testGetDataFromCache() throws {
@@ -80,6 +86,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
         XCTAssertTrue(hasFeatures)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
     }
     
     func testWithEncryptGetDataFromCache() throws {
@@ -110,6 +119,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
     }
     
     func testSavedGroupsRestoredFromCacheOnRestart() throws {
@@ -136,6 +148,11 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertNotNil(savedGroupsFromCache, "savedGroups should be restored from cache on restart")
         XCTAssertFalse(savedGroupsFromCache?.dictionaryValue.isEmpty ?? true, "savedGroups should not be empty")
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
+
+        XCTAssertEqual(captureDelegate.featuresUpdateIsCompleteCallCount, 0)
     }
 
     func test304NotModifiedTreatedAsSuccess() throws {
@@ -153,6 +170,11 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
 
         XCTAssertTrue(isSuccess)
         XCTAssertFalse(isError)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 2)
+        XCTAssertNil(featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
+        XCTAssertEqual(featuresUpdateIsCompleteArguments[1].error, nil)
+        XCTAssertEqual(featuresUpdateIsCompleteArguments[1].isRemote, true)
     }
 
     func testError() throws {
@@ -167,6 +189,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)
         XCTAssertFalse(hasFeatures)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(featuresUpdateIsCompleteArguments[0].error?.code, .failedToFetchData)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     func testInvalid() throws {
@@ -178,6 +203,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertFalse(isSuccess)
         XCTAssertTrue(isError)
         XCTAssertFalse(hasFeatures)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(featuresUpdateIsCompleteArguments[0].error?.code, .failedMissingKey)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     /// Regression test: payloads that include `filters` with array-encoded `ranges`
@@ -204,6 +232,9 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertTrue(isSuccess, "Expected successful feature fetch with filters payload")
         XCTAssertFalse(isError)
         XCTAssertTrue(hasFeatures)
+        XCTAssertEqual(featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
@@ -231,6 +262,16 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
 
     }
+
+    // featuresUpdateIsComplete
+
+    var featuresUpdateIsCompleteCallCount = 0
+    var featuresUpdateIsCompleteArguments: [(error: GrowthBook.SDKError?, isRemote: Bool)] = []
+
+    func featuresUpdateIsComplete(error: GrowthBook.SDKError?, isRemote: Bool) {
+        featuresUpdateIsCompleteArguments += [(error, isRemote)]
+        featuresUpdateIsCompleteCallCount += 1
+    }
 }
 
 private class SavedGroupsCapture: FeaturesFlowDelegate {
@@ -246,5 +287,15 @@ private class SavedGroupsCapture: FeaturesFlowDelegate {
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         onSavedGroups(savedGroups)
+    }
+
+    // featuresUpdateIsComplete
+
+    var featuresUpdateIsCompleteCallCount = 0
+    var featuresUpdateIsCompleteArguments: [(error: GrowthBook.SDKError?, isRemote: Bool)] = []
+
+    func featuresUpdateIsComplete(error: GrowthBook.SDKError?, isRemote: Bool) {
+        featuresUpdateIsCompleteArguments += [(error, isRemote)]
+        featuresUpdateIsCompleteCallCount += 1
     }
 }

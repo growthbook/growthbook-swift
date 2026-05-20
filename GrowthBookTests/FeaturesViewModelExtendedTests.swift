@@ -6,6 +6,7 @@ class FeaturesViewModelExtendedTests: XCTestCase {
     // MARK: - Delegate capture
 
     private class Capture: FeaturesFlowDelegate {
+
         var successCount = 0
         var failCount = 0
         var savedGroupsCount = 0
@@ -27,6 +28,16 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         }
         func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) { failCount += 1 }
         func featuresAPIModelSuccessfully(model: FeaturesDataModel) {}
+
+        // featuresUpdateIsComplete
+        
+        var featuresUpdateIsCompleteCallCount = 0
+        var featuresUpdateIsCompleteArguments: [(error: GrowthBook.SDKError?, isRemote: Bool)] = []
+
+        func featuresUpdateIsComplete(error: GrowthBook.SDKError?, isRemote: Bool) {
+            featuresUpdateIsCompleteArguments += [(error, isRemote)]
+            featuresUpdateIsCompleteCallCount += 1
+        }
     }
 
     private func makeVM(
@@ -60,6 +71,7 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         // With preloadedFeatures, the VM skips the cache → no success or fail from cache
         XCTAssertEqual(capture.successCount, 0)
         XCTAssertEqual(capture.failCount, 0)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 0)
     }
 
     func testNoPreloadedFeaturesReadsCache() {
@@ -68,6 +80,7 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         _ = makeVM(delegate: capture)
         XCTAssertEqual(capture.failCount, 1)
         XCTAssertEqual(capture.lastError, .failedToLoadData)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 0)
     }
 
     // MARK: - fetchFeatures with nil apiUrl skips network
@@ -80,6 +93,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         // No network call → no additional success
         XCTAssertEqual(capture.successCount, 0)
         XCTAssertEqual(capture.failCount, beforeFail + 1) // one more fail from cache read in fetchFeatures
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1) // fetchFeatures
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error, .invalidAPIURL)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].isRemote, false)
     }
 
     // MARK: - remoteEval path
@@ -90,6 +106,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.fetchFeatures(apiUrl: "https://example.com", remoteEval: true)
         // Remote eval success should trigger featuresFetchedSuccessfully
         XCTAssertGreaterThan(capture.successCount, 0)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(capture.featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     func testFetchFeaturesRemoteEvalFailure() {
@@ -97,6 +116,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         let vm = makeVM(error: SDKError.failedToFetchData, delegate: capture, ttlSeconds: 0)
         vm.fetchFeatures(apiUrl: "https://example.com", remoteEval: true)
         XCTAssertGreaterThan(capture.failCount, 0)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedToLoadData)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     // MARK: - prepareFeaturesData: encryptedFeatures without key
@@ -111,6 +133,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.prepareFeaturesData(data: payload)
         XCTAssertGreaterThan(capture.failCount, 0)
         XCTAssertEqual(capture.lastError, .failedMissingKey)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedMissingKey)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     func testPrepareFeaturesDataEncryptedFeaturesWithWrongKeyFails() {
@@ -123,6 +148,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.prepareFeaturesData(data: payload)
         XCTAssertGreaterThan(capture.failCount, 0)
         XCTAssertEqual(capture.lastError, .failedEncryptedFeatures)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedEncryptedFeatures)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     // MARK: - prepareFeaturesData: no features and no encryptedFeatures
@@ -136,6 +164,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.prepareFeaturesData(data: payload)
         XCTAssertGreaterThan(capture.failCount, 0)
         XCTAssertEqual(capture.lastError, .failedMissingKey)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedMissingKey)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     // MARK: - prepareFeaturesData: plain features success
@@ -149,6 +180,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.prepareFeaturesData(data: payload)
         XCTAssertEqual(capture.successCount, 1)
         XCTAssertNotNil(capture.lastFeatures?["my-flag"])
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(capture.featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     // MARK: - prepareFeaturesData: invalid JSON fails
@@ -159,6 +193,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.prepareFeaturesData(data: "not json".data(using: .utf8)!)
         XCTAssertGreaterThan(capture.failCount, 0)
         XCTAssertEqual(capture.lastError, .failedParsedData)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedParsedData)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     // MARK: - prepareFeaturesData: savedGroups in response
@@ -172,6 +209,9 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.prepareFeaturesData(data: payload)
         XCTAssertEqual(capture.savedGroupsCount, 1)
         XCTAssertNotNil(capture.lastSavedGroups)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(capture.featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
     // MARK: - fetchFeatures network failure falls back to cache
@@ -207,5 +247,32 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         failVM.fetchFeatures(apiUrl: "https://example.com")
         // After network fail, falls back to cache → at least one success
         XCTAssertGreaterThan(capture.successCount, 0)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedToFetchData)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
+    }
+
+    // MARK: - fetchFeatures is not stale reports featuresAreUpToDate to the delegate
+
+    func testFetchFeaturesReportIfNotStale() {
+        // GIVEN
+        let capture = Capture()
+        let vm = makeVM(response: MockResponse().successResponse, delegate: capture, ttlSeconds: 100)
+        // first successful fetch
+        vm.fetchFeatures(apiUrl: "https://example.com", remoteEval: true)
+        XCTAssertGreaterThan(capture.successCount, 0)
+        // no featuresAreUpToDate callse
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
+        XCTAssertNil(capture.featuresUpdateIsCompleteArguments[0].error)
+        XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
+
+        // WHEN
+        // trying to fetch while cache is not expired
+        vm.fetchFeatures(apiUrl: "https://example.com", remoteEval: true)
+
+        // THEN
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 2, "Expected to call featuresAreUpToDate delegate method")
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[1].error, nil)
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[1].isRemote, true)
     }
 }
