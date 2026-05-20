@@ -14,7 +14,7 @@ class GrowthBookSDKTests: XCTestCase {
         refreshHandler: CacheRefreshHandler? = nil,
         networkResponse: String? = nil,
         networkError: Error? = nil,
-        ttlSeconds: Int = 60,
+        ttlSeconds: Int = 60
     ) -> GrowthBookSDK {
         GrowthBookBuilder(
             apiHost: apiHost,
