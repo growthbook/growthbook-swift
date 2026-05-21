@@ -11,7 +11,6 @@ class GrowthBookSDKTests: XCTestCase {
 
     private func makeSDK(
         features: Data? = nil,
-        refreshHandler: CacheRefreshHandler? = nil,
         networkResponse: String? = nil,
         networkError: Error? = nil,
         ttlSeconds: Int = 60
@@ -22,7 +21,6 @@ class GrowthBookSDKTests: XCTestCase {
             attributes: ["id": "user-1", "country": "US"],
             features: features,
             trackingCallback: { _, _ in },
-            refreshHandler: refreshHandler,
             backgroundSync: false,
             ttlSeconds: ttlSeconds
         )
@@ -33,11 +31,11 @@ class GrowthBookSDKTests: XCTestCase {
         .initializer()
     }
 
-    private func makeSDKWithFeatures(refreshHandler: CacheRefreshHandler? = nil) -> GrowthBookSDK {
+    private func makeSDKWithFeatures() -> GrowthBookSDK {
         let payload = """
         {"features":{"flag-a":{"defaultValue":true},"flag-b":{"defaultValue":false}}}
         """.data(using: .utf8)!
-        return makeSDK(features: payload, refreshHandler: refreshHandler)
+        return makeSDK(features: payload)
     }
 
     // MARK: - isOn
