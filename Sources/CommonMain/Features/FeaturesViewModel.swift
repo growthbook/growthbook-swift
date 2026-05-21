@@ -83,24 +83,24 @@ class FeaturesViewModel {
                 if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                     delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
                 } else {
-                    let erorr = SDKError.failedParsedEncryptedData
-                    delegate?.featuresFetchFailed(error: erorr, isRemote: isRemote)
+                    let error = SDKError.failedParsedEncryptedData
+                    delegate?.featuresFetchFailed(error: error, isRemote: isRemote)
                     if logging { logger.error("Failed get features from cached encrypted features") }
-                    return erorr
+                    return error
                 }
             } else if let features = try? decoder.decode(Features.self, from: data) {
                 // Call Success Delegate with mention of data available but its not remote
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
             } else {
-                let erorr = SDKError.failedParsedData
-                delegate?.featuresFetchFailed(error: erorr, isRemote: isRemote)
-                occurredError = erorr
+                let error = SDKError.failedParsedData
+                delegate?.featuresFetchFailed(error: error, isRemote: isRemote)
+                occurredError = error
                 if logging { logger.error("Failed parse local data") }
             }
         } else {
-            let erorr = SDKError.failedToLoadData
-            delegate?.featuresFetchFailed(error: erorr, isRemote: isRemote)
-            occurredError = erorr
+            let error = SDKError.failedToLoadData
+            delegate?.featuresFetchFailed(error: error, isRemote: isRemote)
+            occurredError = error
             if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
         }
 
