@@ -264,3 +264,37 @@ class EvaluationDataTests: XCTestCase {
     }
 }
 
+class ExperimentCustomFieldsTests: XCTestCase {
+
+    func testCustomFields_parsedFromJSON() {
+        let json: [String: JSON] = [
+            "key": JSON("my-experiment"),
+            "variations": JSON([JSON("control"), JSON("variant")]),
+            "customFields": JSON(["cfl_abc123": "My custom field", "cfl_def456": 42])
+        ]
+        let experiment = Experiment(json: json)
+        XCTAssertNotNil(experiment.customFields)
+        XCTAssertEqual(experiment.customFields?["cfl_abc123"]?.stringValue, "My custom field")
+        XCTAssertEqual(experiment.customFields?["cfl_def456"]?.intValue, 42)
+    }
+
+    func testCustomFields_nilWhenAbsent() {
+        let json: [String: JSON] = [
+            "key": JSON("my-experiment"),
+            "variations": JSON([JSON("control"), JSON("variant")])
+        ]
+        let experiment = Experiment(json: json)
+        XCTAssertNil(experiment.customFields)
+    }
+
+    func testCustomFields_publicInit() {
+        let experiment = Experiment(
+            key: "my-experiment",
+            variations: ["control", "variant"],
+            customFields: ["cfl_xyz": "hello"]
+        )
+        XCTAssertNotNil(experiment.customFields)
+        XCTAssertEqual(experiment.customFields?["cfl_xyz"]?.stringValue, "hello")
+    }
+}
+
