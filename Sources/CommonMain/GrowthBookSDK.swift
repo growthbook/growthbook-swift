@@ -635,10 +635,8 @@ protocol GrowthBookProtocol: AnyObject {
     func featuresFetchFailed(error: SDKError, isRemote: Bool) {}
 
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {
-        if isRemote {
-            withLock {
-                refreshHandler?(error)
-            }
+        withLock {
+            refreshHandler?(error)
         }
     }
 
