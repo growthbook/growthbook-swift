@@ -336,4 +336,39 @@ class GrowthBookSDKTests: XCTestCase {
         savedGroupsApplied = sdk.getGBContext().savedGroups != nil
         XCTAssertTrue(savedGroupsApplied)
     }
+
+    func testRunsRefreshHandler() {
+        // GIVEN
+        let expectation = XCTestExpectation(description: "Runs refresh handler even if features are cached")
+        expectation.expectedFulfillmentCount = 2
+        // 1 call - initializer.featuresUpdateIsComplete
+        // 2 call - refreshCache.featuresUpdateIsComplete
+        let cachingManager = CachingManager(apiKey: "isolated-savedgroups-test")
+        cachingManager.clearCache()
+
+        let sdk = GrowthBookBuilder(
+            growthBookBuilderModel: GrowthBookModel(
+                apiHost: apiHost, clientKey: "isolated-savedgroups-test",
+                attributes: JSON([:]), trackingClosure: { _, _ in },
+                backgroundSync: false
+            ),
+            networkDispatcher: MockNetworkClient(
+                successResponse: MockResponse().successResponseNoGroups,
+                error: nil
+            ),
+            ttlSeconds: 60,
+            cachingManager: cachingManager,
+            refreshHandler: { _ in
+                expectation.fulfill()
+            }
+        ).initializer()
+
+        // WHEN
+        sdk.refreshCache()
+
+        // THEN
+        wait(for: [expectation], timeout: 2.0)
+
+        XCTAssertTrue(sdk.isOn(feature: "onboarding"))
+    }
 }

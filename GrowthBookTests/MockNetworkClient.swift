@@ -216,7 +216,37 @@ class MockResponse {
         "savedGroups": {"group_id": ["4", "5", "6"]}
     }
     """.trimmingCharacters(in: .whitespaces)
-    
+
+    let successResponseNoGroups = """
+    {
+        "status": 200,
+        "features": {
+            "onboarding": {
+                "defaultValue": "top",
+                "rules": [
+                    {
+                        "condition": {
+                            "id": "2435245",
+                            "loggedIn": false
+                        },
+                        "variations": [
+                            "top",
+                            "bottom",
+                            "center"
+                        ],
+                        "weights": [
+                            0.25,
+                            0.5,
+                            0.25
+                        ],
+                        "hashAttribute": "id"
+                    }
+                ]
+            }
+        }
+    }
+    """.trimmingCharacters(in: .whitespaces)
+
     /// Reproduces the payload shape reported by users after multiRange namespace support
     /// was introduced: feature rules may now carry a `filters` array whose `ranges` items
     /// are bare JSON arrays `[start, end]` rather than keyed objects.
