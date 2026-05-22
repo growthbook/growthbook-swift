@@ -451,6 +451,7 @@ private class RemoteCallCapture: FeaturesFlowDelegate {
     func featuresFetchFailed(error: SDKError, isRemote: Bool) { onFailure(isRemote) }
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {}
+    func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {}
 }
 
 private class ErrorCapture: FeaturesFlowDelegate {
@@ -461,4 +462,5 @@ private class ErrorCapture: FeaturesFlowDelegate {
     func featuresFetchFailed(error: SDKError, isRemote: Bool) { onError(error) }
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {}
+    func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {}
 }
