@@ -2,7 +2,7 @@
 import Foundation
 
 // GrowthBook default logger
-nonisolated(unsafe) var logger = GBLogger()
+var logger = GBLogger()
 
 @objc public enum LoggerLevel: NSInteger {
     case trace = 0
