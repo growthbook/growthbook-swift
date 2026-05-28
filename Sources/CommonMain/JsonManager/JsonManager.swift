@@ -50,7 +50,7 @@ public enum Type: Int {
 
 // MARK: - JSON Base
 
-public struct JSON {
+public struct JSON: @unchecked Sendable {
 
     /**
      Creates a JSON using the data.

@@ -19,9 +19,9 @@ public enum Component {
     case block(() -> Any?)
 }
 
-open class Formatters {}
+open class Formatters: @unchecked Sendable {}
 
-open class Formatter: Formatters {
+open class Formatter: Formatters, @unchecked Sendable {
     /// The formatter format.
     private var format: String
 

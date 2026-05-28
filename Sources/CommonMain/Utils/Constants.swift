@@ -16,7 +16,7 @@ typealias Features = [String: Feature]
 /// Type Alias for Condition Element in GrowthBook Rules
 typealias Condition = JSON
 
-public struct ParentConditionInterface: Codable {
+public struct ParentConditionInterface: Codable, Sendable {
     public let id: String
     public let condition: JSON
     public let gate: Bool?
@@ -45,7 +45,7 @@ public typealias ExperimentRunCallback = (Experiment, ExperimentResult) -> Void
 typealias NameSpace = (String, Float, Float)
 
 /// Double Struct for GrowthBook Ranges
-public struct BucketRange: Codable {
+public struct BucketRange: Codable, Sendable {
     let number1: Float
     let number2: Float
     
@@ -79,7 +79,7 @@ public struct BucketRange: Codable {
     }
 }
 
-public enum SDKErrorCode: String {
+public enum SDKErrorCode: String, Sendable {
     case failedToLoadData
     case failedParsedData
     case failedMissingKey
@@ -113,7 +113,7 @@ public enum SDKErrorCode: String {
 }
 
 /// Meta info about the variations
-public struct VariationMeta: Codable {
+public struct VariationMeta: Codable, Sendable {
     /// Used to implement holdout groups
     let passthrough: Bool?
     /// A unique key for this variation
@@ -128,7 +128,7 @@ public struct VariationMeta: Codable {
     }
 }
 
-public struct Track: Codable {
+public struct Track: Codable, Sendable {
     public let experiment: Experiment?
     public let result: ExperimentResult?
     
@@ -139,7 +139,7 @@ public struct Track: Codable {
 }
 
 ///Used for remote feature evaluation to trigger the `TrackingCallback`
-public struct TrackData: Codable {
+public struct TrackData: Codable, Sendable {
     let experiment: Experiment
     let result: ExperimentResult
     
@@ -151,7 +151,7 @@ public struct TrackData: Codable {
 }
 
 /// Object used for mutual exclusion and filtering users out of experiments based on random hashes.
-@objc public class Filter: NSObject, Codable {
+@objc public class Filter: NSObject, Codable, @unchecked Sendable {
     /// The attribute to use (default to `"id"`)
     var attribute: String?
     /// The seed used in the hash

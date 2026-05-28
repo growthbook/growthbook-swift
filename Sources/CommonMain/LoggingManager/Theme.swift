@@ -7,9 +7,9 @@
 
 import Foundation
 
-open class Themes {}
+open class Themes: @unchecked Sendable {}
 
-open class Theme: Themes {
+open class Theme: Themes, @unchecked Sendable {
     /// The theme colors.
     var colors: [Level: String]
 
