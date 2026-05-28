@@ -8,7 +8,7 @@
 import Foundation
 import os
 
-public enum Level: Int {
+public enum Level: Int, Sendable {
     case trace, debug, info, warning, error
 
     var description: String {
@@ -22,7 +22,7 @@ extension Level: Comparable {
     }
 }
 
-open class GBLogger {
+open class GBLogger: @unchecked Sendable {
     /// The logger state.
     open var enabled: Bool = true
 
