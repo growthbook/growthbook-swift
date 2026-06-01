@@ -54,7 +54,11 @@ import Foundation
   public var url: String? = nil
 
   public var forcedFeatureValues: JSON? = nil
-  
+
+  /// Attribute values that override the base attributes during evaluation.
+  /// Merged on top of `attributes` when building an EvalContext.
+  public var attributeOverrides: JSON? = nil
+
   init(
     streamingHost: String?,
     attributes: JSON,
@@ -64,7 +68,8 @@ import Foundation
     features: Features = [:],
     savedGroups: JSON? = nil,
     url: String? = nil,
-    forcedFeatureValues: JSON? = nil) {
+    forcedFeatureValues: JSON? = nil,
+    attributeOverrides: JSON? = nil) {
       self.streamingHost = streamingHost
       self.attributes = attributes
       self.forcedVariations = forcedVariations
@@ -74,5 +79,6 @@ import Foundation
       self.savedGroups = savedGroups
       self.url = url
       self.forcedFeatureValues = forcedFeatureValues
+      self.attributeOverrides = attributeOverrides
     }
 }

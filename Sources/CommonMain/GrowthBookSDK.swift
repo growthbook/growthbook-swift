@@ -378,7 +378,6 @@ protocol GrowthBookProtocol: AnyObject {
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
-    private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext? = nil
     private var ttlSeconds: Int
@@ -729,6 +728,7 @@ protocol GrowthBookProtocol: AnyObject {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.attributes = JSON(attributes)
+                data.attributeOverrides = nil
                 data.stickyBucketAssignmentDocs = nil
             }
             self.refreshStickyBucketService()
@@ -743,6 +743,7 @@ protocol GrowthBookProtocol: AnyObject {
             let updatedAttributes = try evalData.attributes.merged(with: JSON(attributes))
             contextManager.updateEvalData { data in
                 data.attributes = updatedAttributes
+                data.attributeOverrides = nil
                 data.stickyBucketAssignmentDocs = nil
             }
             refreshStickyBucketService()
@@ -750,14 +751,14 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     /// Sets custom attribute values that override the default ones
-    /// - Parameter overrides: Ant
+    /// - Parameter overrides: Any
     @objc public func setAttributeOverrides(overrides: Any) {
         withLock {
-            self.attributeOverrides = JSON(overrides)
-            let globalConfig = self.contextManager.getGlobalConfig()
-            if globalConfig.stickyBucketService != nil {
-                self.refreshStickyBucketService()
+            self.contextManager.updateEvalData { data in
+                data.attributeOverrides = JSON(overrides)
+                data.stickyBucketAssignmentDocs = nil
             }
+            self.refreshStickyBucketService()
             self.refreshForRemoteEval()
         }
     }
@@ -798,14 +799,12 @@ protocol GrowthBookProtocol: AnyObject {
         let globalConfig = contextManager.getGlobalConfig()
         guard let service = globalConfig.stickyBucketService else { return }
 
-        let evalData = contextManager.getEvaluationData()
         let context = contextManager.getEvalContext()
-
 
         Utils.refreshStickyBuckets(
             stickyBucketService: service,
             context: context,
-            attributes: evalData.attributes,
+            attributes: context.userContext.attributes,
             data: data
         ) { [weak self] docs in
             guard let self = self else { return }

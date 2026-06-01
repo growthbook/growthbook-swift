@@ -91,6 +91,86 @@ class StickyBucketUserSwitchTests: XCTestCase {
     }
 }
 
+class AttributeOverridesTests: XCTestCase {
+
+    // Verifies that refreshStickyBucketService uses merged (base + override) attributes
+    // for the getAllAssignments call, so docs keyed on override attributes are fetched.
+    func testAttributeOverridesAreUsedInStickyBucketLookup() {
+        let service = ManualStickyBucketService()
+        // Base attributes have no "id"; override supplies it.
+        let sdk = makeSdk(attributes: ["deviceId": "device-1"], service: service)
+        service.flush(docs: [:])
+
+        sdk.setAttributeOverrides(overrides: ["id": "user-from-override"])
+        let overrideDocs = ["id||user-from-override": StickyAssignmentsDocument(
+            attributeName: "id",
+            attributeValue: "user-from-override",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: overrideDocs)
+
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||user-from-override"],
+                        "Sticky doc keyed on override attribute must be fetched and loaded")
+    }
+
+    // Verifies that setAttributes clears attributeOverrides so the previous user's
+    // overrides don't bleed into the new user's sticky bucket lookup.
+    func testSetAttributesResetsAttributeOverrides() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["deviceId": "device-1"], service: service)
+        service.flush(docs: [:])
+
+        sdk.setAttributeOverrides(overrides: ["id": "override-id"])
+        let overrideDocs = ["id||override-id": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "override-id",
+            assignments: ["exp-1__0": "control"]
+        )]
+        service.flush(docs: overrideDocs)
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||override-id"],
+                        "Precondition: override docs must be loaded")
+
+        // Switch user — must clear overrides so new user doesn't inherit them.
+        sdk.setAttributes(attributes: ["id": "new-user"])
+        let newUserDocs = ["id||new-user": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "new-user",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: newUserDocs)
+
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||override-id"],
+                     "Override docs from previous context must be gone after setAttributes")
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||new-user"],
+                        "New user docs must be loaded after setAttributes")
+    }
+
+    // Verifies that attributeOverrides are merged into userContext.attributes and
+    // therefore affect experiment evaluation (via hashAttribute lookup).
+    func testAttributeOverridesAreAppliedToEvaluation() {
+        let service = ManualStickyBucketService()
+        // Base attributes have no "id" — experiments hashing on "id" won't bucket the user.
+        let sdk = makeSdk(attributes: ["deviceId": "device-only"], service: service)
+        service.flush(docs: [:])
+
+        let experiment = Experiment(
+            key: "test-exp",
+            variations: [JSON("control"), JSON("variant")],
+            hashAttribute: "id",
+            coverage: 1.0
+        )
+
+        let before = sdk.run(experiment: experiment)
+        XCTAssertFalse(before.inExperiment, "Without id attribute, user must not be bucketed")
+
+        sdk.setAttributeOverrides(overrides: ["id": "user-with-override"])
+        // No flush needed: updateEvalData already invalidated the context cache,
+        // so the next run() call gets a fresh EvalContext with merged attributes.
+
+        let after = sdk.run(experiment: experiment)
+        XCTAssertTrue(after.inExperiment,
+                      "id from attributeOverrides must be applied to experiment evaluation")
+    }
+}
+
 class StickyBucketingFeatureTests: XCTestCase {
     var service: StickyBucketService!
     var evalConditions: [JSON]?
