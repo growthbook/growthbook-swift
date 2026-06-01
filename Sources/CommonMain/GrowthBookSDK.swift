@@ -729,6 +729,7 @@ protocol GrowthBookProtocol: AnyObject {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.attributes = JSON(attributes)
+                data.stickyBucketAssignmentDocs = nil
             }
             self.refreshStickyBucketService()
         }
@@ -742,6 +743,7 @@ protocol GrowthBookProtocol: AnyObject {
             let updatedAttributes = try evalData.attributes.merged(with: JSON(attributes))
             contextManager.updateEvalData { data in
                 data.attributes = updatedAttributes
+                data.stickyBucketAssignmentDocs = nil
             }
             refreshStickyBucketService()
         }

@@ -2,6 +2,95 @@ import XCTest
 
 @testable import GrowthBook
 
+// Captures the getAllAssignments completion without calling it, so tests can
+// control exactly when the async refresh resolves.
+private class ManualStickyBucketService: NSObject, StickyBucketServiceProtocol {
+    private var pendingCompletion: (([String: StickyAssignmentsDocument]?, Error?) -> Void)?
+
+    func getAssignments(attributeName: String, attributeValue: String,
+                        completion: @escaping (StickyAssignmentsDocument?, Error?) -> Void) {
+        completion(nil, nil)
+    }
+
+    func saveAssignments(doc: StickyAssignmentsDocument, completion: @escaping (Error?) -> Void) {
+        completion(nil)
+    }
+
+    func getAllAssignments(attributes: [String: String],
+                           completion: @escaping ([String: StickyAssignmentsDocument]?, Error?) -> Void) {
+        pendingCompletion = completion
+    }
+
+    func flush(docs: [String: StickyAssignmentsDocument] = [:]) {
+        pendingCompletion?(docs, nil)
+        pendingCompletion = nil
+    }
+}
+
+private func makeSdk(attributes: [String: Any],
+                     service: StickyBucketServiceProtocol) -> GrowthBookSDK {
+    let emptyFeatures = try! JSONEncoder().encode([String: Feature]())
+    return GrowthBookBuilder(
+        features: emptyFeatures,
+        attributes: attributes,
+        trackingCallback: { _, _ in },
+        backgroundSync: false
+    )
+    .setStickyBucketService(stickyBucketService: service)
+    .initializer()
+}
+
+class StickyBucketUserSwitchTests: XCTestCase {
+
+    func testSetAttributesClearsStickyDocsBeforeRefreshCompletes() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "userA"], service: service)
+
+        let userADocs = ["id||userA": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userA",
+            assignments: ["exp-1__0": "control"]
+        )]
+        service.flush(docs: userADocs)
+        XCTAssertEqual(sdk.getGBContext().stickyBucketAssignmentDocs?["id||userA"]?.assignments["exp-1__0"], "control",
+                       "Precondition: userA docs must be loaded after init flush")
+
+        sdk.setAttributes(attributes: ["id": "userB"])
+
+        // Before the refresh completion fires, stale userA docs must already be gone.
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs,
+                     "Stale docs from previous user must be cleared synchronously on setAttributes")
+
+        let userBDocs = ["id||userB": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userB",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: userBDocs)
+        XCTAssertEqual(sdk.getGBContext().stickyBucketAssignmentDocs?["id||userB"]?.assignments["exp-1__0"], "variant",
+                       "userB docs must be loaded after refresh completes")
+    }
+
+    func testAppendAttributesClearsStickyDocsBeforeRefreshCompletes() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["deviceId": "device-1"], service: service)
+
+        let anonymousDocs = ["deviceId||device-1": StickyAssignmentsDocument(
+            attributeName: "deviceId", attributeValue: "device-1",
+            assignments: ["exp-1__0": "control"]
+        )]
+        service.flush(docs: anonymousDocs)
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs,
+                        "Precondition: anonymous docs must be loaded after init flush")
+
+        try? sdk.appendAttributes(attributes: ["id": "user-logged-in"])
+
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs,
+                     "Stale docs must be cleared synchronously on appendAttributes")
+
+        service.flush(docs: [:])
+        XCTAssertTrue(sdk.getGBContext().stickyBucketAssignmentDocs?.isEmpty ?? true)
+    }
+}
+
 class StickyBucketingFeatureTests: XCTestCase {
     var service: StickyBucketService!
     var evalConditions: [JSON]?
