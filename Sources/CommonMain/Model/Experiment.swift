@@ -44,7 +44,9 @@ import Foundation
     public let name: String?
     /// Id of the current experiment phase
     public let phase: String?
-    
+    /// Custom fields defined in the GrowthBook UI
+    public let customFields: [String: JSON]?
+
     public init(key: String,
                 variations: [Any] = [],
                 namespace: [Any]? = nil,
@@ -65,7 +67,8 @@ import Foundation
                 filters: [Filter]? = nil,
                 seed: String? = nil,
                 name: String? = nil,
-                phase: String? = nil) {
+                phase: String? = nil,
+                customFields: [String: Any]? = nil) {
         self.key = key
         self.variations = JSON(variations).arrayValue
         if let namespace = namespace {
@@ -93,6 +96,11 @@ import Foundation
         self.seed = seed
         self.name = name
         self.phase = phase
+        if let customFields = customFields {
+            self.customFields = JSON(customFields).dictionaryValue
+        } else {
+            self.customFields = nil
+        }
     }
 
     init(key: String,
@@ -115,7 +123,8 @@ import Foundation
          filters: [Filter]? = nil,
          seed: String? = nil,
          name: String? = nil,
-         phase: String? = nil) {
+         phase: String? = nil,
+         customFields: [String: JSON]? = nil) {
         self.key = key
         self.variations = variations
         self.namespace = namespace
@@ -137,6 +146,7 @@ import Foundation
         self.seed = seed
         self.name = name
         self.phase = phase
+        self.customFields = customFields
     }
 
     init(json: [String: JSON]) {
@@ -189,11 +199,12 @@ import Foundation
         })
         
         seed = json["seed"]?.stringValue
-        
+
         name = json["name"]?.stringValue
-        
+
         phase = json["phase"]?.stringValue
-        
+
+        customFields = json["customFields"]?.dictionaryValue
     }
 }
 
