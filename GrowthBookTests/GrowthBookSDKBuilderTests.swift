@@ -302,6 +302,40 @@ class GrowthBookSDKBuilderTests: XCTestCase {
         XCTAssertEqual(2, countTrackingCallback)
     }
     
+    // MARK: - Raw-map preloaded payload
+
+    /// Regression test for the v1.1.0 fallback-unreachable bug.
+    /// A raw { "featureId": { ... } } blob (no "features" envelope) must be decoded via the
+    /// fallback path and produce the correct evalFeature result — not unknownFeature.
+    func testRawMapFeaturesPayloadIsLoaded() throws {
+        let rawMapPayload = """
+        {
+            "my-flag": {
+                "defaultValue": true,
+                "rules": [
+                    { "id": "rule_1", "condition": {"label": "my-label"}, "force": false }
+                ]
+            }
+        }
+        """.data(using: .utf8)!
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: testClientKey,
+            attributes: [:],
+            features: rawMapPayload,
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: nil))
+        .initializer()
+
+        XCTAssertEqual(sdk.getFeatures().count, 1, "Raw-map payload must produce exactly one feature")
+        let result = sdk.evalFeature(id: "my-flag")
+        XCTAssertEqual(result.source, FeatureSource.defaultValue.rawValue, "Feature source must be defaultValue, not unknownFeature")
+        XCTAssertEqual(result.value?.bool, true, "Feature default value must be true")
+    }
+
     // MARK: - Offline Mode
 
     /// When features are supplied at init and backgroundSync is false, the SDK must not
