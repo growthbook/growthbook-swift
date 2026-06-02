@@ -53,7 +53,7 @@ import Foundation
   /// Single registry instance shared across all evaluations.
   public let pluginRegistry: PluginRegistry
 
-  public init(apiHost: String?,
+  @nonobjc public init(apiHost: String?,
     clientKey: String?,
     encryptionKey: String?,
     isEnabled: Bool,
@@ -76,5 +76,30 @@ import Foundation
     self.stickyBucketService = stickyBucketService
     self.plugins = plugins
     self.pluginRegistry = PluginRegistry(plugins: plugins)
+  }
+
+  @objc public convenience init(apiHost: String?,
+    clientKey: String?,
+    encryptionKey: String?,
+    isEnabled: Bool,
+    isQaMode: Bool,
+    backgroundSync: Bool = false,
+    stableSession: Bool = false,
+    remoteEval: Bool = false,
+    trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
+    stickyBucketService: StickyBucketServiceProtocol? = nil) {
+    self.init(
+      apiHost: apiHost,
+      clientKey: clientKey,
+      encryptionKey: encryptionKey,
+      isEnabled: isEnabled,
+      isQaMode: isQaMode,
+      backgroundSync: backgroundSync,
+      stableSession: stableSession,
+      remoteEval: remoteEval,
+      trackingClosure: trackingClosure,
+      stickyBucketService: stickyBucketService,
+      plugins: []
+    )
   }
 }
