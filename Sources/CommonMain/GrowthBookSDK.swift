@@ -393,10 +393,9 @@ protocol GrowthBookProtocol: AnyObject {
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
-    private var pluginRegistry: PluginRegistry = .empty
 
     deinit {
-        pluginRegistry.close()
+        contextManager.getGlobalConfig().pluginRegistry.close()
     }
 
     init(contextManager: ContextManager,
@@ -457,9 +456,8 @@ protocol GrowthBookProtocol: AnyObject {
         }
         refreshStickyBucketService()
 
-        pluginRegistry = PluginRegistry(plugins: globalConfig.plugins)
         let clientKey = globalConfig.clientKey ?? ""
-        pluginRegistry.initialize(clientKey: clientKey)
+        globalConfig.pluginRegistry.initialize(clientKey: clientKey)
     }
 
     // Convenience init for backward compatibility
@@ -703,7 +701,7 @@ protocol GrowthBookProtocol: AnyObject {
         let context = contextManager.getEvalContext()
         let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
         contextManager.syncFromEvaluation(context)
-        pluginRegistry.onFeatureEvaluated(featureKey: id, result: result, attributes: context.userContext.attributes)
+        contextManager.getGlobalConfig().pluginRegistry.onFeatureEvaluated(featureKey: id, result: result, attributes: context.userContext.attributes)
         return result
     }
 

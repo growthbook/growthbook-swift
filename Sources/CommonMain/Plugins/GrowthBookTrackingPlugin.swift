@@ -165,7 +165,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         guard !events.isEmpty else { return }
         let semaphore = DispatchSemaphore(value: 0)
         post(events: events) { semaphore.signal() }
-        semaphore.wait()
+        _ = semaphore.wait(timeout: .now() + config.batchTimeout)
     }
 
     private func post(events: [IngestEvent], completion: (() -> Void)?) {

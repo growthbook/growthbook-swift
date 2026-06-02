@@ -4,8 +4,6 @@ import Foundation
 ///
 /// Implement this protocol to intercept experiment and feature evaluation events.
 /// Plugin methods are always called after the existing tracking callbacks fire.
-/// Any errors thrown inside plugin methods must not propagate to callers — the SDK
-/// wraps every plugin call so a misbehaving plugin cannot crash the host app.
 public protocol GrowthBookPlugin: AnyObject {
     /// Called once when the SDK is initialized.
     func initialize(clientKey: String)

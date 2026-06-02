@@ -50,6 +50,8 @@ import Foundation
   public let stickyBucketService: StickyBucketServiceProtocol?
   /// Plugins that receive experiment and feature evaluation events.
   public let plugins: [GrowthBookPlugin]
+  /// Single registry instance shared across all evaluations.
+  public let pluginRegistry: PluginRegistry
 
   public init(apiHost: String?,
     clientKey: String?,
@@ -73,5 +75,6 @@ import Foundation
     self.trackingClosure = trackingClosure
     self.stickyBucketService = stickyBucketService
     self.plugins = plugins
+    self.pluginRegistry = PluginRegistry(plugins: plugins)
   }
 }

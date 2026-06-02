@@ -192,7 +192,7 @@ import Foundation
       isQaMode: globalConfig.isQaMode,
       url: evalData.url,
       trackingClosure: globalConfig.trackingClosure,
-      pluginRegistry: PluginRegistry(plugins: globalConfig.plugins)
+      pluginRegistry: globalConfig.pluginRegistry
     )
     
     // GlobalContext is created from evalData.features and evalData.savedGroups
