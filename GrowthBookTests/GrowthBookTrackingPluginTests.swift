@@ -246,51 +246,44 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     // MARK: - Request format
 
     func testRequestSentToCorrectEndpoint() {
-        let expectation = expectation(description: "correct endpoint")
-        let plugin = makePlugin(batchSize: 1) { request in
-            XCTAssertEqual(request.url?.absoluteString, "\(GrowthBookTrackingPlugin.Config.defaultIngestorHost)/track?client_key=sdk-test")
-            XCTAssertEqual(request.httpMethod, "POST")
-            XCTAssertEqual(request.value(forHTTPHeaderField: "Content-Type"), "application/json")
-            XCTAssertTrue(request.value(forHTTPHeaderField: "User-Agent")?.hasPrefix("growthbook-swift-sdk/") == true)
-            expectation.fulfill()
-        }
+        var captured: URLRequest?
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { request in captured = request }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
-        wait(for: [expectation], timeout: 10.0)
-        withExtendedLifetime(plugin) {}
+        plugin.close()
+        XCTAssertEqual(captured?.url?.absoluteString, "\(GrowthBookTrackingPlugin.Config.defaultIngestorHost)/track?client_key=sdk-test")
+        XCTAssertEqual(captured?.httpMethod, "POST")
+        XCTAssertEqual(captured?.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertTrue(captured?.value(forHTTPHeaderField: "User-Agent")?.hasPrefix("growthbook-swift-sdk/") == true)
     }
 
     func testFeatureEvaluatedEventIncludedInPayload() {
-        let expectation = expectation(description: "feature event in payload")
-        let plugin = makePlugin(batchSize: 1) { request in
-            let events = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [[String: Any]]
-            XCTAssertEqual(events.first?["event_name"] as? String, "Feature Evaluated")
-            let props = events.first?["properties"] as? [String: Any]
-            XCTAssertEqual(props?["feature"] as? String, "my-feature")
-            expectation.fulfill()
+        var capturedEvents: [[String: Any]]?
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { request in
+            capturedEvents = try? JSONSerialization.jsonObject(with: request.httpBody!) as? [[String: Any]]
         }
         plugin.initialize(clientKey: "sdk-test")
         let featureResult = FeatureResult(value: JSON(true), isOn: true, source: "defaultValue")
         plugin.onFeatureEvaluated(featureKey: "my-feature", result: featureResult, attributes: nil)
-        wait(for: [expectation], timeout: 10.0)
-        withExtendedLifetime(plugin) {}
+        plugin.close()
+        XCTAssertEqual(capturedEvents?.first?["event_name"] as? String, "Feature Evaluated")
+        let props = capturedEvents?.first?["properties"] as? [String: Any]
+        XCTAssertEqual(props?["feature"] as? String, "my-feature")
     }
 
     func testAttributesIncludedInEventPayload() {
-        let expectation = expectation(description: "attributes in payload")
-        let plugin = makePlugin(batchSize: 1) { request in
-            let events = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [[String: Any]]
-            let attrs = events.first?["attributes"] as? [String: Any]
-            XCTAssertEqual(attrs?["id"] as? String, "user-1")
-            XCTAssertEqual(attrs?["plan"] as? String, "pro")
-            XCTAssertEqual(attrs?["sdk_language"] as? String, "swift")
-            XCTAssertNotNil(attrs?["sdk_version"])
-            expectation.fulfill()
+        var capturedAttrs: [String: Any]?
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { request in
+            let events = try? JSONSerialization.jsonObject(with: request.httpBody!) as? [[String: Any]]
+            capturedAttrs = events?.first?["attributes"] as? [String: Any]
         }
         plugin.initialize(clientKey: "sdk-test")
         let attrs = JSON(["id": "user-1", "plan": "pro"])
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: attrs)
-        wait(for: [expectation], timeout: 10.0)
-        withExtendedLifetime(plugin) {}
+        plugin.close()
+        XCTAssertEqual(capturedAttrs?["id"] as? String, "user-1")
+        XCTAssertEqual(capturedAttrs?["plan"] as? String, "pro")
+        XCTAssertEqual(capturedAttrs?["sdk_language"] as? String, "swift")
+        XCTAssertNotNil(capturedAttrs?["sdk_version"])
     }
 }
