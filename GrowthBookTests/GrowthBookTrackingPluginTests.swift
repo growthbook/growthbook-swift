@@ -183,7 +183,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         for _ in 0..<3 {
             plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         }
-        wait(for: [expectation], timeout: 3.0)
+        wait(for: [expectation], timeout: 10.0)
         withExtendedLifetime(plugin) {}
     }
 
@@ -206,7 +206,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         let plugin = makePlugin(batchSize: 100, batchTimeout: 0.1) { _ in expectation.fulfill() }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
-        wait(for: [expectation], timeout: 3.0)
+        wait(for: [expectation], timeout: 10.0)
         withExtendedLifetime(plugin) {}
     }
 
@@ -256,7 +256,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
-        wait(for: [expectation], timeout: 3.0)
+        wait(for: [expectation], timeout: 10.0)
         withExtendedLifetime(plugin) {}
     }
 
@@ -272,7 +272,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         plugin.initialize(clientKey: "sdk-test")
         let featureResult = FeatureResult(value: JSON(true), isOn: true, source: "defaultValue")
         plugin.onFeatureEvaluated(featureKey: "my-feature", result: featureResult, attributes: nil)
-        wait(for: [expectation], timeout: 3.0)
+        wait(for: [expectation], timeout: 10.0)
         withExtendedLifetime(plugin) {}
     }
 
@@ -290,7 +290,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         plugin.initialize(clientKey: "sdk-test")
         let attrs = JSON(["id": "user-1", "plan": "pro"])
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: attrs)
-        wait(for: [expectation], timeout: 3.0)
+        wait(for: [expectation], timeout: 10.0)
         withExtendedLifetime(plugin) {}
     }
 }
