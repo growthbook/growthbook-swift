@@ -602,14 +602,19 @@ protocol GrowthBookProtocol: AnyObject {
                 return
             }
 
-            self.contextManager.updateEvalData { data in
-                data.features = features
-            }
-            self.refreshStickyBucketService()
-
-            if stableSession {
-                sessionEstablished = true
-                logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
+            // Apply features only after sticky bucket docs are loaded so that the
+            // first evaluation after a payload update never sees features without docs.
+            // For the default sync StickyBucketService the completion fires immediately
+            // (zero behaviour change); for async services features are delayed until
+            // docs are ready, mirroring Kotlin's onPayloadReady pattern.
+            self.refreshStickyBucketService {
+                self.contextManager.updateEvalData { data in
+                    data.features = features
+                }
+                if stableSession {
+                    self.sessionEstablished = true
+                    logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
+                }
             }
         }
     }
@@ -795,9 +800,12 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
-    @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
+    @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil, completion: (() -> Void)? = nil) {
         let globalConfig = contextManager.getGlobalConfig()
-        guard let service = globalConfig.stickyBucketService else { return }
+        guard let service = globalConfig.stickyBucketService else {
+            completion?()
+            return
+        }
 
         let context = contextManager.getEvalContext()
 
@@ -812,6 +820,7 @@ protocol GrowthBookProtocol: AnyObject {
                 self.contextManager.updateEvalData { data in
                     data.stickyBucketAssignmentDocs = docs
                 }
+                completion?()
             }
         }
     }

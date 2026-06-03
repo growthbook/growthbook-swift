@@ -91,6 +91,40 @@ class StickyBucketUserSwitchTests: XCTestCase {
     }
 }
 
+class FeatureLoadRaceConditionTests: XCTestCase {
+
+    // Verifies that features are applied to the context only after sticky bucket
+    // docs are loaded, so an evaluation immediately after featuresFetchedSuccessfully
+    // never sees features without docs (Kotlin onPayloadReady pattern).
+    func testFeaturesAppliedAfterStickyDocsLoaded() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "user-1"], service: service)
+
+        // Complete the init refresh.
+        service.flush(docs: [:])
+
+        // Simulate featuresFetchedSuccessfully by calling it directly.
+        let newFeatures: [String: Feature] = ["my-feature": Feature(defaultValue: JSON(true), rules: nil)]
+        sdk.featuresFetchedSuccessfully(features: newFeatures, isRemote: true)
+
+        // Before the sticky bucket refresh completion fires, features must NOT be applied yet.
+        XCTAssertNil(sdk.getFeatures()["my-feature"],
+                     "Features must not be visible before sticky bucket docs are loaded")
+
+        // Flush docs — features must appear together with docs.
+        let docs = ["id||user-1": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "user-1",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: docs)
+
+        XCTAssertNotNil(sdk.getFeatures()["my-feature"],
+                        "Features must be visible after sticky bucket docs are loaded")
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||user-1"],
+                        "Sticky docs must be loaded together with features")
+    }
+}
+
 class AttributeOverridesTests: XCTestCase {
 
     // Verifies that refreshStickyBucketService uses merged (base + override) attributes
