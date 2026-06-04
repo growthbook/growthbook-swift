@@ -119,14 +119,14 @@ class FeaturesViewModel {
     
     
     /// Fetch Features
-    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
+    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil, forceRefresh: Bool = false) {
         // Check for cache data
         fetchCachedFeatures(logging: true)
         guard let apiUrl else {
             delegate?.featuresUpdateIsComplete(error: .invalidAPIURL, isRemote: false)
             return
         }
-        guard isCacheExpired() else {
+        guard isCacheExpired() || forceRefresh else {
             delegate?.featuresUpdateIsComplete(error: nil, isRemote: true)
             return
         }
