@@ -13,7 +13,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
     
     override func setUp() {
         super.setUp()
-        
+        cachingManager.clearCache()
         isSuccess = false
         isError = true
         hasFeatures = false
@@ -71,7 +71,8 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             return
         }
         
-        if let features = try? JSONDecoder().decode(Features.self, from: featureData), features != [:] {
+        struct CacheEnvelope: Decodable { let features: Features }
+        if let envelope = try? JSONDecoder().decode(CacheEnvelope.self, from: featureData), !envelope.features.isEmpty {
             XCTAssertTrue(true)
         } else {
             XCTFail()
@@ -108,10 +109,8 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             return
         }
         
-        let crypto: CryptoProtocol = Crypto()
-        if let encryptedString = String(data: featureData, encoding: .utf8), crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) != nil {
-            XCTAssertTrue(true)
-        } else if let _ = try? JSONDecoder().decode(Features.self, from: featureData) {
+        struct CacheEnvelope: Decodable { let features: Features }
+        if let envelope = try? JSONDecoder().decode(CacheEnvelope.self, from: featureData), !envelope.features.isEmpty {
             XCTAssertTrue(true)
         } else {
             XCTFail()
@@ -275,6 +274,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             cachingManager: CachingManager(),
             ttlSeconds: 0
         )
+        viewModel.maxRetryAttempts = 0
         viewModel.manager.clearCache()
         viewModel.fetchFeatures(apiUrl: "https://cdn.growthbook.io/api/features/key")
 
@@ -310,6 +310,7 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
             cachingManager: cachingManager,
             ttlSeconds: 0
         )
+        vm.maxRetryAttempts = 0
         vm.fetchFeatures(apiUrl: "https://cdn.growthbook.io/api/features/key")
 
         XCTAssertTrue(fetchFailedCalledRemote, "featuresFetchFailed(isRemote: true) must be reported for network error")

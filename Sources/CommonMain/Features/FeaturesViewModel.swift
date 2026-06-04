@@ -35,15 +35,41 @@ class FeaturesViewModel {
     }
     
     
+    private struct CachedFeaturesEnvelope: Codable {
+        let features: Features
+        let cachedAt: TimeInterval
+    }
+
     private func isCacheExpired() -> Bool {
-        guard let expiresAt = expiresAt else {
-            return true
+        if expiresAt == nil,
+           let data = manager.getContent(fileName: Constants.featureCache),
+           let envelope = try? JSONDecoder().decode(CachedFeaturesEnvelope.self, from: data) {
+            expiresAt = envelope.cachedAt + Double(ttlSeconds)
         }
+        guard let expiresAt else { return true }
         return Date().timeIntervalSince1970 >= expiresAt
     }
-    
+
+    private func saveFeatures(_ features: Features) {
+        let now = Date().timeIntervalSince1970
+        expiresAt = now + Double(ttlSeconds)
+        let envelope = CachedFeaturesEnvelope(features: features, cachedAt: now)
+        if let data = try? JSONEncoder().encode(envelope) {
+            manager.saveContent(fileName: Constants.featureCache, content: data)
+        }
+    }
+
     private func refreshExpiresAt() {
-        expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
+        guard let data = manager.getContent(fileName: Constants.featureCache) else { return }
+        let features: Features
+        if let envelope = try? JSONDecoder().decode(CachedFeaturesEnvelope.self, from: data) {
+            features = envelope.features
+        } else if let plain = try? JSONDecoder().decode(Features.self, from: data) {
+            features = plain
+        } else {
+            return
+        }
+        saveFeatures(features)
     }
     
     func connectBackgroundSync(sseUrl: String) {
@@ -88,8 +114,10 @@ class FeaturesViewModel {
                     if logging { logger.error("Failed get features from cached encrypted features") }
                     return error
                 }
+            } else if let envelope = try? decoder.decode(CachedFeaturesEnvelope.self, from: data) {
+                delegate?.featuresFetchedSuccessfully(features: envelope.features, isRemote: isRemote)
             } else if let features = try? decoder.decode(Features.self, from: data) {
-                // Call Success Delegate with mention of data available but its not remote
+                // migration: old cache format without envelope
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
             } else {
                 let error = SDKError.failedParsedData
@@ -197,12 +225,7 @@ class FeaturesViewModel {
                 if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                     let crypto: CryptoProtocol = Crypto()
                     if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                        if let featureData = try? JSONEncoder().encode(features) {
-                            manager.saveContent(fileName: Constants.featureCache, content: featureData)
-                            refreshExpiresAt()
-                        } else {
-                            logger.error("Failed encode features")
-                        }
+                        saveFeatures(features)
                         delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
                     } else {
                         let error: SDKError = .failedEncryptedFeatures
@@ -219,10 +242,7 @@ class FeaturesViewModel {
                     return
                 }
             } else if let features = jsonPetitions.features {
-                if let featureData = try? JSONEncoder().encode(features) {
-                    manager.saveContent(fileName: Constants.featureCache, content: featureData)
-                    refreshExpiresAt()
-                }
+                saveFeatures(features)
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
             } else {
                 let error: SDKError = .failedMissingKey
