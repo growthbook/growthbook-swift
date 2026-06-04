@@ -118,6 +118,11 @@ class FeaturesViewModel {
     }
     
     
+    private static let initialRetryDelay: TimeInterval = 1.0
+    private static let maxRetryDelay: TimeInterval = 60.0
+    // Internal so tests can set to 0 to skip retry delays
+    var maxRetryAttempts: Int = 5
+
     /// Fetch Features
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil, forceRefresh: Bool = false) {
         // Check for cache data
@@ -144,18 +149,30 @@ class FeaturesViewModel {
                 }
             }
         } else {
-            dataSource.fetchFeatures(apiUrl: apiUrl) { result in
-                switch result {
-                case .success(let data):
-                    self.prepareFeaturesData(data: data)
-                case .failure(let error):
-                    if (error as NSError).code == 304 {
-                        self.refreshExpiresAt()
-                        let fetchCachedFeaturesError = self.fetchCachedFeatures(isRemote: true)
-                        self.delegate?.featuresUpdateIsComplete(error: fetchCachedFeaturesError, isRemote: true)
-                        return
+            doFetchFeatures(apiUrl: apiUrl, attempt: 0, delay: Self.initialRetryDelay)
+        }
+    }
+
+    private func doFetchFeatures(apiUrl: String, attempt: Int, delay: TimeInterval) {
+        dataSource.fetchFeatures(apiUrl: apiUrl) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let data):
+                self.prepareFeaturesData(data: data)
+            case .failure(let error):
+                if (error as NSError).code == 304 {
+                    self.refreshExpiresAt()
+                    let cachedError = self.fetchCachedFeatures(isRemote: true)
+                    self.delegate?.featuresUpdateIsComplete(error: cachedError, isRemote: true)
+                    return
+                }
+                if attempt < maxRetryAttempts {
+                    logger.info("GrowthBook: fetch failed, retrying in \(Int(delay))s (attempt \(attempt + 1)/\(maxRetryAttempts))")
+                    DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+                        self?.doFetchFeatures(apiUrl: apiUrl, attempt: attempt + 1, delay: min(delay * 2, Self.maxRetryDelay))
                     }
-                    logger.info("Failed to get features from remote: \(error.localizedDescription)")
+                } else {
+                    logger.info("Failed to get features from remote after \(maxRetryAttempts) retries: \(error.localizedDescription)")
                     let sdkError: SDKError = .failedToFetchData(error)
                     self.delegate?.featuresFetchFailed(error: sdkError, isRemote: true)
                     self.fetchCachedFeatures(isRemote: true)

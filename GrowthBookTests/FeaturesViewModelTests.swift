@@ -320,9 +320,10 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = false
         isError = true
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: .failedToLoadData)), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        viewModel.maxRetryAttempts = 0  // disable retry so failure is immediate in this test
 
         viewModel.manager.clearCache()
-        
+
         viewModel.fetchFeatures(apiUrl: "")
 
         XCTAssertFalse(isSuccess)

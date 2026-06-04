@@ -244,6 +244,7 @@ class FeaturesViewModelExtendedTests: XCTestCase {
             cachingManager: manager,
             ttlSeconds: 0
         )
+        failVM.maxRetryAttempts = 0  // disable retry so failure is immediate in this test
         failVM.fetchFeatures(apiUrl: "https://example.com")
         // After network fail, falls back to cache → at least one success
         XCTAssertGreaterThan(capture.successCount, 0)
