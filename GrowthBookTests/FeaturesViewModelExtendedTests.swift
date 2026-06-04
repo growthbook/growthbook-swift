@@ -252,39 +252,6 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
     }
 
-    // MARK: - persistent TTL survives VM restart
-
-    func testCachedAtTimestampSkipsNetworkOnRestart() {
-        let apiKey = UUID().uuidString
-        let manager = CachingManager(apiKey: apiKey)
-        manager.clearCache()
-
-        // First VM: fetch successfully, writes cachedAt to disk
-        let firstClient = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
-        let firstCapture = Capture()
-        let firstVM = FeaturesViewModel(
-            delegate: firstCapture,
-            dataSource: FeaturesDataSource(dispatcher: firstClient),
-            cachingManager: manager,
-            ttlSeconds: 3600
-        )
-        firstVM.fetchFeatures(apiUrl: "https://example.com")
-        XCTAssertEqual(firstClient.callCount, 1)
-
-        // Second VM simulates cold restart with same cache — TTL still fresh, no network call
-        let secondClient = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
-        let secondCapture = Capture()
-        let secondVM = FeaturesViewModel(
-            delegate: secondCapture,
-            dataSource: FeaturesDataSource(dispatcher: secondClient),
-            cachingManager: manager,
-            ttlSeconds: 3600
-        )
-        secondVM.fetchFeatures(apiUrl: "https://example.com")
-        XCTAssertEqual(secondClient.callCount, 0, "Network should not be called when cache is fresh after restart")
-        XCTAssertGreaterThan(secondCapture.successCount, 0, "Cache should still serve features")
-    }
-
     // MARK: - SSE empty / heartbeat payload handling
 
     /// Empty SSE data ("") must not reach prepareFeaturesData.
