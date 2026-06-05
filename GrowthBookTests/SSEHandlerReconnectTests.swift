@@ -72,4 +72,22 @@ final class SSEHandlerReconnectTests: XCTestCase {
         handler.disconnect()
         XCTAssertEqual(handler.connectionStatus, .disconnected)
     }
+
+    // MARK: - shouldReconnect
+
+    func testReconnectsOnStatus200() {
+        XCTAssertTrue(handler.shouldReconnect(statusCode: 200))
+    }
+
+    func testDoesNotReconnectOnOther2xx() {
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 201))
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 204))
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 299))
+    }
+
+    func testDoesNotReconnectOnClientOrServerErrors() {
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 400))
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 404))
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 500))
+    }
 }
