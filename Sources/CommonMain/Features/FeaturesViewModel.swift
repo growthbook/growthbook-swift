@@ -61,11 +61,7 @@ class FeaturesViewModel {
         }
         streamingUpdate.connect()
         
-        streamingUpdate.onDissconnect { [weak streamingUpdate] _, shouldReconnect, _ in
-            if let shouldReconnect = shouldReconnect, shouldReconnect {
-                streamingUpdate?.connect()
-            }
-        }
+        streamingUpdate.onDissconnect { _, _, _ in }
     }
     
     deinit {

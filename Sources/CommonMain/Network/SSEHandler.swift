@@ -22,6 +22,14 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     private var mainQueue = DispatchQueue.main
     private var urlSession: URLSession?
 
+    var retryCount = 0
+    let maxRetryCount = 10
+    let maxRetryDelayMs = 30_000
+
+    var backoffDelay: Int {
+        min(retryTime * (1 << retryCount), maxRetryDelayMs)
+    }
+
     public init(
         url: URL,
         headers: [String: String] = [:]
@@ -47,6 +55,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
 
     public func disconnect() {
         connectionStatus = .disconnected
+        retryCount = 0
         urlSession?.invalidateAndCancel()
     }
 
@@ -87,6 +96,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
 
         completionHandler(URLSession.ResponseDisposition.allow)
         connectionStatus = .connected
+        retryCount = 0
         mainQueue.async { [weak self] in self?.onConnect?() }
     }
 
@@ -100,7 +110,18 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         }
 
         let reconnect = shouldReconnect(statusCode: responseStatusCode)
-        mainQueue.async { [weak self] in self?.onDisconnect?(responseStatusCode, reconnect, nil) }
+
+        if reconnect && retryCount < maxRetryCount {
+            let delay = backoffDelay
+            retryCount += 1
+            mainQueue.asyncAfter(deadline: .now() + .milliseconds(delay)) { [weak self] in
+                guard let self, self.connectionStatus != .disconnected else { return }
+                self.connect(lastEventId: self.lastEventId)
+            }
+            mainQueue.async { [weak self] in self?.onDisconnect?(responseStatusCode, true, nil) }
+        } else {
+            mainQueue.async { [weak self] in self?.onDisconnect?(responseStatusCode, false, nil) }
+        }
     }
 
     open func urlSession(_ session: URLSession,
