@@ -28,49 +28,41 @@ final class SSEHandlerReconnectTests: XCTestCase {
     // MARK: - Backoff delay calculation
 
     func testBackoffDelayAtRetry0Is1s() {
-        handler.retryCount = 0
-        XCTAssertEqual(handler.backoffDelay, 1_000)
+        XCTAssertEqual(handler.backoffDelay(for: 0), 1_000)
     }
 
     func testBackoffDelayDoublesEachRetry() {
         let expected = [1_000, 2_000, 4_000, 8_000, 16_000]
         for (i, ms) in expected.enumerated() {
-            handler.retryCount = i
-            XCTAssertEqual(handler.backoffDelay, ms, "retry \(i) should be \(ms)ms")
+            XCTAssertEqual(handler.backoffDelay(for: i), ms, "retry \(i) should be \(ms)ms")
         }
     }
 
     func testBackoffDelayCappedAt30s() {
-        handler.retryCount = 5   // 1000 * 2^5 = 32000 → capped at 30000
-        XCTAssertEqual(handler.backoffDelay, 30_000)
-
-        handler.retryCount = 10
-        XCTAssertEqual(handler.backoffDelay, 30_000)
+        XCTAssertEqual(handler.backoffDelay(for: 5), 30_000)  // 1000 * 2^5 = 32000 → capped
+        XCTAssertEqual(handler.backoffDelay(for: 10), 30_000)
     }
 
-    func testBackoffDelayRespectCustomRetryTime() {
+    func testBackoffDelayRespectsCustomRetryTime() {
         handler.retryTime = 2_000
-        handler.retryCount = 0
-        XCTAssertEqual(handler.backoffDelay, 2_000)
-
-        handler.retryCount = 1
-        XCTAssertEqual(handler.backoffDelay, 4_000)
-
-        handler.retryCount = 4   // 2000 * 2^4 = 32000 → capped at 30000
-        XCTAssertEqual(handler.backoffDelay, 30_000)
+        XCTAssertEqual(handler.backoffDelay(for: 0), 2_000)
+        XCTAssertEqual(handler.backoffDelay(for: 1), 4_000)
+        XCTAssertEqual(handler.backoffDelay(for: 4), 30_000)  // 2000 * 2^4 = 32000 → capped
     }
 
     // MARK: - disconnect() resets state
 
-    func testDisconnectResetsRetryCount() {
-        handler.retryCount = 7
-        handler.disconnect()
-        XCTAssertEqual(handler.retryCount, 0)
-    }
-
     func testDisconnectSetsStatusToDisconnected() {
         handler.disconnect()
         XCTAssertEqual(handler.connectionStatus, .disconnected)
+    }
+
+    func testDisconnectResetsRetryCountOnOperationQueue() {
+        // retryCount reset is dispatched to operationQueue to avoid data race;
+        // flush the queue before asserting.
+        handler.disconnect()
+        handler.operationQueue.waitUntilAllOperationsAreFinished()
+        XCTAssertEqual(handler.retryCount, 0)
     }
 
     // MARK: - shouldReconnect

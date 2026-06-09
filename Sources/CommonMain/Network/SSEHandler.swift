@@ -18,17 +18,20 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     private var onDisconnect: ((Int?, Bool?, NSError?) -> Void)?
     private var eventListeners: [String: (_ id: String?, _ event: String?, _ data: String?) -> Void] = [:]
     private var eventHandler: EventHandler?
-    private var operationQueue: OperationQueue
+    var operationQueue: OperationQueue
     private var mainQueue = DispatchQueue.main
     private var urlSession: URLSession?
 
-    var retryCount = 0
+    private(set) var retryCount = 0
     let maxRetryCount = 10
     let maxRetryDelayMs = 30_000
 
-    var backoffDelay: Int {
-        min(retryTime * (1 << retryCount), maxRetryDelayMs)
+    // Internal for testing: accepts an explicit count so tests don't need to mutate retryCount.
+    func backoffDelay(for count: Int) -> Int {
+        min(retryTime * Int(pow(2, Double(count))), maxRetryDelayMs)
     }
+
+    var backoffDelay: Int { backoffDelay(for: retryCount) }
 
     public init(
         url: URL,
@@ -55,8 +58,10 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
 
     public func disconnect() {
         connectionStatus = .disconnected
-        retryCount = 0
         urlSession?.invalidateAndCancel()
+        // Reset on operationQueue to avoid a data race with delegate methods
+        // that also mutate retryCount on that queue.
+        operationQueue.addOperation { [weak self] in self?.retryCount = 0 }
     }
 
     public func onConnect(onConnect: @escaping (() -> ())) {
