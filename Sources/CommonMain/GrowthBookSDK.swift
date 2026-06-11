@@ -733,6 +733,27 @@ protocol GrowthBookProtocol: AnyObject {
         withLock { _evalFeature(id: id).isOn }
     }
 
+    /// The isOff method takes a single string argument, which is the unique identifier for the feature and returns whether the feature is off.
+    /// - Parameter id: String
+    /// - Returns: Bool
+    @objc public func isOff(feature id: String) -> Bool {
+        withLock { _evalFeature(id: id).isOff }
+    }
+
+    /// Evaluate every known feature and return their results keyed by feature id.
+    /// - Returns: a dictionary of feature id to its `FeatureResult`
+    @objc public func getAllFeatureResults() -> [String: FeatureResult] {
+        withLock {
+            let features = contextManager.getEvaluationData().features
+            var results: [String: FeatureResult] = [:]
+            results.reserveCapacity(features.count)
+            for key in features.keys {
+                results[key] = _evalFeature(id: key)
+            }
+            return results
+        }
+    }
+
     /// The run method takes an Experiment object and returns an experiment result
     /// - Parameter experiment: Experiment
     /// - Returns: ExperimentResult
