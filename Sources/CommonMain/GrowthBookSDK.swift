@@ -585,6 +585,46 @@ protocol GrowthBookProtocol: AnyObject {
         withLock { _evalFeature(id: id).value ?? defaultValue }
     }
 
+    /// Get the value of a feature decoded into a `Decodable` type, with a fallback.
+    ///
+    /// Use this for structured values (objects and arrays). For primitive scalars
+    /// (`Int`/`String`/`Bool`/`Double`) the dedicated overloads below are preferred —
+    /// they read the value directly and avoid JSON fragment decoding edge cases.
+    /// - Parameters:
+    ///   - id: feature key
+    ///   - type: the type to decode into
+    ///   - defaultValue: returned if the feature is missing or cannot be decoded as `T`
+    /// - Returns: the decoded value, or `defaultValue`
+    public func getFeatureValue<T: Decodable>(feature id: String, as type: T.Type, default defaultValue: T) -> T {
+        withLock {
+            guard let value = _evalFeature(id: id).value,
+                  let data = try? value.rawData(),
+                  let decoded = try? JSONDecoder().decode(T.self, from: data)
+            else { return defaultValue }
+            return decoded
+        }
+    }
+
+    /// Get an `Int` feature value, with a fallback.
+    public func getFeatureValue(feature id: String, as type: Int.Type, default defaultValue: Int) -> Int {
+        withLock { _evalFeature(id: id).value?.int ?? defaultValue }
+    }
+
+    /// Get a `String` feature value, with a fallback.
+    public func getFeatureValue(feature id: String, as type: String.Type, default defaultValue: String) -> String {
+        withLock { _evalFeature(id: id).value?.string ?? defaultValue }
+    }
+
+    /// Get a `Bool` feature value, with a fallback.
+    public func getFeatureValue(feature id: String, as type: Bool.Type, default defaultValue: Bool) -> Bool {
+        withLock { _evalFeature(id: id).value?.bool ?? defaultValue }
+    }
+
+    /// Get a `Double` feature value, with a fallback.
+    public func getFeatureValue(feature id: String, as type: Double.Type, default defaultValue: Double) -> Double {
+        withLock { _evalFeature(id: id).value?.double ?? defaultValue }
+    }
+
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
         withLock {
             let stableSession = contextManager.getGlobalConfig().stableSession
