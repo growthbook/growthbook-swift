@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Combine)
+import Combine
+#endif
 
 /// GrowthBookBuilder - Root Class for SDK Initializers for GrowthBook SDK
 protocol GrowthBookProtocol: AnyObject {
@@ -385,6 +388,13 @@ protocol GrowthBookProtocol: AnyObject {
     var cachingManager: CachingLayer
 
     private let lock = NSRecursiveLock()
+
+    /// Type-erased storage for the Combine features subject, created lazily on first
+    /// `featuresPublisher` access. Stored as `AnyObject?` so the property stays available
+    /// on OS versions that predate Combine; the concrete `CurrentValueSubject` type is
+    /// only referenced inside `@available`-gated members.
+    private var featuresSubjectStorage: AnyObject?
+
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
@@ -563,6 +573,40 @@ protocol GrowthBookProtocol: AnyObject {
         withLock { contextManager.getEvaluationData().features }
     }
 
+#if canImport(Combine)
+    /// A publisher that emits the current feature set and then every subsequent update
+    /// (from cache, network, streaming, or `setEncryptedFeatures`). New subscribers
+    /// immediately receive the latest features. Emissions are delivered on the thread
+    /// that applied the update; use `.receive(on:)` if you need them on the main queue.
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    public var featuresPublisher: AnyPublisher<[String: Feature], Never> {
+        withLock { featuresSubject().eraseToAnyPublisher() }
+    }
+
+    /// Returns the backing subject, creating it lazily on first use. Must be called
+    /// under `lock` (it mutates `featuresSubjectStorage`).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    private func featuresSubject() -> CurrentValueSubject<[String: Feature], Never> {
+        if let existing = featuresSubjectStorage as? CurrentValueSubject<[String: Feature], Never> {
+            return existing
+        }
+        let subject = CurrentValueSubject<[String: Feature], Never>(contextManager.getEvaluationData().features)
+        featuresSubjectStorage = subject
+        return subject
+    }
+#endif
+
+    /// Emit a features change to the Combine subject, if one exists and the platform
+    /// supports Combine. Sends outside `lock` so subscriber code never runs while the
+    /// SDK lock is held.
+    private func emitFeaturesChange(_ features: [String: Feature]) {
+#if canImport(Combine)
+        guard #available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) else { return }
+        let subject = withLock { featuresSubjectStorage as? CurrentValueSubject<[String: Feature], Never> }
+        subject?.send(features)
+#endif
+    }
+
     /// Subscribe to all experiment execution events.
     /// - Parameter result: ExperimentRunCallback
     @objc public func subscribe(_ result: @escaping ExperimentRunCallback) {
@@ -586,7 +630,7 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
-        withLock {
+        let didApply: Bool = withLock {
             let stableSession = contextManager.getGlobalConfig().stableSession
 
             // In stableSession mode, block every update once the session is established.
@@ -600,7 +644,7 @@ protocol GrowthBookProtocol: AnyObject {
                 } else {
                     logger.debug("stableSession: ignoring cache refresh — session features already established")
                 }
-                return
+                return false
             }
 
             self.contextManager.updateEvalData { data in
@@ -612,6 +656,11 @@ protocol GrowthBookProtocol: AnyObject {
                 sessionEstablished = true
                 logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
             }
+            return true
+        }
+
+        if didApply {
+            emitFeaturesChange(features)
         }
     }
 
@@ -634,6 +683,7 @@ protocol GrowthBookProtocol: AnyObject {
             }
             self.refreshStickyBucketService()
         }
+        emitFeaturesChange(features)
     }
 
     func featuresFetchFailed(error: SDKError, isRemote: Bool) {}
