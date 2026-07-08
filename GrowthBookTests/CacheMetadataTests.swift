@@ -81,6 +81,39 @@ final class CacheMetadataTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertGreaterThan(secondAge, firstAge, "cacheAge must grow between accesses")
     }
 
+    /// Exercises the race that motivated the `stateLock`: `cacheMetadata` read from many
+    /// threads while `refreshExpiresAt` (via `fetchFeatures`) writes the same fields.
+    /// Run under Thread Sanitizer (`swift test --sanitize=thread`) to catch regressions.
+    func testConcurrentReadsWhileRefreshing() throws {
+        let viewModel = FeaturesViewModel(
+            delegate: self,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)),
+            cachingManager: cachingManager,
+            ttlSeconds: 60
+        )
+
+        let iterations = 500
+        let writers = DispatchQueue(label: "writers", attributes: .concurrent)
+        let readers = DispatchQueue(label: "readers", attributes: .concurrent)
+        let group = DispatchGroup()
+
+        for _ in 0..<iterations {
+            group.enter()
+            writers.async {
+                viewModel.fetchFeatures(apiUrl: "https://cdn.growthbook.io/api/features/key")
+                group.leave()
+            }
+            group.enter()
+            readers.async {
+                _ = viewModel.cacheMetadata
+                group.leave()
+            }
+        }
+
+        let finished = group.wait(timeout: .now() + 10)
+        XCTAssertEqual(finished, .success, "Concurrent access should complete without deadlock")
+    }
+
     // MARK: - Public GrowthBookSDK API
 
     func testSDKExposesCacheMetadata() throws {

@@ -28,6 +28,12 @@ class FeaturesViewModel {
     let manager: CachingLayer
     internal var sseHandler: SSEHandler?
     private let ttlSeconds: Int
+    /// Guards `expiresAt` and `lastRefreshDate`. These are written from network/SSE
+    /// callback threads (via `refreshExpiresAt`) and read from arbitrary threads through
+    /// the public `cacheMetadata`, so all access goes through this leaf lock.
+    /// Critical sections are kept minimal and never span a delegate call, so the lock
+    /// order stays `SDK lock → this lock` with no reverse path (no deadlock).
+    private let stateLock = NSLock()
     private var expiresAt: TimeInterval?
     /// Timestamp of the last successful refresh. Set alongside `expiresAt`.
     private var lastRefreshDate: Date?
@@ -47,27 +53,40 @@ class FeaturesViewModel {
     
     
     private func isCacheExpired() -> Bool {
-        guard let expiresAt = expiresAt else {
+        stateLock.lock()
+        let expiry = expiresAt
+        stateLock.unlock()
+        guard let expiry else {
             return true
         }
-        return Date().timeIntervalSince1970 >= expiresAt
+        return Date().timeIntervalSince1970 >= expiry
     }
-    
+
     private func refreshExpiresAt() {
         let now = Date()
+        stateLock.lock()
         lastRefreshDate = now
         expiresAt = now.timeIntervalSince1970 + Double(ttlSeconds)
+        stateLock.unlock()
     }
 
     /// Current read-only snapshot of the cache state. Recomputed on each access
     /// so `cacheAge` always reflects the present moment.
+    ///
+    /// Computes `isExpired` inline from the locked snapshot rather than calling
+    /// `isCacheExpired()`, so the non-recursive `stateLock` is taken only once.
     var cacheMetadata: CacheMetadata {
+        stateLock.lock()
         let lastRefresh = lastRefreshDate
+        let expiry = expiresAt
+        stateLock.unlock()
+
+        let now = Date()
         return CacheMetadata(
             lastRefresh: lastRefresh,
-            cacheAge: lastRefresh.map { Date().timeIntervalSince($0) },
-            expiresAt: expiresAt.map { Date(timeIntervalSince1970: $0) },
-            isExpired: isCacheExpired()
+            cacheAge: lastRefresh.map { now.timeIntervalSince($0) },
+            expiresAt: expiry.map { Date(timeIntervalSince1970: $0) },
+            isExpired: expiry.map { now.timeIntervalSince1970 >= $0 } ?? true
         )
     }
     
