@@ -29,6 +29,8 @@ class FeaturesViewModel {
     internal var sseHandler: SSEHandler?
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
+    /// Timestamp of the last successful refresh. Set alongside `expiresAt`.
+    private var lastRefreshDate: Date?
     
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, preloadedFeatures: Features? = nil) {
         self.delegate = delegate
@@ -52,7 +54,21 @@ class FeaturesViewModel {
     }
     
     private func refreshExpiresAt() {
-        expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
+        let now = Date()
+        lastRefreshDate = now
+        expiresAt = now.timeIntervalSince1970 + Double(ttlSeconds)
+    }
+
+    /// Current read-only snapshot of the cache state. Recomputed on each access
+    /// so `cacheAge` always reflects the present moment.
+    var cacheMetadata: CacheMetadata {
+        let lastRefresh = lastRefreshDate
+        return CacheMetadata(
+            lastRefresh: lastRefresh,
+            cacheAge: lastRefresh.map { Date().timeIntervalSince($0) },
+            expiresAt: expiresAt.map { Date(timeIntervalSince1970: $0) },
+            isExpired: isCacheExpired()
+        )
     }
     
     func connectBackgroundSync(sseUrl: String) {
