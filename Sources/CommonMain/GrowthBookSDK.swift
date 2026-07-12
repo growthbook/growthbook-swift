@@ -383,6 +383,10 @@ protocol GrowthBookProtocol: AnyObject {
 @objc public class GrowthBookSDK: NSObject, FeaturesFlowDelegate {
     var refreshHandler: CacheRefreshHandler?
     private var subscriptions: [ExperimentRunCallback] = []
+    /// One-shot completions awaiting the next refresh cycle, used by the async `refresh()`
+    /// API. Kept separate from `refreshHandler` so the async wrapper never overwrites the
+    /// caller's persistent handler. Drained (and cleared) on the next `featuresUpdateIsComplete`.
+    private var refreshCompletions: [(SDKError?) -> Void] = []
     private var networkDispatcher: NetworkProtocol
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
@@ -531,6 +535,32 @@ protocol GrowthBookProtocol: AnyObject {
             } else {
                 featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL())
             }
+        }
+    }
+
+    /// Asynchronously refresh the feature cache.
+    ///
+    /// Swift Concurrency wrapper over `refreshCache()`: suspends until the refresh cycle
+    /// completes and rethrows any `SDKError` reported by the pipeline (e.g. a network
+    /// failure). The callback-based `refreshCache()` and `setRefreshHandler` remain
+    /// available and are not affected — a persistent `refreshHandler` still fires as well.
+    ///
+    /// - Note: Swift-only (async/continuation is not representable in Objective-C).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
+    public func refresh() async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            // Register the one-shot completion *before* triggering the refresh so a
+            // synchronous completion (e.g. the cache-not-expired path) is never missed.
+            withLock {
+                refreshCompletions.append { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+            refreshCache()
         }
     }
 
@@ -697,6 +727,11 @@ protocol GrowthBookProtocol: AnyObject {
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {
         withLock {
             refreshHandler?(error)
+            // Fulfil any pending async refresh() callers. Snapshot-and-clear before
+            // invoking so each completion fires exactly once per refresh cycle.
+            let completions = refreshCompletions
+            refreshCompletions.removeAll()
+            completions.forEach { $0(error) }
         }
     }
 
