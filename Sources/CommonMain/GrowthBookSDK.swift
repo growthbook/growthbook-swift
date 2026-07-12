@@ -395,6 +395,11 @@ protocol GrowthBookProtocol: AnyObject {
     /// only referenced inside `@available`-gated members.
     private var featuresSubjectStorage: AnyObject?
 
+    /// Type-erased storage for the Combine experiments subject, created lazily on first
+    /// `experimentsPublisher` access. Same rationale as `featuresSubjectStorage`; the
+    /// concrete `PassthroughSubject` type is only referenced inside `@available`-gated members.
+    private var experimentsSubjectStorage: AnyObject?
+
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
@@ -607,6 +612,39 @@ protocol GrowthBookProtocol: AnyObject {
 #endif
     }
 
+#if canImport(Combine)
+    /// A publisher that emits an event for every experiment executed via `run(experiment:)`.
+    /// Unlike `featuresPublisher`, this is an event stream with no "current" value: new
+    /// subscribers receive only subsequent runs, not past ones. Emissions are delivered on
+    /// the thread that ran the experiment; use `.receive(on:)` for the main queue.
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    public var experimentsPublisher: AnyPublisher<ExperimentRun, Never> {
+        withLock { experimentsSubject().eraseToAnyPublisher() }
+    }
+
+    /// Returns the backing subject, creating it lazily on first use. Must be called
+    /// under `lock` (it mutates `experimentsSubjectStorage`).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    private func experimentsSubject() -> PassthroughSubject<ExperimentRun, Never> {
+        if let existing = experimentsSubjectStorage as? PassthroughSubject<ExperimentRun, Never> {
+            return existing
+        }
+        let subject = PassthroughSubject<ExperimentRun, Never>()
+        experimentsSubjectStorage = subject
+        return subject
+    }
+#endif
+
+    /// Emit an experiment run to the Combine subject, if one exists and the platform
+    /// supports Combine. Sends outside `lock`, mirroring `emitFeaturesChange`.
+    private func emitExperimentRun(_ run: ExperimentRun) {
+#if canImport(Combine)
+        guard #available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) else { return }
+        let subject = withLock { experimentsSubjectStorage as? PassthroughSubject<ExperimentRun, Never> }
+        subject?.send(run)
+#endif
+    }
+
     /// Subscribe to all experiment execution events.
     /// - Parameter result: ExperimentRunCallback
     @objc public func subscribe(_ result: @escaping ExperimentRunCallback) {
@@ -747,11 +785,15 @@ protocol GrowthBookProtocol: AnyObject {
     /// - Parameter experiment: Experiment
     /// - Returns: ExperimentResult
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        withLock {
+        let result: ExperimentResult = withLock {
             let result = _runExperiment(experiment: experiment)
             self.subscriptions.forEach { $0(experiment, result) }
             return result
         }
+        // Emit to the Combine subject outside the lock, mirroring emitFeaturesChange,
+        // so subscriber code never runs while the SDK lock is held.
+        emitExperimentRun(ExperimentRun(experiment: experiment, result: result))
+        return result
     }
 
     private func _runExperiment(experiment: Experiment) -> ExperimentResult {
@@ -876,5 +918,18 @@ protocol GrowthBookProtocol: AnyObject {
 
 
         return result
+    }
+}
+
+/// A single experiment execution event, delivered by `GrowthBookSDK.experimentsPublisher`.
+/// Mirrors the `(Experiment, ExperimentResult)` pair passed to `subscribe(_:)`, exposed as a
+/// public value type so Combine subscribers can read both sides of the run.
+public struct ExperimentRun {
+    public let experiment: Experiment
+    public let result: ExperimentResult
+
+    public init(experiment: Experiment, result: ExperimentResult) {
+        self.experiment = experiment
+        self.result = result
     }
 }
