@@ -548,9 +548,32 @@ protocol GrowthBookProtocol: AnyObject {
     /// - Note: Swift-only (async/continuation is not representable in Objective-C).
     @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
     public func refresh() async throws {
+        try await awaitRefreshCycle { [self] in refreshCache() }
+    }
+
+    /// Asynchronously trigger a remote evaluation.
+    ///
+    /// Swift Concurrency wrapper over `refreshForRemoteEval()`: posts the current attributes
+    /// and forced values to the remote-eval endpoint, suspends until the result is applied,
+    /// and rethrows any `SDKError`. Requires the SDK to be configured with `remoteEval: true`;
+    /// otherwise throws `SDKError.remoteEvalNotEnabled` — without this guard the continuation
+    /// would never resume, since `refreshForRemoteEval()` no-ops when remote eval is disabled.
+    ///
+    /// - Note: Swift-only (async/continuation is not representable in Objective-C).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
+    public func evaluate() async throws {
+        guard contextManager.getGlobalConfig().remoteEval else {
+            throw SDKError.remoteEvalNotEnabled
+        }
+        try await awaitRefreshCycle { [self] in refreshForRemoteEval() }
+    }
+
+    /// Shared continuation plumbing for the async `refresh()` / `evaluate()` APIs. Registers a
+    /// one-shot completion *before* invoking `trigger` (so a synchronous completion is never
+    /// missed) and resumes exactly once when the next refresh cycle finishes.
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
+    private func awaitRefreshCycle(_ trigger: () -> Void) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            // Register the one-shot completion *before* triggering the refresh so a
-            // synchronous completion (e.g. the cache-not-expired path) is never missed.
             withLock {
                 refreshCompletions.append { error in
                     if let error {
@@ -560,7 +583,7 @@ protocol GrowthBookProtocol: AnyObject {
                     }
                 }
             }
-            refreshCache()
+            trigger()
         }
     }
 

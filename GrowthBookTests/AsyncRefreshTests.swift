@@ -81,6 +81,56 @@ final class AsyncRefreshTests: XCTestCase {
         XCTAssertGreaterThan(flag.count, baseline, "The persistent refreshHandler must still fire for an async refresh")
     }
 
+    // MARK: - evaluate() (remote evaluation)
+
+    private func makeRemoteEvalSDK(successResponse: String?, error: SDKError?) -> GrowthBookSDK {
+        GrowthBookBuilder(
+            apiHost: apiHost,
+            clientKey: clientKey,
+            encryptionKey: nil,
+            attributes: [:],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false,
+            remoteEval: true,
+            ttlSeconds: 0
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: successResponse, error: error))
+        .initializer()
+    }
+
+    func testEvaluateThrowsWhenRemoteEvalDisabled() async {
+        // makeSDK builds an SDK without remoteEval — evaluate() must fail fast, not hang.
+        let sdk = makeSDK(successResponse: MockResponse().successResponse, error: nil)
+        do {
+            try await sdk.evaluate()
+            XCTFail("evaluate() must throw when remote eval is not enabled")
+        } catch let error as SDKError {
+            XCTAssertEqual(error.code, .remoteEvalNotEnabled)
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
+    func testEvaluateSucceedsWithRemoteEval() async throws {
+        let sdk = makeRemoteEvalSDK(successResponse: MockResponse().successResponse, error: nil)
+        try await sdk.evaluate()
+        XCTAssertFalse(sdk.getFeatures().isEmpty, "Remote eval should apply features on success")
+    }
+
+    func testEvaluateThrowsOnNetworkFailure() async {
+        sdk_clearCache()
+        let sdk = makeRemoteEvalSDK(successResponse: nil, error: .failedToLoadData)
+        do {
+            try await sdk.evaluate()
+            XCTFail("evaluate() should throw on a remote-eval network failure")
+        } catch is SDKError {
+            // expected
+        } catch {
+            XCTFail("Unexpected error type: \(error)")
+        }
+    }
+
     private func sdk_clearCache() {
         CachingManager(apiKey: clientKey).clearCache()
     }
