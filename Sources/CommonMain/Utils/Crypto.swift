@@ -137,6 +137,17 @@ class Crypto: CryptoProtocol {
     }
     
     func getSavedGroupsFromEncryptedFeatures(encryptedString: String, encryptionKey: String) -> JSON? {
+        decryptToJSON(encryptedString: encryptedString, encryptionKey: encryptionKey)
+    }
+
+    func getContextualBanditsFromEncryptedFeatures(encryptedString: String, encryptionKey: String) -> JSON? {
+        decryptToJSON(encryptedString: encryptedString, encryptionKey: encryptionKey)
+    }
+
+    /// Decrypts an `iv.cipherText` payload and decodes the plaintext as an arbitrary JSON value.
+    /// Shared by the `savedGroups` and `contextualBandits` payload sections, both of which are
+    /// opaque JSON objects rather than typed models.
+    private func decryptToJSON(encryptedString: String, encryptionKey: String) -> JSON? {
         let decoder = JSONDecoder()
         let arrayEncryptedString = encryptedString.components(separatedBy: ".")
         guard let iv = arrayEncryptedString.first,
@@ -147,12 +158,12 @@ class Crypto: CryptoProtocol {
               let plainTextBuffer = try? decrypt(key: keyBase64.map{$0},
                                                  iv: ivBase64.map{$0},
                                                  cypherText: cipherTextBase64.map{$0}),
-              let savedGroups = try? decoder.decode(JSON.self, from: Data(plainTextBuffer))
+              let json = try? decoder.decode(JSON.self, from: Data(plainTextBuffer))
         else { return nil }
-                
-        return savedGroups
+
+        return json
     }
-    
+
 }
 
 struct CryptoError: Error {

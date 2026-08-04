@@ -294,6 +294,10 @@ protocol GrowthBookProtocol: AnyObject {
         // unrecognised or corrupted payload must not suppress the fallback network fetch.
         var initialFeatures: Features = [:]
         var hasPreloadedPayload = false
+        // Contextual bandit definitions travel in the same envelope as the features. They are
+        // applied independently of hasPreloadedPayload: a payload can legitimately carry bandits
+        // while the features themselves come from cache or network.
+        var initialContextualBandits: JSON? = nil
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
@@ -303,6 +307,10 @@ protocol GrowthBookProtocol: AnyObject {
             // so without this check the else-if fallback for raw-map payloads is unreachable.
             if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: featuresData),
                featuresModel.features != nil || featuresModel.encryptedFeatures != nil {
+                initialContextualBandits = parsePreloadedContextualBandits(
+                    from: featuresModel,
+                    encryptionKey: growthBookBuilderModel.encryptionKey
+                )
                 if let features = featuresModel.features {
                     initialFeatures = features
                     hasPreloadedPayload = true
@@ -347,6 +355,7 @@ protocol GrowthBookProtocol: AnyObject {
             stickyBucketIdentifierAttributes: nil,
             features: initialFeatures,
             savedGroups: nil,
+            contextualBandits: initialContextualBandits,
             url: nil,
             forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues
         )
@@ -375,6 +384,31 @@ protocol GrowthBookProtocol: AnyObject {
         let preloadedFeatures: Features? = hasPreloadedPayload ? initialFeatures : nil
         return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
     }
+
+    /// Extracts the `contextualBandits` section from a preloaded (offline-mode) payload, decrypting
+    /// it first when the payload uses `encryptedContextualBandits`.
+    ///
+    /// Returns `nil` when the payload carries no bandits or when decryption fails — a missing
+    /// definition makes contextual bandit rules fall back to aggregate/equal weights rather than
+    /// failing evaluation.
+    private func parsePreloadedContextualBandits(from model: FeaturesDataModel, encryptionKey: String?) -> JSON? {
+        if let encryptedContextualBandits = model.encryptedContextualBandits,
+           !encryptedContextualBandits.isEmpty {
+            guard let encryptionKey, !encryptionKey.isEmpty else {
+                logger.error("Preloaded payload has encryptedContextualBandits but no encryption key was provided")
+                return nil
+            }
+            guard let contextualBandits = Crypto().getContextualBanditsFromEncryptedFeatures(
+                encryptedString: encryptedContextualBandits,
+                encryptionKey: encryptionKey
+            ) else {
+                logger.error("Failed to decrypt contextual bandits from preloaded payload")
+                return nil
+            }
+            return contextualBandits
+        }
+        return model.contextualBandits
+    }
 }
 
 /// The main export of the libraries is a simple GrowthBook wrapper class that takes a Context object in the constructor.
@@ -397,6 +431,14 @@ protocol GrowthBookProtocol: AnyObject {
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
+    /// True once the session's contextual bandit definitions have been applied.
+    ///
+    /// Bandits need a latch of their own rather than reusing `sessionEstablished`: on a network
+    /// fetch the features callback fires first and would already have latched, which would block
+    /// the bandits arriving in the very same payload. Bandit weights decide which variation a user
+    /// is bucketed into, so under stableSession they must be frozen for the session just like the
+    /// features are.
+    private var banditsEstablished: Bool = false
 
     deinit {
         contextManager.getGlobalConfig().pluginRegistry.close()
@@ -417,6 +459,16 @@ protocol GrowthBookProtocol: AnyObject {
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
         super.init()
+
+        // Latch the bandits before featureVM is constructed — its init reads the cache and can
+        // already deliver a bandits callback. A payload supplied to the builder defines the
+        // session's bandits, so under stableSession later payloads must not replace them.
+        // Safe to set without withLock: the object has not yet escaped to other threads.
+        if contextManager.getGlobalConfig().stableSession,
+           contextManager.getEvaluationData().contextualBandits != nil {
+            banditsEstablished = true
+        }
+
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, preloadedFeatures: features)
 
         let evalData = contextManager.getEvaluationData()
@@ -496,6 +548,7 @@ protocol GrowthBookProtocol: AnyObject {
             stickyBucketIdentifierAttributes: context.stickyBucketIdentifierAttributes,
             features: features ?? context.features,
             savedGroups: savedGroups ?? context.savedGroups,
+            contextualBandits: context.contextualBandits,
             url: context.url,
             forcedFeatureValues: context.forcedFeatureValues
         )
@@ -564,6 +617,7 @@ protocol GrowthBookProtocol: AnyObject {
                 backgroundSync: globalConfig.backgroundSync,
                 remoteEval: globalConfig.remoteEval,
                 savedGroups: evalData.savedGroups,
+                contextualBandits: evalData.contextualBandits,
                 url: evalData.url,
                 forcedFeatureValues: evalData.forcedFeatureValues
             )
@@ -710,6 +764,33 @@ protocol GrowthBookProtocol: AnyObject {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.savedGroups = savedGroups
+            }
+        }
+    }
+
+    func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) {}
+
+    func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {
+        withLock {
+            let stableSession = contextManager.getGlobalConfig().stableSession
+
+            // Applying new bandit weights mid-session would re-bucket users, which is exactly what
+            // stableSession exists to prevent. Cache-only from the second payload onwards.
+            if stableSession && banditsEstablished {
+                if isRemote {
+                    logger.info("stableSession: new contextual bandits received from network — cached for next session, not applied now")
+                } else {
+                    logger.debug("stableSession: ignoring cached contextual bandits — session bandits already established")
+                }
+                return
+            }
+
+            self.contextManager.updateEvalData { data in
+                data.contextualBandits = contextualBandits
+            }
+
+            if stableSession {
+                banditsEstablished = true
             }
         }
     }

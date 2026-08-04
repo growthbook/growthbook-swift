@@ -7,6 +7,8 @@ protocol FeaturesFlowDelegate: AnyObject {
     func featuresFetchFailed(error: SDKError, isRemote: Bool)
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool)
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool)
+    func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool)
+    func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool)
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool)
 }
 
@@ -113,6 +115,17 @@ class FeaturesViewModel {
                 }
             } else if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
+            }
+        }
+
+        if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache) {
+            if let encryptionKey, !encryptionKey.isEmpty {
+                if let encryptedString = String(data: contextualBanditsData, encoding: .utf8),
+                   let contextualBandits = Crypto().getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
+                    delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
+                }
+            } else if let contextualBandits = try? JSONDecoder().decode(JSON.self, from: contextualBanditsData) {
+                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
             }
         }
         return occurredError
@@ -237,6 +250,29 @@ class FeaturesViewModel {
                     manager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
+            }
+
+            if let encryptedContextualBandits = jsonPetitions.encryptedContextualBandits, !encryptedContextualBandits.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+                let crypto = Crypto()
+                if let contextualBandits = crypto.getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedContextualBandits, encryptionKey: encryptionKey) {
+                    if let encryptedContextualBanditsData = encryptedContextualBandits.data(using: .utf8) {
+                        manager.saveContent(fileName: Constants.contextualBanditsCache, content: encryptedContextualBanditsData)
+                    } else {
+                        logger.error("Failed encode contextual bandits")
+                    }
+                    delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: true)
+                } else {
+                    let error: SDKError = .failedEncryptedContextualBandits
+                    delegate?.contextualBanditsFetchFailed(error: error, isRemote: true)
+                    occurredError = error
+                    logger.error("Failed get contextual bandits from encrypted contextual bandits")
+                    return
+                }
+            } else if let contextualBandits = jsonPetitions.contextualBandits {
+                if let contextualBanditsData = try? JSONEncoder().encode(contextualBandits) {
+                    manager.saveContent(fileName: Constants.contextualBanditsCache, content: contextualBanditsData)
+                }
+                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: true)
             }
         } else {
             let error: SDKError = .failedParsedData
