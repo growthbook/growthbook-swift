@@ -688,6 +688,58 @@ class ContextualBanditTests: XCTestCase {
         manager.clearCache()
     }
 
+    // MARK: - Sticky bucket identifier attributes
+
+    /// The identifier attributes drive which assignment documents are fetched from the sticky bucket
+    /// service. A contextual bandit rule carries its variations under `contextualVariations`, so a
+    /// check for `variations` alone leaves its hash and fallback attributes unregistered and sticky
+    /// bucketing silently never loads that experiment's documents.
+    func testStickyBucketIdentifierAttributesIncludeContextualBanditRules() {
+        let rule: [String: Any] = [
+            "id": "rule-1",
+            "key": "my-experiment",
+            "contextualBanditRef": "bandit-1",
+            "contextualVariations": ["control", "treatment"],
+            "hashAttribute": "deviceId",
+            "fallbackAttribute": "anonymousId"
+        ]
+        let context = makeContext(
+            features: ["my-feature": makeFeature(["defaultValue": "off", "rules": [rule]])],
+            contextualBandits: twoLeafBandits()
+        )
+
+        let attributes = Utils.deriveStickyBucketIdentifierAttributes(context: context, data: nil)
+
+        XCTAssertTrue(attributes.contains("deviceId"),
+                      "A bandit rule's hashAttribute must be registered for sticky bucketing")
+        XCTAssertTrue(attributes.contains("anonymousId"),
+                      "A bandit rule's fallbackAttribute must be registered for sticky bucketing")
+    }
+
+    func testStickyBucketIdentifierAttributesStillIncludePlainRules() {
+        let rule: [String: Any] = [
+            "id": "rule-1",
+            "key": "plain-experiment",
+            "variations": ["a", "b"],
+            "hashAttribute": "userId"
+        ]
+        let context = makeContext(
+            features: ["my-feature": makeFeature(["defaultValue": "off", "rules": [rule]])]
+        )
+
+        XCTAssertTrue(Utils.deriveStickyBucketIdentifierAttributes(context: context, data: nil).contains("userId"))
+    }
+
+    func testStickyBucketIdentifierAttributesIgnoreNonExperimentRules() {
+        // A pure force rule has neither variations nor contextualVariations and must not contribute.
+        let rule: [String: Any] = ["id": "rule-1", "force": "on", "hashAttribute": "shouldNotAppear"]
+        let context = makeContext(
+            features: ["my-feature": makeFeature(["defaultValue": "off", "rules": [rule]])]
+        )
+
+        XCTAssertFalse(Utils.deriveStickyBucketIdentifierAttributes(context: context, data: nil).contains("shouldNotAppear"))
+    }
+
     // MARK: - Context plumbing
 
     func testContextManagerPropagatesContextualBanditsToEvalContext() {
