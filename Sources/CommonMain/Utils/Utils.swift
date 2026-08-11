@@ -451,7 +451,9 @@ public class Utils {
                                     url: context.url,
                                     trackingClosure: context.trackingClosure)
         
-        let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
+        let globalContext = GlobalContext(features: context.features,
+                                          savedGroups: context.savedGroups,
+                                          contextualBandits: context.contextualBandits)
         
         // should create manual force features
             let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: context.forcedFeatureValues)

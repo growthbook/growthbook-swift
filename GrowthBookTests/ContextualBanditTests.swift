@@ -740,6 +740,33 @@ class ContextualBanditTests: XCTestCase {
         XCTAssertFalse(Utils.deriveStickyBucketIdentifierAttributes(context: context, data: nil).contains("shouldNotAppear"))
     }
 
+    // MARK: - Legacy Context bridge
+
+    /// `Utils.initializeEvalContext` builds an `EvalContext` from the legacy `Context`. It must carry
+    /// the bandits across, otherwise anything going through that bridge evaluates bandit rules with
+    /// no definitions and silently falls back to aggregate weights.
+    func testLegacyContextBridgeCarriesContextualBandits() {
+        let context = Context(
+            apiHost: nil, streamingHost: nil, clientKey: nil, encryptionKey: nil,
+            isEnabled: true,
+            attributes: JSON(["id": "user-1", "country": "CA"]),
+            forcedVariations: nil,
+            isQaMode: false,
+            trackingClosure: { _, _ in },
+            features: ["my-feature": makeFeature(["defaultValue": "off", "rules": [banditRule()]])],
+            contextualBandits: twoLeafBandits()
+        )
+
+        let evalContext = Utils.initializeEvalContext(context: context)
+
+        XCTAssertEqual(evalContext.globalContext.contextualBandits?["bandit-1"]["banditVersion"].intValue, 7)
+
+        // And end to end through that context: the leaf must actually be applied.
+        let result = FeatureEvaluator(context: evalContext, featureKey: "my-feature").evaluateFeature()
+        XCTAssertEqual(result.experimentResult?.leafId, 2)
+        XCTAssertEqual(result.value?.stringValue, "treatment")
+    }
+
     // MARK: - Context plumbing
 
     func testContextManagerPropagatesContextualBanditsToEvalContext() {
