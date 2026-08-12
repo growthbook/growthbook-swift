@@ -55,12 +55,13 @@ public struct BucketRange: Codable {
     }
     
     init(json: JSON) {
-        if json.arrayValue.isEmpty {
+        let values = json.arrayValue
+        if values.count < 2 {
             number1 = 0
             number2 = 0
         } else {
-            self.number1 = json.arrayValue[0].floatValue
-            self.number2 = json.arrayValue[1].floatValue
+            self.number1 = values[0].floatValue
+            self.number2 = values[1].floatValue
         }
     }
 

@@ -228,6 +228,6 @@ class ExperimentEvaluator {
     }
     
     private func isStickyBucketingEnabledForExperiment(context: EvalContext, experiment: Experiment) -> Bool {
-        return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? true))
+        return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? false))
     }
 }
