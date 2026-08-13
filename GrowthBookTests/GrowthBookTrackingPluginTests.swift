@@ -206,7 +206,11 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         let plugin = makePlugin(batchSize: 100, batchTimeout: 0.1) { _ in expectation.fulfill() }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
-        wait(for: [expectation], timeout: 10.0)
+        // The flush runs on a `.utility` queue, which a CI runner can starve for seconds while it
+        // builds for four simulator platforms. What is asserted here is that the timer flushes at
+        // all, not that it flushes within a given second, so keep the ceiling generous: the wait
+        // returns on fulfillment, so a higher ceiling costs nothing when the timer fires on time.
+        wait(for: [expectation], timeout: 30.0)
         withExtendedLifetime(plugin) {}
     }
 
