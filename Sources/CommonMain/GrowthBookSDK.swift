@@ -263,6 +263,14 @@ protocol GrowthBookProtocol: AnyObject {
         return self
     }
 
+    /// Registers a plugin that will receive experiment and feature evaluation events.
+    /// - Parameter plugin: Any object conforming to `GrowthBookPlugin`.
+    /// - Returns: GrowthBookBuilder
+    public func addPlugin(_ plugin: GrowthBookPlugin) -> GrowthBookBuilder {
+        growthBookBuilderModel.plugins.append(plugin)
+        return self
+    }
+
     @objc public func initializer() -> GrowthBookSDK {
         let globalConfig = GlobalConfig(
             apiHost: growthBookBuilderModel.apiHost,
@@ -274,7 +282,8 @@ protocol GrowthBookProtocol: AnyObject {
             stableSession: growthBookBuilderModel.stableSession,
             remoteEval: growthBookBuilderModel.remoteEval,
             trackingClosure: growthBookBuilderModel.trackingClosure,
-            stickyBucketService: growthBookBuilderModel.stickyBucketService
+            stickyBucketService: growthBookBuilderModel.stickyBucketService,
+            plugins: growthBookBuilderModel.plugins
         )
 
         // TODO: extract parsePreloadedFeatures() and resolveInitialFeatures() helpers to
@@ -389,6 +398,10 @@ protocol GrowthBookProtocol: AnyObject {
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
 
+    deinit {
+        contextManager.getGlobalConfig().pluginRegistry.close()
+    }
+
     init(contextManager: ContextManager,
          refreshHandler: CacheRefreshHandler? = nil,
          logLevel: Level = .info,
@@ -446,6 +459,9 @@ protocol GrowthBookProtocol: AnyObject {
             }
         }
         refreshStickyBucketService()
+
+        let clientKey = globalConfig.clientKey ?? ""
+        globalConfig.pluginRegistry.initialize(clientKey: clientKey)
     }
 
     // Convenience init for backward compatibility
@@ -723,6 +739,7 @@ protocol GrowthBookProtocol: AnyObject {
         let context = contextManager.getEvalContext()
         let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
         contextManager.syncFromEvaluation(context)
+        contextManager.getGlobalConfig().pluginRegistry.onFeatureEvaluated(featureKey: id, result: result, attributes: context.userContext.attributes)
         return result
     }
 
