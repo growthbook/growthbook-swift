@@ -231,6 +231,48 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         XCTAssertEqual(requestCount, 0)
     }
 
+    /// `batchSize: 1` flushes on enqueue, so by the time close() runs the event has already left
+    /// the buffer and its request is in flight. close() must still wait for that request.
+    func testCloseWaitsForRequestAlreadyInFlight() {
+        let lock = NSLock()
+        var didComplete = false
+        let started = expectation(description: "request started")
+
+        let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 5)) { _, completion in
+            started.fulfill()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+                lock.lock(); didComplete = true; lock.unlock()
+                completion()
+            }
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        wait(for: [started], timeout: 5.0)
+
+        plugin.close()
+
+        lock.lock()
+        let completed = didComplete
+        lock.unlock()
+        XCTAssertTrue(completed, "close() returned while a submitted request was still in flight")
+    }
+
+    /// The wait above must stay bounded: a request that never completes may delay shutdown by
+    /// `batchTimeout`, not forever.
+    func testCloseGivesUpOnRequestThatNeverCompletes() {
+        let started = expectation(description: "request started")
+        let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 0.5)) { _, _ in
+            started.fulfill()  // never calls completion
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        wait(for: [started], timeout: 5.0)
+
+        let start = Date()
+        plugin.close()
+        XCTAssertLessThan(Date().timeIntervalSince(start), 3.0, "close() must give up after batchTimeout")
+    }
+
     // MARK: - Network failure
 
     func testNetworkFailureDoesNotCrash() {

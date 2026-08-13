@@ -50,6 +50,8 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     private let queue = DispatchQueue(label: "com.growthbook.tracking-plugin", qos: .utility)
     // Used to detect re-entrant calls to close() from deinit triggered on the queue thread.
     private static let queueKey = DispatchSpecificKey<Bool>()
+    // Tracks sends that already left `eventQueue`, so close() can wait for them too.
+    private let inFlight = DispatchGroup()
 
     private let urlSession: URLSession
     // Non-nil only in tests — bypasses URLSession entirely.
@@ -120,7 +122,10 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         return JSON(merged)
     }
 
-    /// Stops the flush timer and synchronously sends all buffered events before returning.
+    /// Stops the flush timer, sends any buffered events, and blocks until every request the
+    /// plugin has accepted has finished — including requests started earlier by the flush timer
+    /// or by `batchSize`, which are no longer in the buffer. Waiting is bounded by `batchTimeout`,
+    /// so a hung connection delays shutdown by at most that long.
     public func close() {
         if DispatchQueue.getSpecific(key: Self.queueKey) == true {
             // Already on the queue (e.g. deinit triggered by a queue closure).
@@ -162,10 +167,13 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         flushTimer = nil
         let events = eventQueue
         eventQueue = []
-        guard !events.isEmpty else { return }
-        let semaphore = DispatchSemaphore(value: 0)
-        post(events: events) { semaphore.signal() }
-        _ = semaphore.wait(timeout: .now() + config.batchTimeout)
+        if !events.isEmpty {
+            post(events: events, completion: nil)
+        }
+        // Waiting on `eventQueue` alone would return immediately whenever a flush has just
+        // handed its events to a request, so wait on the in-flight sends instead — the batch
+        // posted above is one of them.
+        _ = inFlight.wait(timeout: .now() + config.batchTimeout)
     }
 
     private func post(events: [IngestEvent], completion: (() -> Void)?) {
@@ -185,10 +193,17 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("growthbook-swift-sdk/\(Self.sdkVersion)", forHTTPHeaderField: "User-Agent")
 
+        // Balanced in `finish`, which every send path calls exactly once.
+        inFlight.enter()
+        let finish = { [inFlight] in
+            inFlight.leave()
+            completion?()
+        }
+
         if let handler = sendHandler {
-            handler(request) { completion?() }
+            handler(request, finish)
         } else {
-            urlSession.dataTask(with: request) { _, _, _ in completion?() }.resume()
+            urlSession.dataTask(with: request) { _, _, _ in finish() }.resume()
         }
     }
 }
