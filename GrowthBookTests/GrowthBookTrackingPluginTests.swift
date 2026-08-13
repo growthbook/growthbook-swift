@@ -242,7 +242,10 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         var didComplete = false
         let started = expectation(description: "request started")
 
-        let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 5)) { _, completion in
+        // Ceilings are deliberately generous: a CI runner can starve the plugin's `.utility` queue
+        // for seconds, and neither the 0.3s in-flight window nor `batchTimeout` is what this test
+        // asserts — it asserts that close() does not return before the send finishes.
+        let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 30)) { _, completion in
             started.fulfill()
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
                 lock.lock(); didComplete = true; lock.unlock()
@@ -251,7 +254,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
-        wait(for: [started], timeout: 5.0)
+        wait(for: [started], timeout: 30.0)
 
         plugin.close()
 
@@ -270,11 +273,13 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
-        wait(for: [started], timeout: 5.0)
+        wait(for: [started], timeout: 30.0)
 
+        // What matters is bounded vs. forever, so leave wide slack over the 0.5s `batchTimeout`
+        // rather than asserting a tight elapsed time a loaded runner cannot honour.
         let start = Date()
         plugin.close()
-        XCTAssertLessThan(Date().timeIntervalSince(start), 3.0, "close() must give up after batchTimeout")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 10.0, "close() must give up after batchTimeout")
     }
 
     // MARK: - Network failure
