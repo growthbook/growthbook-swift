@@ -387,6 +387,10 @@ protocol GrowthBookProtocol: AnyObject {
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
+    /// Incremented on every sticky bucket refresh, so a completion that resolves after a newer
+    /// refresh started can recognise itself as stale. Mutated under `lock`, except in `init()`
+    /// where the instance has not escaped to other threads yet.
+    private var stickyRefreshGeneration: Int = 0
 
     init(contextManager: ContextManager,
          refreshHandler: CacheRefreshHandler? = nil,
@@ -671,7 +675,12 @@ protocol GrowthBookProtocol: AnyObject {
             let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
             let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
-            let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
+            // Send what the SDK itself evaluates against: `getEvalContext()` merges
+            // `attributeOverrides` on top of the base attributes, so taking `evalData.attributes`
+            // here would ask the server to evaluate a user the local evaluator no longer sees.
+            let effectiveAttributes = contextManager.getEvalContext().userContext.attributes
+
+            let payload = RemoteEvalParams(attributes: effectiveAttributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
             featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
         }
     }
@@ -809,6 +818,13 @@ protocol GrowthBookProtocol: AnyObject {
 
         let context = contextManager.getEvalContext()
 
+        // A custom service may resolve asynchronously and out of order: a request started for one
+        // user can complete after a request started for the next one. Tag this refresh with a
+        // generation so its completion can tell whether it is still the current one; the documents
+        // it carries belong to the attributes captured above, not to whatever is current now.
+        stickyRefreshGeneration += 1
+        let generation = stickyRefreshGeneration
+
         Utils.refreshStickyBuckets(
             stickyBucketService: service,
             context: context,
@@ -817,6 +833,12 @@ protocol GrowthBookProtocol: AnyObject {
         ) { [weak self] docs in
             guard let self = self else { return }
             self.withLock {
+                // Still invoke this call's own completion — its caller is waiting on it — but let
+                // the newer refresh own the state.
+                guard generation == self.stickyRefreshGeneration else {
+                    completion?()
+                    return
+                }
                 self.contextManager.updateEvalData { data in
                     data.stickyBucketAssignmentDocs = docs
                 }

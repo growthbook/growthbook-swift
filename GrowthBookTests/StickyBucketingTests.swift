@@ -2,10 +2,13 @@ import XCTest
 
 @testable import GrowthBook
 
-// Captures the getAllAssignments completion without calling it, so tests can
-// control exactly when the async refresh resolves.
+// Captures getAllAssignments completions without calling them, so tests control exactly when — and
+// in which order — each async refresh resolves. Completions are queued rather than replaced, which
+// is what lets a test resolve a newer request before an older one that is still in flight.
 private class ManualStickyBucketService: NSObject, StickyBucketServiceProtocol {
-    private var pendingCompletion: (([String: StickyAssignmentsDocument]?, Error?) -> Void)?
+    private var pendingCompletions: [([String: StickyAssignmentsDocument]?, Error?) -> Void] = []
+
+    var pendingCount: Int { pendingCompletions.count }
 
     func getAssignments(attributeName: String, attributeValue: String,
                         completion: @escaping (StickyAssignmentsDocument?, Error?) -> Void) {
@@ -18,12 +21,21 @@ private class ManualStickyBucketService: NSObject, StickyBucketServiceProtocol {
 
     func getAllAssignments(attributes: [String: String],
                            completion: @escaping ([String: StickyAssignmentsDocument]?, Error?) -> Void) {
-        pendingCompletion = completion
+        pendingCompletions.append(completion)
     }
 
+    /// Resolves the oldest pending request — the single-request behaviour most tests rely on.
     func flush(docs: [String: StickyAssignmentsDocument] = [:]) {
-        pendingCompletion?(docs, nil)
-        pendingCompletion = nil
+        guard !pendingCompletions.isEmpty else { return }
+        let completion = pendingCompletions.removeFirst()
+        completion(docs, nil)
+    }
+
+    /// Resolves one specific pending request, so a test can complete them out of order.
+    func complete(_ index: Int, with docs: [String: StickyAssignmentsDocument]) {
+        guard pendingCompletions.indices.contains(index) else { return }
+        let completion = pendingCompletions.remove(at: index)
+        completion(docs, nil)
     }
 }
 
@@ -67,6 +79,62 @@ class StickyBucketUserSwitchTests: XCTestCase {
         service.flush(docs: userBDocs)
         XCTAssertEqual(sdk.getGBContext().stickyBucketAssignmentDocs?["id||userB"]?.assignments["exp-1__0"], "variant",
                        "userB docs must be loaded after refresh completes")
+    }
+
+    /// A custom service is free to resolve out of order, so the request started for userA can
+    /// complete after the one started for userB. The late userA documents belong to a user the SDK
+    /// has already left and must not win by completion order.
+    func testStaleRefreshCompletionDoesNotOverwriteNewerUser() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "userA"], service: service)
+
+        XCTAssertEqual(service.pendingCount, 1, "Precondition: init started a refresh for userA")
+
+        sdk.setAttributes(attributes: ["id": "userB"])
+        XCTAssertEqual(service.pendingCount, 2, "setAttributes must start a second refresh")
+
+        let userADocs = ["id||userA": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userA",
+            assignments: ["exp-1__0": "control"]
+        )]
+        let userBDocs = ["id||userB": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userB",
+            assignments: ["exp-1__0": "variant"]
+        )]
+
+        service.complete(1, with: userBDocs)   // newer request wins the race
+        service.complete(0, with: userADocs)   // superseded request lands afterwards
+
+        let docs = sdk.getGBContext().stickyBucketAssignmentDocs
+        XCTAssertEqual(docs?["id||userB"]?.assignments["exp-1__0"], "variant",
+                       "Documents of the current user must survive a late completion for the previous one")
+        XCTAssertNil(docs?["id||userA"],
+                     "Documents from the superseded request must be discarded, not merged in")
+    }
+
+    /// Control for the test above: in the natural order the newest completion is the one applied.
+    func testLatestRefreshCompletionIsAppliedWhenItResolvesLast() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "userA"], service: service)
+
+        sdk.setAttributes(attributes: ["id": "userB"])
+        XCTAssertEqual(service.pendingCount, 2)
+
+        let userADocs = ["id||userA": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userA",
+            assignments: ["exp-1__0": "control"]
+        )]
+        let userBDocs = ["id||userB": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userB",
+            assignments: ["exp-1__0": "variant"]
+        )]
+
+        service.complete(0, with: userADocs)   // stale request resolves first
+        service.complete(0, with: userBDocs)   // then the current one
+
+        let docs = sdk.getGBContext().stickyBucketAssignmentDocs
+        XCTAssertEqual(docs?["id||userB"]?.assignments["exp-1__0"], "variant")
+        XCTAssertNil(docs?["id||userA"], "The stale documents must not linger once the current request lands")
     }
 
     func testAppendAttributesClearsStickyDocsBeforeRefreshCompletes() {
@@ -272,5 +340,70 @@ class StickyBucketingFeatureTests: XCTestCase {
         print("Failed TESTS - \(failedScenarios.count)")
 
         XCTAssertTrue(failedScenarios.count == 0)
+    }
+}
+
+// MARK: - Remote eval payload
+
+/// Records the POST body of every remote-eval request so tests can assert on what the server
+/// would actually be asked to evaluate.
+private class CapturingNetworkClient: NetworkProtocol {
+    private(set) var capturedParams: [[String: Any]] = []
+
+    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        successResult(Data("{\"features\":{}}".utf8))
+    }
+
+    func consumePOSTRequest(url: String, params: [String: Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        capturedParams.append(params)
+        successResult(Data("{\"features\":{}}".utf8))
+    }
+
+    var lastAttributes: [String: Any]? { capturedParams.last?["attributes"] as? [String: Any] }
+}
+
+class RemoteEvalPayloadTests: XCTestCase {
+
+    private func makeRemoteEvalSdk(network: NetworkProtocol) -> GrowthBookSDK {
+        GrowthBookBuilder(apiHost: "https://host.com",
+                          clientKey: "key",
+                          attributes: ["id": "user-1", "country": "PL"],
+                          trackingCallback: { _, _ in },
+                          refreshHandler: nil,
+                          backgroundSync: false,
+                          remoteEval: true,
+                          // ttlSeconds: 0 keeps this test about payload content: the TTL gate on
+                          // remote-eval refreshes is a separate concern, fixed on its own branch.
+                          ttlSeconds: 0)
+            .setNetworkDispatcher(networkDispatcher: network)
+            .initializer()
+    }
+
+    /// Local evaluation runs on attributes with the overrides merged in, so the remote payload has
+    /// to carry the same effective attributes — otherwise the server evaluates a user the SDK has
+    /// already stopped seeing.
+    func testOverridesAreIncludedInRemoteEvalPayload() {
+        let network = CapturingNetworkClient()
+        let sdk = makeRemoteEvalSdk(network: network)
+
+        sdk.setAttributeOverrides(overrides: ["country": "UA"])
+
+        let attributes = network.lastAttributes
+        XCTAssertEqual(attributes?["country"] as? String, "UA",
+                       "The overridden attribute must be sent to the remote-eval endpoint")
+        XCTAssertEqual(attributes?["id"] as? String, "user-1",
+                       "Base attributes that are not overridden must still be sent")
+    }
+
+    /// Clearing the overrides has to be visible to the server too.
+    func testClearedOverridesRevertRemoteEvalPayloadToBaseAttributes() {
+        let network = CapturingNetworkClient()
+        let sdk = makeRemoteEvalSdk(network: network)
+
+        sdk.setAttributeOverrides(overrides: ["country": "UA"])
+        sdk.setAttributeOverrides(overrides: [String: Any]())
+
+        XCTAssertEqual(network.lastAttributes?["country"] as? String, "PL",
+                       "With the overrides lifted the payload must fall back to the base attributes")
     }
 }
