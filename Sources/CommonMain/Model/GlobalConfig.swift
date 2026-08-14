@@ -48,8 +48,12 @@ import Foundation
   public let trackingClosure: (Experiment, ExperimentResult) -> Void
   /// Sticky bucketing is enabled if stickyBucketService is available
   public let stickyBucketService: StickyBucketServiceProtocol?
+  /// Plugins that receive experiment and feature evaluation events.
+  public let plugins: [GrowthBookPlugin]
+  /// Single registry instance shared across all evaluations.
+  public let pluginRegistry: PluginRegistry
 
-  @objc public init(apiHost: String?,
+  @nonobjc public init(apiHost: String?,
     clientKey: String?,
     encryptionKey: String?,
     isEnabled: Bool,
@@ -58,7 +62,8 @@ import Foundation
     stableSession: Bool = false,
     remoteEval: Bool = false,
     trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
-    stickyBucketService: StickyBucketServiceProtocol? = nil) {
+    stickyBucketService: StickyBucketServiceProtocol? = nil,
+    plugins: [GrowthBookPlugin] = []) {
     self.apiHost = apiHost
     self.clientKey = clientKey
     self.encryptionKey = encryptionKey
@@ -69,5 +74,32 @@ import Foundation
     self.remoteEval = remoteEval
     self.trackingClosure = trackingClosure
     self.stickyBucketService = stickyBucketService
+    self.plugins = plugins
+    self.pluginRegistry = PluginRegistry(plugins: plugins)
+  }
+
+  @objc public convenience init(apiHost: String?,
+    clientKey: String?,
+    encryptionKey: String?,
+    isEnabled: Bool,
+    isQaMode: Bool,
+    backgroundSync: Bool = false,
+    stableSession: Bool = false,
+    remoteEval: Bool = false,
+    trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
+    stickyBucketService: StickyBucketServiceProtocol? = nil) {
+    self.init(
+      apiHost: apiHost,
+      clientKey: clientKey,
+      encryptionKey: encryptionKey,
+      isEnabled: isEnabled,
+      isQaMode: isQaMode,
+      backgroundSync: backgroundSync,
+      stableSession: stableSession,
+      remoteEval: remoteEval,
+      trackingClosure: trackingClosure,
+      stickyBucketService: stickyBucketService,
+      plugins: []
+    )
   }
 }
