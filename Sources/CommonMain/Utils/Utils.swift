@@ -36,8 +36,8 @@ public class Utils {
     ///This is a helper method to evaluate `filters` for both feature flags and experiments.
     static func isFilteredOut(filters: [Filter], attributes: JSON) -> Bool {
         return filters.contains { filter in
-            let hashAttribute = Utils.getHashAttribute(attr: filter.attribute, attributes: attributes)
-            let hashValue = hashAttribute.hashValue
+            let hashValue = Utils.getHashAttribute(attr: filter.attribute, attributes: attributes).hashValue
+            guard !hashValue.isEmpty else { return true }
             
             let hash = hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
             guard let hashValue = hash else { return true }
@@ -59,6 +59,7 @@ public class Utils {
         }
         
         let hashValue = Utils.getHashAttribute(attr: hashAttribute, fallback: fallbackAttribute, attributes: attributes).hashValue
+        guard !hashValue.isEmpty else { return false }
         
         let hash = Utils.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
         

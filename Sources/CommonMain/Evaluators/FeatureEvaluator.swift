@@ -126,7 +126,7 @@ class FeatureEvaluator {
                         attributes: context.userContext.attributes,
                         seed: rule.seed ?? featureKey,
                         hashAttribute: rule.hashAttribute,
-                        fallbackAttribute: (context.options.stickyBucketService != nil && !(rule.disableStickyBucketing ?? true)) ? rule.fallbackAttribute : nil,
+                        fallbackAttribute: (context.options.stickyBucketService != nil && !(rule.disableStickyBucketing ?? false)) ? rule.fallbackAttribute : nil,
                         range: rule.range,
                         coverage: rule.coverage,
                         hashVersion: rule.hashVersion
@@ -148,28 +148,6 @@ class FeatureEvaluator {
                         }
                     }
                     
-                    // Ignore coverage if the rule has a range
-                    if rule.range == nil {
-                        // If rule.coverage is set
-                        if let coverage = rule.coverage {
-                            
-                            let key = rule.hashAttribute ?? Constants.idAttributeKey
-                            // Get the user hash value (context.attributes[rule.hashAttribute || "id"]) and if empty, skip the rule
-                            guard let attributeValue = context.userContext.attributes.dictionaryValue[key]?.stringValue,
-                                  attributeValue.isEmpty == false
-                            else {
-                                continue
-                            }
-                            
-                            // Compute a hash using the Fowler–Noll–Vo algorithm (specifically fnv32-1a)
-                            let hashFNV = Utils.hash(seed: featureKey, value: attributeValue, version: 1.0) ?? 0.0
-                            // If the hash is greater than rule.coverage, skip the rule
-                            if hashFNV > coverage {
-                                continue ruleLoop
-                            }
-                        }
-                    }
-
                     // Return (value = forced value, source = force)
                     
                     let forcedFeatureResult = prepareResult(value: force, source: FeatureSource.force, ruleId: rule.id)
@@ -246,4 +224,3 @@ struct FeatureEvalContext {
     var id: String?
     var evaluatedFeatures: Set<String>
 }
-
