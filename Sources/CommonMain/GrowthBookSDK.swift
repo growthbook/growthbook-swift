@@ -385,7 +385,7 @@ protocol GrowthBookProtocol: AnyObject {
     private var subscriptions: [ExperimentRunCallback] = []
     private var networkDispatcher: NetworkProtocol
     private var contextManager: ContextManager
-    private var featureVM: FeaturesViewModel!
+    var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
     private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
@@ -527,9 +527,9 @@ protocol GrowthBookProtocol: AnyObject {
         withLock {
             let globalConfig = contextManager.getGlobalConfig()
             if globalConfig.remoteEval {
-                refreshForRemoteEval()
+                refreshForRemoteEval(forceRefresh: true)
             } else {
-                featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL())
+                featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL(), forceRefresh: true)
             }
         }
     }
@@ -716,6 +716,10 @@ protocol GrowthBookProtocol: AnyObject {
 
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation
     @objc public func refreshForRemoteEval() {
+        refreshForRemoteEval(forceRefresh: false)
+    }
+
+    private func refreshForRemoteEval(forceRefresh: Bool) {
         withLock {
             let globalConfig = contextManager.getGlobalConfig()
             let evalData = contextManager.getEvaluationData()
@@ -724,7 +728,7 @@ protocol GrowthBookProtocol: AnyObject {
             let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
             let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
-            featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
+            featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload, forceRefresh: forceRefresh)
         }
     }
 

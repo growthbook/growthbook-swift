@@ -244,12 +244,46 @@ class FeaturesViewModelExtendedTests: XCTestCase {
             cachingManager: manager,
             ttlSeconds: 0
         )
+        failVM.maxRetryAttempts = 0  // disable retry so failure is immediate in this test
         failVM.fetchFeatures(apiUrl: "https://example.com")
         // After network fail, falls back to cache → at least one success
         XCTAssertGreaterThan(capture.successCount, 0)
         XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
         XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedToFetchData)
         XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
+    }
+
+    // MARK: - persistent TTL survives VM restart
+
+    func testCachedAtTimestampSkipsNetworkOnRestart() {
+        let apiKey = UUID().uuidString
+        let manager = CachingManager(apiKey: apiKey)
+        manager.clearCache()
+
+        // First VM: fetch successfully, writes cachedAt to disk
+        let firstClient = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
+        let firstCapture = Capture()
+        let firstVM = FeaturesViewModel(
+            delegate: firstCapture,
+            dataSource: FeaturesDataSource(dispatcher: firstClient),
+            cachingManager: manager,
+            ttlSeconds: 3600
+        )
+        firstVM.fetchFeatures(apiUrl: "https://example.com")
+        XCTAssertEqual(firstClient.callCount, 1)
+
+        // Second VM simulates cold restart with same cache — TTL still fresh, no network call
+        let secondClient = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)
+        let secondCapture = Capture()
+        let secondVM = FeaturesViewModel(
+            delegate: secondCapture,
+            dataSource: FeaturesDataSource(dispatcher: secondClient),
+            cachingManager: manager,
+            ttlSeconds: 3600
+        )
+        secondVM.fetchFeatures(apiUrl: "https://example.com")
+        XCTAssertEqual(secondClient.callCount, 0, "Network should not be called when cache is fresh after restart")
+        XCTAssertGreaterThan(secondCapture.successCount, 0, "Cache should still serve features")
     }
 
     // MARK: - SSE empty / heartbeat payload handling
@@ -305,6 +339,72 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         vm.prepareFeaturesData(data: "not-json".data(using: .utf8)!)
         XCTAssertGreaterThan(capture.failCount, 0)
         XCTAssertEqual(capture.lastError, .failedParsedData)
+    }
+
+    // MARK: - retry classification
+
+    private func httpError(_ status: Int) -> NSError {
+        NSError(domain: Constants.httpErrorDomain, code: status)
+    }
+
+    private func urlError(_ code: Int) -> NSError {
+        NSError(domain: NSURLErrorDomain, code: code)
+    }
+
+    func testPermanentFailuresAreNotRetryable() {
+        for status in [400, 401, 403, 404, 410, 422, 501] {
+            XCTAssertFalse(FeaturesViewModel.isRetryable(httpError(status)),
+                           "HTTP \(status) cannot be fixed by asking again")
+        }
+        for code in [NSURLErrorCancelled, NSURLErrorBadURL, NSURLErrorUnsupportedURL,
+                     NSURLErrorUserAuthenticationRequired, NSURLErrorClientCertificateRejected] {
+            XCTAssertFalse(FeaturesViewModel.isRetryable(urlError(code)),
+                           "URLError \(code) is deliberate or impossible, not transient")
+        }
+    }
+
+    func testTransientFailuresAreRetryable() {
+        for status in [408, 429, 500, 502, 503, 504] {
+            XCTAssertTrue(FeaturesViewModel.isRetryable(httpError(status)),
+                          "HTTP \(status) means 'not now', so the backoff applies")
+        }
+        for code in [NSURLErrorTimedOut, NSURLErrorNotConnectedToInternet,
+                     NSURLErrorNetworkConnectionLost, NSURLErrorDNSLookupFailed,
+                     NSURLErrorCannotConnectToHost] {
+            XCTAssertTrue(FeaturesViewModel.isRetryable(urlError(code)),
+                          "URLError \(code) never reached an answer")
+        }
+    }
+
+    /// Unrecognised failures keep the previous behaviour rather than silently giving up.
+    func testUnknownErrorDomainStaysRetryable() {
+        XCTAssertTrue(FeaturesViewModel.isRetryable(NSError(domain: "EmptyResponse", code: -2)))
+    }
+
+    /// The point of the classification: an auth or configuration failure must reach the caller
+    /// straight away instead of after five backoff rounds.
+    func testPermanentFailureReportsImmediatelyWithoutRetrying() {
+        let capture = Capture()
+        let vm = makeVM(error: httpError(401), delegate: capture)
+
+        vm.fetchFeatures(apiUrl: "https://example.com")
+
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1,
+                       "A permanent failure must complete the refresh on the first attempt")
+        XCTAssertEqual(capture.featuresUpdateIsCompleteArguments.first?.error?.code, .failedToFetchData)
+    }
+
+    /// The mirror case: a retryable failure must not report completion yet, because another attempt
+    /// is already scheduled. Asserting the absence of the callback keeps this free of wall-clock
+    /// waiting for the backoff itself.
+    func testRetryableFailureDefersCompletion() {
+        let capture = Capture()
+        let vm = makeVM(error: httpError(503), delegate: capture)
+
+        vm.fetchFeatures(apiUrl: "https://example.com")
+
+        XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 0,
+                       "A retryable failure must wait for the scheduled attempt before reporting")
     }
 
     // MARK: - fetchFeatures is not stale reports featuresAreUpToDate to the delegate
