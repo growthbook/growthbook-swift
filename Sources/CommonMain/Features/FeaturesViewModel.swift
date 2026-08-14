@@ -182,6 +182,46 @@ class FeaturesViewModel {
         }
     }
 
+    /// Whether repeating a failed fetch has any chance of succeeding.
+    ///
+    /// Retrying a permanent answer only delays the refresh callback — five attempts with the
+    /// backoff below take about half a minute — while telling the host nothing new. An expired key
+    /// or a wrong client key is not going to fix itself, so those fail immediately; congestion,
+    /// dropped connections and server-side hiccups are what the backoff exists for.
+    ///
+    /// Internal so tests can enumerate the classification without driving the network.
+    static func isRetryable(_ error: Error) -> Bool {
+        let error = error as NSError
+
+        switch error.domain {
+        case Constants.httpErrorDomain:
+            // 408 Request Timeout and 429 Too Many Requests explicitly invite a later attempt, and
+            // these 5xx mean "not now". Everything else in 4xx — 400, 401, 403, 404 — is a
+            // configuration or authentication problem that repeating cannot change.
+            return [408, 429, 500, 502, 503, 504].contains(error.code)
+
+        case NSURLErrorDomain:
+            // Transport failures never reached an answer, so they are retryable unless the request
+            // was impossible to make or was stopped on purpose.
+            switch error.code {
+            case NSURLErrorCancelled,
+                 NSURLErrorBadURL,
+                 NSURLErrorUnsupportedURL,
+                 NSURLErrorUserAuthenticationRequired,
+                 NSURLErrorClientCertificateRejected,
+                 NSURLErrorServerCertificateUntrusted,
+                 NSURLErrorAppTransportSecurityRequiresSecureConnection:
+                return false
+            default:
+                return true
+            }
+
+        default:
+            // Unknown failure shapes keep the previous behaviour rather than silently going quiet.
+            return true
+        }
+    }
+
     private func doFetchFeatures(apiUrl: String, attempt: Int, delay: TimeInterval) {
         dataSource.fetchFeatures(apiUrl: apiUrl) { [weak self] result in
             guard let self else { return }
@@ -195,13 +235,14 @@ class FeaturesViewModel {
                     self.delegate?.featuresUpdateIsComplete(error: cachedError, isRemote: true)
                     return
                 }
-                if attempt < maxRetryAttempts {
+                if attempt < maxRetryAttempts, Self.isRetryable(error) {
                     logger.info("GrowthBook: fetch failed, retrying in \(Int(delay))s (attempt \(attempt + 1)/\(maxRetryAttempts))")
                     DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
                         self?.doFetchFeatures(apiUrl: apiUrl, attempt: attempt + 1, delay: min(delay * 2, Self.maxRetryDelay))
                     }
                 } else {
-                    logger.info("Failed to get features from remote after \(maxRetryAttempts) retries: \(error.localizedDescription)")
+                    let cause = Self.isRetryable(error) ? "after \(maxRetryAttempts) retries" : "without retrying, the failure is permanent"
+                    logger.info("Failed to get features from remote \(cause): \(error.localizedDescription)")
                     let sdkError: SDKError = .failedToFetchData(error)
                     self.delegate?.featuresFetchFailed(error: sdkError, isRemote: true)
                     self.fetchCachedFeatures(isRemote: true)
