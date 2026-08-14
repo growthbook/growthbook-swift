@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Combine)
+import Combine
+#endif
 
 /// GrowthBookBuilder - Root Class for SDK Initializers for GrowthBook SDK
 protocol GrowthBookProtocol: AnyObject {
@@ -394,6 +397,30 @@ protocol GrowthBookProtocol: AnyObject {
     var cachingManager: CachingLayer
 
     private let lock = NSRecursiveLock()
+
+    /// Type-erased storage for the Combine features subject, created lazily on first
+    /// `featuresPublisher` access. Stored as `AnyObject?` so the property stays available
+    /// on OS versions that predate Combine; the concrete `CurrentValueSubject` type is
+    /// only referenced inside `@available`-gated members.
+    private var featuresSubjectStorage: AnyObject?
+
+    /// Type-erased storage for the Combine experiments subject, created lazily on first
+    /// `experimentsPublisher` access. Same rationale as `featuresSubjectStorage`; the
+    /// concrete `PassthroughSubject` type is only referenced inside `@available`-gated members.
+    private var experimentsSubjectStorage: AnyObject?
+
+    /// Guards emission so two threads cannot interleave sends. Deliberately separate from `lock`:
+    /// subscriber code runs while this is held, and it must not run holding the SDK lock. Always
+    /// taken *after* `lock` is released, never the other way round, so the two cannot deadlock.
+    private let emissionLock = NSRecursiveLock()
+
+    /// Order in which feature updates were applied. Assigned under `lock`.
+    private var featuresGeneration = 0
+
+    /// Highest generation already delivered to the features subject; read and written only under
+    /// `emissionLock`.
+    private var lastEmittedFeaturesGeneration = 0
+
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
@@ -579,6 +606,99 @@ protocol GrowthBookProtocol: AnyObject {
         withLock { contextManager.getEvaluationData().features }
     }
 
+#if canImport(Combine)
+    /// A publisher that emits the current feature set and then every subsequent update
+    /// (from cache, network, streaming, or `setEncryptedFeatures`). New subscribers
+    /// immediately receive the latest features. Emissions are delivered on the thread
+    /// that applied the update; use `.receive(on:)` if you need them on the main queue.
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    public var featuresPublisher: AnyPublisher<[String: Feature], Never> {
+        withLock { featuresSubject().eraseToAnyPublisher() }
+    }
+
+    /// Returns the backing subject, creating it lazily on first use. Must be called
+    /// under `lock` (it mutates `featuresSubjectStorage`).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    private func featuresSubject() -> CurrentValueSubject<[String: Feature], Never> {
+        if let existing = featuresSubjectStorage as? CurrentValueSubject<[String: Feature], Never> {
+            return existing
+        }
+        let subject = CurrentValueSubject<[String: Feature], Never>(contextManager.getEvaluationData().features)
+        featuresSubjectStorage = subject
+        return subject
+    }
+#endif
+
+    /// Emit a features change to the Combine subject, if one exists and the platform supports
+    /// Combine. Sends outside `lock` so subscriber code never runs while the SDK lock is held.
+    ///
+    /// Because the lock is released before sending, two concurrent updates can be applied in one
+    /// order and reach this point in the other. `generation` is the order in which they were
+    /// applied, so an update that has already been overtaken is dropped rather than sent: it is
+    /// history, and letting it through would leave `CurrentValueSubject` replaying features the SDK
+    /// no longer holds. Dropping is safe here precisely because this is a current-value stream —
+    /// subscribers care about the latest state, not about every intermediate step.
+    ///
+    /// Internal rather than private so tests can drive the ordering directly instead of racing two
+    /// threads and hoping for the interleaving that matters.
+    func emitFeaturesChange(_ features: [String: Feature], generation: Int) {
+#if canImport(Combine)
+        guard #available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) else { return }
+        let subject = withLock { featuresSubjectStorage as? CurrentValueSubject<[String: Feature], Never> }
+        guard let subject else { return }
+
+        emissionLock.lock()
+        defer { emissionLock.unlock() }
+        guard generation > lastEmittedFeaturesGeneration else { return }
+        lastEmittedFeaturesGeneration = generation
+        subject.send(features)
+#endif
+    }
+
+#if canImport(Combine)
+    /// A publisher that emits an event for every experiment executed via `run(experiment:)`.
+    /// Unlike `featuresPublisher`, this is an event stream with no "current" value: new
+    /// subscribers receive only subsequent runs, not past ones. Emissions are delivered on
+    /// the thread that ran the experiment; use `.receive(on:)` for the main queue.
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    public var experimentsPublisher: AnyPublisher<ExperimentRun, Never> {
+        withLock { experimentsSubject().eraseToAnyPublisher() }
+    }
+
+    /// Returns the backing subject, creating it lazily on first use. Must be called
+    /// under `lock` (it mutates `experimentsSubjectStorage`).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *)
+    private func experimentsSubject() -> PassthroughSubject<ExperimentRun, Never> {
+        if let existing = experimentsSubjectStorage as? PassthroughSubject<ExperimentRun, Never> {
+            return existing
+        }
+        let subject = PassthroughSubject<ExperimentRun, Never>()
+        experimentsSubjectStorage = subject
+        return subject
+    }
+#endif
+
+    /// Emit an experiment run to the Combine subject, if one exists and the platform supports
+    /// Combine. Sends outside `lock`, mirroring `emitFeaturesChange`.
+    ///
+    /// This is an event stream, not a current value, so nothing may be dropped: every run has to
+    /// reach subscribers. What the shared `emissionLock` buys here is that two concurrent runs
+    /// cannot interleave inside a subscriber, and that a run is never delivered in the middle of a
+    /// features emission. The relative order of two truly concurrent runs is not defined — the
+    /// experiments themselves are independent, and preserving it would mean holding the SDK lock
+    /// across subscriber code.
+    private func emitExperimentRun(_ run: ExperimentRun) {
+#if canImport(Combine)
+        guard #available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) else { return }
+        let subject = withLock { experimentsSubjectStorage as? PassthroughSubject<ExperimentRun, Never> }
+        guard let subject else { return }
+
+        emissionLock.lock()
+        defer { emissionLock.unlock() }
+        subject.send(run)
+#endif
+    }
+
     /// Subscribe to all experiment execution events.
     /// - Parameter result: ExperimentRunCallback
     @objc public func subscribe(_ result: @escaping ExperimentRunCallback) {
@@ -642,7 +762,8 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
-        withLock {
+        var generation = 0
+        let didApply: Bool = withLock {
             let stableSession = contextManager.getGlobalConfig().stableSession
 
             // In stableSession mode, block every update once the session is established.
@@ -656,7 +777,7 @@ protocol GrowthBookProtocol: AnyObject {
                 } else {
                     logger.debug("stableSession: ignoring cache refresh — session features already established")
                 }
-                return
+                return false
             }
 
             self.contextManager.updateEvalData { data in
@@ -668,6 +789,15 @@ protocol GrowthBookProtocol: AnyObject {
                 sessionEstablished = true
                 logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
             }
+            // Stamp the update with its position in the applied order while still serialized, so
+            // the emission below can tell whether a newer update has overtaken it.
+            featuresGeneration += 1
+            generation = featuresGeneration
+            return true
+        }
+
+        if didApply {
+            emitFeaturesChange(features, generation: generation)
         }
     }
 
@@ -684,12 +814,15 @@ protocol GrowthBookProtocol: AnyObject {
         let crypto: CryptoProtocol = subtle ?? Crypto()
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
 
-        withLock {
+        let generation: Int = withLock {
             self.contextManager.updateEvalData { data in
                 data.features = features
             }
             self.refreshStickyBucketService()
+            featuresGeneration += 1
+            return featuresGeneration
         }
+        emitFeaturesChange(features, generation: generation)
     }
 
     func featuresFetchFailed(error: SDKError, isRemote: Bool) {}
@@ -775,11 +908,15 @@ protocol GrowthBookProtocol: AnyObject {
     /// - Parameter experiment: Experiment
     /// - Returns: ExperimentResult
     @objc public func run(experiment: Experiment) -> ExperimentResult {
-        withLock {
+        let result: ExperimentResult = withLock {
             let result = _runExperiment(experiment: experiment)
             self.subscriptions.forEach { $0(experiment, result) }
             return result
         }
+        // Emit to the Combine subject outside the lock, mirroring emitFeaturesChange,
+        // so subscriber code never runs while the SDK lock is held.
+        emitExperimentRun(ExperimentRun(experiment: experiment, result: result))
+        return result
     }
 
     private func _runExperiment(experiment: Experiment) -> ExperimentResult {
@@ -904,5 +1041,18 @@ protocol GrowthBookProtocol: AnyObject {
 
 
         return result
+    }
+}
+
+/// A single experiment execution event, delivered by `GrowthBookSDK.experimentsPublisher`.
+/// Mirrors the `(Experiment, ExperimentResult)` pair passed to `subscribe(_:)`, exposed as a
+/// public value type so Combine subscribers can read both sides of the run.
+public struct ExperimentRun {
+    public let experiment: Experiment
+    public let result: ExperimentResult
+
+    public init(experiment: Experiment, result: ExperimentResult) {
+        self.experiment = experiment
+        self.result = result
     }
 }
