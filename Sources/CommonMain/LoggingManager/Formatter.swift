@@ -23,16 +23,27 @@ open class Formatters: @unchecked Sendable {}
 
 open class Formatter: Formatters, @unchecked Sendable {
     /// The formatter format.
-    private var format: String
+    private let format: String
 
     /// The formatter components.
-    private var components: [Component]
+    private let components: [Component]
 
     /// The date formatter.
     private let dateFormatter = DateFormatter()
 
-    /// The formatter logger.
-    weak var logger: GBLogger?
+    private let loggerLock = NSLock()
+    private weak var _logger: GBLogger?
+
+    /// The logger this formatter reads its theme from.
+    ///
+    /// `Formatter.default` is a shared instance, so this reference is reassigned whenever another
+    /// logger adopts the formatter — while formatting may be reading it from a different thread.
+    /// The storage stays `weak` to avoid a retain cycle with the logger; the accessors make the
+    /// hand-off atomic, which is what `@unchecked Sendable` on this class promises.
+    var logger: GBLogger? {
+        get { loggerLock.lock(); defer { loggerLock.unlock() }; return _logger }
+        set { loggerLock.lock(); defer { loggerLock.unlock() }; _logger = newValue }
+    }
 
     /// The formatter textual representation.
     var description: String {

@@ -463,6 +463,26 @@ If you would like to implement Sticky Bucketing while using Remote Evaluation, y
 Sticky bucketing ensures that users see the same experiment variant, even when user session, user login status, or experiment parameters change. See the [Sticky Bucketing docs](/app/sticky-bucketing) for more information. If your organization and experiment supports sticky bucketing, you must implement an instance of the `StickyBucketService` to use Sticky Bucketing. For simple bucket persistence using the browser's LocalStorage (can be polyfilled for other environments).
 
 
+## Swift 6 and strict concurrency
+
+The SDK builds under the Swift 6 language mode, and CI keeps it that way:
+
+```bash
+swift build -Xswiftc -swift-version -Xswiftc 6 -Xswiftc -strict-concurrency=complete
+```
+
+Two things are worth knowing when you migrate an app to Swift 6 or turn on strict concurrency:
+
+- **`NetworkProtocol` closures are now `@Sendable`.** If you pass a custom network client to
+  `setNetworkDispatcher(networkDispatcher:)`, the protocol still conforms as before — but the
+  closures you hand to `consumeGETRequest` / `consumePOSTRequest` can no longer capture
+  non-`Sendable` state. Under strict concurrency such a call site becomes a compile error rather
+  than a warning, so capture values, not mutable objects.
+- **Logger configuration is safe to change from any thread.** `GBLogger`'s `enabled`, `formatter`,
+  `theme` and `minLevel` are guarded internally, so adjusting log level at runtime while the SDK
+  logs from its own queues is fine.
+
+
 ## License
 
 This project uses the MIT license. The core GrowthBook app will always remain open and free, although we may add some commercial enterprise add-ons in the future.
