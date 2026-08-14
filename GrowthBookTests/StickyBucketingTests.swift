@@ -24,10 +24,12 @@ private class ManualStickyBucketService: NSObject, StickyBucketServiceProtocol {
         pendingCompletions.append(completion)
     }
 
-    /// Resolves the oldest pending request — the single-request behaviour most tests rely on.
+    /// Resolves the newest pending request and drops the rest, which is what this double did when
+    /// it held a single completion: a later `getAllAssignments` replaced — and so discarded — the
+    /// earlier one. Tests that drive one refresh at a time keep their previous behaviour.
     func flush(docs: [String: StickyAssignmentsDocument] = [:]) {
-        guard !pendingCompletions.isEmpty else { return }
-        let completion = pendingCompletions.removeFirst()
+        guard let completion = pendingCompletions.last else { return }
+        pendingCompletions.removeAll()
         completion(docs, nil)
     }
 
