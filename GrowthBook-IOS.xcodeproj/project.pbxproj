@@ -32,6 +32,11 @@
 		843316162FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */; };
 		843317012FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843317002FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift */; };
 		843316182FA3FD1800D1C388 /* MiscCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */; };
+		8433161B2FA9479100D1C388 /* GrowthBookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316192FA9479100D1C388 /* GrowthBookPlugin.swift */; };
+		8433161D2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */; };
+		8433162120FB123400D1C388 /* PluginRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433162020FB123400D1C388 /* PluginRegistry.swift */; };
+		8433162320FB125400D1C388 /* SDKVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433162220FB125400D1C388 /* SDKVersion.swift */; };
+		8433161F2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433161E2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift */; };
 		844838362E054AD200784A36 /* NetworkRetryHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 844838342E054AD200784A36 /* NetworkRetryHandler.swift */; };
 		846A7A562D6CAE56007CCFD1 /* GlobalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A7A552D6CAE53007CCFD1 /* GlobalContext.swift */; };
 		8483E6FA2ABC60B900306B55 /* DecryptionUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8483E6F92ABC60B900306B55 /* DecryptionUtils.swift */; };
@@ -46,6 +51,8 @@
 		849114CD280DA73100C0B9A5 /* GrowthBookSDKBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84391F1A27FD810D003309DC /* GrowthBookSDKBuilderTests.swift */; };
 		849114CE280DA73100C0B9A5 /* MockNetworkClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84391F1C27FD89F7003309DC /* MockNetworkClient.swift */; };
 		849114CF280DA73100C0B9A5 /* CachingManagerTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84391F1E27FD8C3B003309DC /* CachingManagerTest.swift */; };
+		B1A0000000000000000C0005 /* TypedFeatureValueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A0000000000000000C0006 /* TypedFeatureValueTests.swift */; };
+		B1A0000000000000000C0007 /* UtilityMethodsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1A0000000000000000C0008 /* UtilityMethodsTests.swift */; };
 		849952512ACDB676003BBCF7 /* SSEHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849952502ACDB676003BBCF7 /* SSEHandler.swift */; };
 		849952572ADD6D66003BBCF7 /* EventModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849952562ADD6D66003BBCF7 /* EventModel.swift */; };
 		849952592ADD704A003BBCF7 /* EventHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 849952582ADD704A003BBCF7 /* EventHandler.swift */; };
@@ -126,6 +133,11 @@
 		843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesViewModelExtendedTests.swift; sourceTree = "<group>"; };
 		843317002FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBLoggerConcurrencyTests.swift; sourceTree = "<group>"; };
 		843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscCoverageTests.swift; sourceTree = "<group>"; };
+		843316192FA9479100D1C388 /* GrowthBookPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookPlugin.swift; sourceTree = "<group>"; };
+		8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookTrackingPlugin.swift; sourceTree = "<group>"; };
+		8433162020FB123400D1C388 /* PluginRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PluginRegistry.swift; sourceTree = "<group>"; };
+		8433162220FB125400D1C388 /* SDKVersion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SDKVersion.swift; sourceTree = "<group>"; };
+		8433161E2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookTrackingPluginTests.swift; sourceTree = "<group>"; };
 		843363F627F845EB0072BFDC /* GrowthBookSDK.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookSDK.swift; sourceTree = "<group>"; };
 		843363F827F845EB0072BFDC /* NetworkClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkClient.swift; sourceTree = "<group>"; };
 		843363FA27F845EB0072BFDC /* FeaturesDataModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesDataModel.swift; sourceTree = "<group>"; };
@@ -150,6 +162,8 @@
 		84391F1A27FD810D003309DC /* GrowthBookSDKBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookSDKBuilderTests.swift; sourceTree = "<group>"; };
 		84391F1C27FD89F7003309DC /* MockNetworkClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockNetworkClient.swift; sourceTree = "<group>"; };
 		84391F1E27FD8C3B003309DC /* CachingManagerTest.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CachingManagerTest.swift; sourceTree = "<group>"; };
+		B1A0000000000000000C0006 /* TypedFeatureValueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedFeatureValueTests.swift; sourceTree = "<group>"; };
+		B1A0000000000000000C0008 /* UtilityMethodsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilityMethodsTests.swift; sourceTree = "<group>"; };
 		84391F2628016C85003309DC /* json.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = json.json; sourceTree = "<group>"; };
 		844838342E054AD200784A36 /* NetworkRetryHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRetryHandler.swift; sourceTree = "<group>"; };
 		84622ACF280AC1D70099AED2 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -219,9 +233,21 @@
 			name = "Recovered References";
 			sourceTree = "<group>";
 		};
+		8433161A2FA9479100D1C388 /* Plugins */ = {
+			isa = PBXGroup;
+			children = (
+				8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */,
+				843316192FA9479100D1C388 /* GrowthBookPlugin.swift */,
+				8433162020FB123400D1C388 /* PluginRegistry.swift */,
+				8433162220FB125400D1C388 /* SDKVersion.swift */,
+			);
+			path = Plugins;
+			sourceTree = "<group>";
+		};
 		843363F427F845EB0072BFDC /* CommonMain */ = {
 			isa = PBXGroup;
 			children = (
+				8433161A2FA9479100D1C388 /* Plugins */,
 				84FEA9EE2BC9911D00111EE2 /* StickyBucket */,
 				84095C83281812EA00ADDF19 /* LoggingManager */,
 				84095C762817EA6400ADDF19 /* JsonManager */,
@@ -320,6 +346,7 @@
 		849114BE280DA71E00C0B9A5 /* GrowthBookTests */ = {
 			isa = PBXGroup;
 			children = (
+			8433161E2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift */,
 				843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */,
 				843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */,
 				843317002FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift */,
@@ -348,6 +375,8 @@
 				84391F1A27FD810D003309DC /* GrowthBookSDKBuilderTests.swift */,
 				84391F1C27FD89F7003309DC /* MockNetworkClient.swift */,
 				84391F1E27FD8C3B003309DC /* CachingManagerTest.swift */,
+				B1A0000000000000000C0006 /* TypedFeatureValueTests.swift */,
+				B1A0000000000000000C0008 /* UtilityMethodsTests.swift */,
 				848B8043294B5CB900B22168 /* CryptoTests.swift */,
 			);
 			path = GrowthBookTests;
@@ -537,8 +566,11 @@
 				843316142FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift in Sources */,
 				849114CD280DA73100C0B9A5 /* GrowthBookSDKBuilderTests.swift in Sources */,
 				843316102FA3F3AE00D1C388 /* ConditionEvaluatorTests.swift in Sources */,
+			8433161F2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift in Sources */,
 				849114CE280DA73100C0B9A5 /* MockNetworkClient.swift in Sources */,
 				849114CF280DA73100C0B9A5 /* CachingManagerTest.swift in Sources */,
+				B1A0000000000000000C0005 /* TypedFeatureValueTests.swift in Sources */,
+				B1A0000000000000000C0007 /* UtilityMethodsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -580,8 +612,12 @@
 				849952572ADD6D66003BBCF7 /* EventModel.swift in Sources */,
 				84CDE3432812F454008B3E6F /* Context.swift in Sources */,
 				15147AEF2F7E746400FC9112 /* GrowthBookModel.swift in Sources */,
+				8433161B2FA9479100D1C388 /* GrowthBookPlugin.swift in Sources */,
+				8433162120FB123400D1C388 /* PluginRegistry.swift in Sources */,
+				8433162320FB125400D1C388 /* SDKVersion.swift in Sources */,
 				84A1B2C3D4E5F6A7B8C9D0E1F2 /* ContextManager.swift in Sources */,
 				84B2C3D4E5F6A7B8C9D0E1F2A3 /* GlobalConfig.swift in Sources */,
+				8433161D2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift in Sources */,
 				84C3D4E5F6A7B8C9D0E1F2A3B4 /* EvaluationData.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

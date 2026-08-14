@@ -53,6 +53,41 @@ class ConstantsTests: XCTestCase {
         XCTAssertEqual(range.number2, 0.0)
     }
 
+    // MARK: - BucketRange serialization
+
+    func testBucketRangeEncodesToTwoElementArray() throws {
+        let range = BucketRange(number1: 0.0, number2: 0.5)
+        let data = try JSONEncoder().encode(range)
+        let array = try JSONDecoder().decode([Float].self, from: data)
+        XCTAssertEqual(array.count, 2, "BucketRange must serialize as [start, end], not as a 3-element Namespace array")
+        XCTAssertEqual(array[0], 0.0, accuracy: 0.0001)
+        XCTAssertEqual(array[1], 0.5, accuracy: 0.0001)
+    }
+
+    func testBucketRangeRoundTrip() throws {
+        let original = BucketRange(number1: 0.25, number2: 0.75)
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(BucketRange.self, from: data)
+        XCTAssertEqual(decoded.number1, original.number1, accuracy: 0.0001)
+        XCTAssertEqual(decoded.number2, original.number2, accuracy: 0.0001)
+    }
+
+    func testFeatureRuleWithBucketRangesRoundTrip() throws {
+        let original = FeatureRule(
+            range: BucketRange(number1: 0.0, number2: 0.5),
+            ranges: [BucketRange(number1: 0.0, number2: 0.25), BucketRange(number1: 0.75, number2: 1.0)]
+        )
+        let data = try JSONEncoder().encode(original)
+        let decoded = try JSONDecoder().decode(FeatureRule.self, from: data)
+        XCTAssertEqual(decoded.range?.number1, 0.0)
+        XCTAssertEqual(decoded.range?.number2, 0.5)
+        XCTAssertEqual(decoded.ranges?.count, 2)
+        XCTAssertEqual(decoded.ranges?[0].number1, 0.0)
+        XCTAssertEqual(decoded.ranges?[0].number2, 0.25)
+        XCTAssertEqual(decoded.ranges?[1].number1, 0.75)
+        XCTAssertEqual(decoded.ranges?[1].number2, 1.0)
+    }
+
     // MARK: - Filter.init(json:)
 
     func testFilterInitFromJson() {
