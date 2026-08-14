@@ -409,6 +409,18 @@ protocol GrowthBookProtocol: AnyObject {
     /// concrete `PassthroughSubject` type is only referenced inside `@available`-gated members.
     private var experimentsSubjectStorage: AnyObject?
 
+    /// Guards emission so two threads cannot interleave sends. Deliberately separate from `lock`:
+    /// subscriber code runs while this is held, and it must not run holding the SDK lock. Always
+    /// taken *after* `lock` is released, never the other way round, so the two cannot deadlock.
+    private let emissionLock = NSRecursiveLock()
+
+    /// Order in which feature updates were applied. Assigned under `lock`.
+    private var featuresGeneration = 0
+
+    /// Highest generation already delivered to the features subject; read and written only under
+    /// `emissionLock`.
+    private var lastEmittedFeaturesGeneration = 0
+
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
@@ -617,14 +629,29 @@ protocol GrowthBookProtocol: AnyObject {
     }
 #endif
 
-    /// Emit a features change to the Combine subject, if one exists and the platform
-    /// supports Combine. Sends outside `lock` so subscriber code never runs while the
-    /// SDK lock is held.
-    private func emitFeaturesChange(_ features: [String: Feature]) {
+    /// Emit a features change to the Combine subject, if one exists and the platform supports
+    /// Combine. Sends outside `lock` so subscriber code never runs while the SDK lock is held.
+    ///
+    /// Because the lock is released before sending, two concurrent updates can be applied in one
+    /// order and reach this point in the other. `generation` is the order in which they were
+    /// applied, so an update that has already been overtaken is dropped rather than sent: it is
+    /// history, and letting it through would leave `CurrentValueSubject` replaying features the SDK
+    /// no longer holds. Dropping is safe here precisely because this is a current-value stream —
+    /// subscribers care about the latest state, not about every intermediate step.
+    ///
+    /// Internal rather than private so tests can drive the ordering directly instead of racing two
+    /// threads and hoping for the interleaving that matters.
+    func emitFeaturesChange(_ features: [String: Feature], generation: Int) {
 #if canImport(Combine)
         guard #available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) else { return }
         let subject = withLock { featuresSubjectStorage as? CurrentValueSubject<[String: Feature], Never> }
-        subject?.send(features)
+        guard let subject else { return }
+
+        emissionLock.lock()
+        defer { emissionLock.unlock() }
+        guard generation > lastEmittedFeaturesGeneration else { return }
+        lastEmittedFeaturesGeneration = generation
+        subject.send(features)
 #endif
     }
 
@@ -651,13 +678,24 @@ protocol GrowthBookProtocol: AnyObject {
     }
 #endif
 
-    /// Emit an experiment run to the Combine subject, if one exists and the platform
-    /// supports Combine. Sends outside `lock`, mirroring `emitFeaturesChange`.
+    /// Emit an experiment run to the Combine subject, if one exists and the platform supports
+    /// Combine. Sends outside `lock`, mirroring `emitFeaturesChange`.
+    ///
+    /// This is an event stream, not a current value, so nothing may be dropped: every run has to
+    /// reach subscribers. What the shared `emissionLock` buys here is that two concurrent runs
+    /// cannot interleave inside a subscriber, and that a run is never delivered in the middle of a
+    /// features emission. The relative order of two truly concurrent runs is not defined — the
+    /// experiments themselves are independent, and preserving it would mean holding the SDK lock
+    /// across subscriber code.
     private func emitExperimentRun(_ run: ExperimentRun) {
 #if canImport(Combine)
         guard #available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, *) else { return }
         let subject = withLock { experimentsSubjectStorage as? PassthroughSubject<ExperimentRun, Never> }
-        subject?.send(run)
+        guard let subject else { return }
+
+        emissionLock.lock()
+        defer { emissionLock.unlock() }
+        subject.send(run)
 #endif
     }
 
@@ -724,6 +762,7 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     @objc public func featuresFetchedSuccessfully(features: [String: Feature], isRemote: Bool) {
+        var generation = 0
         let didApply: Bool = withLock {
             let stableSession = contextManager.getGlobalConfig().stableSession
 
@@ -750,11 +789,15 @@ protocol GrowthBookProtocol: AnyObject {
                 sessionEstablished = true
                 logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
             }
+            // Stamp the update with its position in the applied order while still serialized, so
+            // the emission below can tell whether a newer update has overtaken it.
+            featuresGeneration += 1
+            generation = featuresGeneration
             return true
         }
 
         if didApply {
-            emitFeaturesChange(features)
+            emitFeaturesChange(features, generation: generation)
         }
     }
 
@@ -771,13 +814,15 @@ protocol GrowthBookProtocol: AnyObject {
         let crypto: CryptoProtocol = subtle ?? Crypto()
         guard let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) else { return }
 
-        withLock {
+        let generation: Int = withLock {
             self.contextManager.updateEvalData { data in
                 data.features = features
             }
             self.refreshStickyBucketService()
+            featuresGeneration += 1
+            return featuresGeneration
         }
-        emitFeaturesChange(features)
+        emitFeaturesChange(features, generation: generation)
     }
 
     func featuresFetchFailed(error: SDKError, isRemote: Bool) {}
