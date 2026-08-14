@@ -286,6 +286,61 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         XCTAssertGreaterThan(secondCapture.successCount, 0, "Cache should still serve features")
     }
 
+    // MARK: - SSE empty / heartbeat payload handling
+
+    /// Empty SSE data ("") must not reach prepareFeaturesData.
+    /// Regression: before the fix, `"".data(using: .utf8)` is non-nil so the guard
+    /// `guard let jsonData = data?.data(using: .utf8)` passed, triggering a spurious
+    /// featuresFetchFailed(error: .failedParsedData) call.
+    func testPrepareFeaturesDataEmptyPayloadTriggersError() {
+        let capture = Capture()
+        let vm = makeVM(delegate: capture)
+        vm.prepareFeaturesData(data: Data())
+        XCTAssertGreaterThan(capture.failCount, 0, "Empty Data should be treated as a parse error")
+        XCTAssertEqual(capture.lastError, .failedParsedData)
+    }
+
+    /// SSE comment lines (heartbeat / keepalive, e.g. ": heartbeat") must be filtered
+    /// before any listener is invoked — SSEEvent.init returns nil for them.
+    func testSSEEventHeartbeatCommentIsNil() {
+        let newlines = ["\r\n", "\n", "\r"]
+        XCTAssertNil(SSEEvent(eventString: ": heartbeat", newLineCharacters: newlines))
+        XCTAssertNil(SSEEvent(eventString: ":", newLineCharacters: newlines))
+        XCTAssertNil(SSEEvent(eventString: ": keepalive", newLineCharacters: newlines))
+    }
+
+    /// A well-formed SSE event with an empty data field should produce a non-nil SSEEvent
+    /// whose data property is the empty string — confirming the guard `!data.isEmpty` in
+    /// connectBackgroundSync is what prevents the empty payload from reaching prepareFeaturesData.
+    func testSSEEventEmptyDataFieldIsEmptyString() {
+        let newlines = ["\r\n", "\n", "\r"]
+        let event = SSEEvent(eventString: "event: features\ndata: ", newLineCharacters: newlines)
+        XCTAssertNotNil(event)
+        XCTAssertEqual(event?.data ?? "non-empty", "")
+    }
+
+    /// An SSE event with a valid JSON payload must be passed through to prepareFeaturesData
+    /// and result in a successful feature load.
+    func testSSEEventValidJsonPayloadProducesSuccess() {
+        let capture = Capture()
+        let vm = makeVM(delegate: capture)
+        let validJSON = """
+        {"status":200,"features":{"sse-flag":{"defaultValue":true}}}
+        """
+        vm.prepareFeaturesData(data: validJSON.data(using: .utf8)!)
+        XCTAssertEqual(capture.successCount, 1)
+        XCTAssertNotNil(capture.lastFeatures?["sse-flag"])
+    }
+
+    /// An SSE event with an invalid JSON payload must not crash and must fire featuresFetchFailed.
+    func testSSEEventInvalidJsonPayloadProducesError() {
+        let capture = Capture()
+        let vm = makeVM(delegate: capture)
+        vm.prepareFeaturesData(data: "not-json".data(using: .utf8)!)
+        XCTAssertGreaterThan(capture.failCount, 0)
+        XCTAssertEqual(capture.lastError, .failedParsedData)
+    }
+
     // MARK: - fetchFeatures is not stale reports featuresAreUpToDate to the delegate
 
     func testFetchFeaturesReportIfNotStale() {

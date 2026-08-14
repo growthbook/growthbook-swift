@@ -176,6 +176,7 @@ class ExperimentEvaluator {
         let userInExperiment = result.inExperiment
         if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
             context.options.trackingClosure(experiment, result)
+            context.options.pluginRegistry.onExperimentViewed(experiment: experiment, result: result, attributes: context.userContext.attributes)
         }
 
         // Return (in experiment, assigned variation)
@@ -228,6 +229,6 @@ class ExperimentEvaluator {
     }
     
     private func isStickyBucketingEnabledForExperiment(context: EvalContext, experiment: Experiment) -> Bool {
-        return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? true))
+        return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? false))
     }
 }

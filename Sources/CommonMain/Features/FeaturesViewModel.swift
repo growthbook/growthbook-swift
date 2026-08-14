@@ -82,7 +82,8 @@ class FeaturesViewModel {
         sseHandler = streamingUpdate
         
         streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
-            guard let jsonData = data?.data(using: .utf8) else { return }
+            guard let data = data, !data.isEmpty,
+                  let jsonData = data.data(using: .utf8) else { return }
             self?.prepareFeaturesData(data: jsonData)
         }
         streamingUpdate.connect()

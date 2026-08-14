@@ -2,6 +2,27 @@ import Foundation
 
 @testable import GrowthBook
 
+final class NoopStickyBucketService: NSObject, StickyBucketServiceProtocol {
+    func getAssignments(
+        attributeName: String,
+        attributeValue: String,
+        completion: @escaping (StickyAssignmentsDocument?, Error?) -> Void
+    ) {
+        completion(nil, nil)
+    }
+
+    func saveAssignments(doc: StickyAssignmentsDocument, completion: @escaping (Error?) -> Void) {
+        completion(nil)
+    }
+
+    func getAllAssignments(
+        attributes: [String: String],
+        completion: @escaping ([String: StickyAssignmentsDocument]?, Error?) -> Void
+    ) {
+        completion([:], nil)
+    }
+}
+
 class TestHelper {
     var testData: JSON? {
         get {
