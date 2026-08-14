@@ -82,4 +82,90 @@ final class SSEHandlerReconnectTests: XCTestCase {
         XCTAssertFalse(handler.shouldReconnect(statusCode: 404))
         XCTAssertFalse(handler.shouldReconnect(statusCode: 500))
     }
+
+    // MARK: - Transport failures (no HTTP response)
+
+    private func transportError() -> NSError {
+        NSError(domain: NSURLErrorDomain, code: NSURLErrorTimedOut, userInfo: nil)
+    }
+
+    private func cancelledError() -> NSError {
+        NSError(domain: NSURLErrorDomain, code: NSURLErrorCancelled, userInfo: nil)
+    }
+
+    /// DNS failures, connection loss and timeouts complete without an `HTTPURLResponse`. They are
+    /// what the backoff exists for, so they must count as retryable.
+    func testTransportFailureWithoutStatusIsRetryable() {
+        XCTAssertTrue(handler.shouldReconnect(statusCode: nil))
+    }
+
+    func testTransportErrorSchedulesBoundedRetry() {
+        handler.connectionStatus = .connecting
+        let reported = expectation(description: "disconnect reported")
+        var reconnectFlag: Bool?
+        var forwardedError: NSError?
+        handler.onDissconnect { _, reconnect, error in
+            reconnectFlag = reconnect
+            forwardedError = error
+            reported.fulfill()
+        }
+
+        handler.handleStreamCompletion(statusCode: nil, error: transportError())
+
+        XCTAssertEqual(handler.retryCount, 1, "A transport failure must consume one retry, not stop streaming")
+        wait(for: [reported], timeout: 30.0)
+        XCTAssertEqual(reconnectFlag, true, "Callers must be told the stream will come back")
+        XCTAssertEqual(forwardedError?.code, NSURLErrorTimedOut, "The underlying error must still be surfaced")
+
+        handler.disconnect()  // keep the scheduled reconnect from reaching the network
+    }
+
+    /// The retry budget is shared with HTTP failures, so a permanently broken connection stops.
+    func testTransportErrorsStopAfterMaxRetries() {
+        handler.connectionStatus = .connecting
+
+        // The callback is installed up front: every completion queues its report on the main queue,
+        // and those reports only run once this test starts waiting.
+        let attempts = handler.maxRetryCount + 1
+        let reported = expectation(description: "every disconnect reported")
+        reported.expectedFulfillmentCount = attempts
+        var flags: [Bool?] = []
+        handler.onDissconnect { _, reconnect, _ in
+            flags.append(reconnect)
+            reported.fulfill()
+        }
+
+        for _ in 0..<attempts {
+            handler.handleStreamCompletion(statusCode: nil, error: transportError())
+        }
+        XCTAssertEqual(handler.retryCount, handler.maxRetryCount, "The retry limit must not be exceeded")
+
+        wait(for: [reported], timeout: 30.0)
+        XCTAssertEqual(flags.count, attempts)
+        XCTAssertEqual(flags.dropLast().compactMap { $0 }.filter { $0 }.count, handler.maxRetryCount,
+                       "Every attempt within the budget must promise a reconnect")
+        XCTAssertEqual(flags.last ?? nil, false, "Past the retry limit the stream must stay down")
+
+        handler.disconnect()
+    }
+
+    /// An explicitly requested disconnect must not be undone by the backoff.
+    func testExplicitDisconnectIsNotRetried() {
+        handler.connectionStatus = .connecting
+        handler.disconnect()
+
+        handler.handleStreamCompletion(statusCode: nil, error: cancelledError())
+
+        XCTAssertEqual(handler.retryCount, 0, "disconnect() must not schedule a reconnect")
+        XCTAssertEqual(handler.connectionStatus, .disconnected)
+    }
+
+    /// Cancellation from any other source is deliberate too, so it is not a transport failure.
+    func testCancelledTaskIsNotRetried() {
+        handler.connectionStatus = .connected
+
+        handler.handleStreamCompletion(statusCode: nil, error: cancelledError())
+
+        XCTAssertEqual(handler.retryCount, 0)
+    }
 }

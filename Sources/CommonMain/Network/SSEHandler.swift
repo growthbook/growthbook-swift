@@ -109,12 +109,24 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
                          task: URLSessionTask,
                          didCompleteWithError error: Error?) {
 
-        guard let responseStatusCode = (task.response as? HTTPURLResponse)?.statusCode else {
-            mainQueue.async { [weak self] in self?.onDisconnect?(nil, nil, error as NSError?) }
+        handleStreamCompletion(statusCode: (task.response as? HTTPURLResponse)?.statusCode,
+                               error: error as NSError?)
+    }
+
+    /// Decides whether a finished stream should be retried, and schedules it if so.
+    ///
+    /// Internal rather than private so tests can drive it: the delegate callback above carries a
+    /// `URLSessionTask`, which tests cannot construct.
+    func handleStreamCompletion(statusCode: Int?, error: NSError?) {
+        // A cancelled task means the stream was torn down deliberately — `disconnect()`, or the
+        // session being invalidated — so it must not come back on its own.
+        let wasCancelled = error?.domain == NSURLErrorDomain && error?.code == NSURLErrorCancelled
+        if connectionStatus == .disconnected || wasCancelled {
+            mainQueue.async { [weak self] in self?.onDisconnect?(statusCode, false, error) }
             return
         }
 
-        let reconnect = shouldReconnect(statusCode: responseStatusCode)
+        let reconnect = shouldReconnect(statusCode: statusCode)
 
         if reconnect && retryCount < maxRetryCount {
             let delay = backoffDelay
@@ -123,9 +135,9 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
                 guard let self, self.connectionStatus != .disconnected else { return }
                 self.connect(lastEventId: self.lastEventId)
             }
-            mainQueue.async { [weak self] in self?.onDisconnect?(responseStatusCode, true, nil) }
+            mainQueue.async { [weak self] in self?.onDisconnect?(statusCode, true, error) }
         } else {
-            mainQueue.async { [weak self] in self?.onDisconnect?(responseStatusCode, false, nil) }
+            mainQueue.async { [weak self] in self?.onDisconnect?(statusCode, false, error) }
         }
     }
 
@@ -186,5 +198,13 @@ extension SSEHandler {
     
     func shouldReconnect(statusCode: Int) -> Bool {
         return statusCode == 200
+    }
+
+    /// A stream that completed without an HTTP response never reached the server: DNS failure,
+    /// connection loss, timeout. Those are exactly the failures a bounded backoff exists for, so
+    /// they are retryable; once there *is* a response, only 200 is.
+    func shouldReconnect(statusCode: Int?) -> Bool {
+        guard let statusCode else { return true }
+        return shouldReconnect(statusCode: statusCode)
     }
 }
