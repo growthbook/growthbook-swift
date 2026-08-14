@@ -201,9 +201,20 @@ import Foundation
       savedGroups: evalData.savedGroups
     )
     
-    // UserContext is created from evalData
+    // UserContext is created from evalData.
+    // attributeOverrides are merged on top of base attributes so they take
+    // effect in both experiment evaluation and sticky bucket hash lookups.
+    let effectiveAttributes: JSON
+    if let overrides = evalData.attributeOverrides, overrides != JSON() {
+      var merged = evalData.attributes.dictionaryValue
+      merged.merge(overrides.dictionaryValue) { _, new in new }
+      effectiveAttributes = JSON(merged)
+    } else {
+      effectiveAttributes = evalData.attributes
+    }
+
     let userContext = UserContext(
-      attributes: evalData.attributes,
+      attributes: effectiveAttributes,
       stickyBucketAssignmentDocs: evalData.stickyBucketAssignmentDocs,
       forcedVariations: evalData.forcedVariations,
       forcedFeatureValues: evalData.forcedFeatureValues
