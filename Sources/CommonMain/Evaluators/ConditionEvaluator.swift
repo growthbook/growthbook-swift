@@ -295,6 +295,21 @@ class ConditionEvaluator {
         default: break
         }
 
+        // The saved-group operators resolve the group themselves and work for any attribute shape —
+        // scalar, array or absent — so they are handled before the dispatch below, which branches on
+        // the shape of the attribute and would otherwise leave them unreachable for array attributes.
+        //
+        // Both always return: an absent attribute simply makes the user a non-member, so $inGroup is
+        // false and $notInGroup is true. Returning only from inside a non-null guard would drop out
+        // of the switch and yield false for both, breaking the negation.
+        switch operatorKey {
+        case "$inGroup":
+            return Common.isIn(actual: attributeValue, expected: resolveSavedGroup(conditionValue, savedGroups))
+        case "$notInGroup":
+            return !Common.isIn(actual: attributeValue, expected: resolveSavedGroup(conditionValue, savedGroups))
+        default: break
+        }
+
         /// There are three operators where conditionValue is an array
         if let conditionValue = conditionJson.array, attributeValue != .null {
             switch operatorKey {
@@ -361,14 +376,6 @@ class ConditionEvaluator {
             case "$vlte":
                 if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
                     return Utils.paddedVersionString(input: attributeString) <= Utils.paddedVersionString(input: conditionString)
-                }
-            case "$inGroup":
-                if attributeValue != .null, let conditionString = conditionValue.string {
-                    return Common.isIn(actual: attributeValue, expected: savedGroups?[conditionString].array ?? [] )
-                }
-            case "$notInGroup": 
-                if attributeValue != .null, let conditionString = conditionValue.string {
-                    return !Common.isIn(actual: attributeValue, expected: savedGroups?[conditionString].array ?? [])
                 }
             // Evaluate EQ operator - whether condition equals to attribute
             case "$eq":
@@ -528,6 +535,16 @@ class ConditionEvaluator {
         } catch {
             return false
         }
+    }
+
+    /// Resolves the members of a saved group for the `$inGroup` / `$notInGroup` operators.
+    ///
+    /// An unknown group id, a missing `savedGroups` object, a non-array group value, or a group id
+    /// that is not a string all resolve to an empty group — so membership is simply false and the
+    /// negation stays meaningful.
+    private func resolveSavedGroup(_ conditionValue: JSON, _ savedGroups: JSON?) -> [JSON] {
+        guard let groupId = conditionValue.string else { return [] }
+        return savedGroups?[groupId].array ?? []
     }
 
     private func isPrimitive(value: JSON) -> Bool {
