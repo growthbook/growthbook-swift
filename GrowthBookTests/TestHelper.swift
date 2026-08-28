@@ -1,4 +1,5 @@
 import Foundation
+import XCTest
 
 @testable import GrowthBook
 
@@ -84,16 +85,37 @@ class TestHelper {
         testData?.dictionaryValue["decrypt"]?.arrayValue
     }
 
+    /// Loads the vendored conformance fixtures.
+    ///
+    /// The bundle differs per harness: SwiftPM puts declared resources in `Bundle.module`, while the
+    /// Xcode test target ships them inside the test bundle itself. Resolving only through
+    /// `Bundle(for:)` found nothing under SwiftPM, so every fixture-driven suite silently returned
+    /// early and reported success without evaluating a single case — `swift test` looked green while
+    /// testing none of the spec. Both bundles are consulted now, and a miss fails loudly instead of
+    /// degrading to a no-op.
     private func loadTestData() -> JSON? {
-        let bundle = Bundle(for: type(of: self))
-        guard
-            let path = bundle.path(forResource: "json", ofType: "json"),
-            let data = FileManager.default.contents(atPath: path)
-        else { return nil }
+        for bundle in Self.candidateBundles {
+            guard
+                let path = bundle.path(forResource: "json", ofType: "json"),
+                let data = FileManager.default.contents(atPath: path),
+                let testData = try? JSON(data: data)
+            else { continue }
 
-        let test = try? JSON(data: data)
+            return testData
+        }
 
-        return test
+        XCTFail("Could not load the conformance fixtures (GrowthBookTests/Source/json.json). "
+                + "Every spec-driven test depends on them, so they must never be missing.")
+        return nil
+    }
+
+    private static var candidateBundles: [Bundle] {
+        var bundles: [Bundle] = []
+        #if SWIFT_PACKAGE
+        bundles.append(.module)
+        #endif
+        bundles.append(Bundle(for: TestHelper.self))
+        return bundles
     }
 }
 
