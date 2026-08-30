@@ -371,4 +371,117 @@ class GrowthBookSDKTests: XCTestCase {
 
         XCTAssertTrue(sdk.isOn(feature: "onboarding"))
     }
+
+    // MARK: - clearStickyBuckets
+
+    /// Payload with one experiment rule, so the SDK derives "id" as a sticky bucket identifier
+    /// attribute and loads the persisted document for the current user at init.
+    private var stickyFeaturesPayload: Data {
+        """
+        {"features":{"exp-feature":{"defaultValue":"off","rules":[{"key":"my-exp","variations":["a","b"],"hashAttribute":"id","weights":[0.5,0.5],"meta":[{"key":"0"},{"key":"1"}],"disableStickyBucketing":false}]}}}
+        """.data(using: .utf8)!
+    }
+
+    private func makeStickySDK(service: StickyBucketService, clientKey: String) -> GrowthBookSDK {
+        let cachingManager = CachingManager(apiKey: clientKey)
+
+        return GrowthBookBuilder(
+            growthBookBuilderModel: GrowthBookModel(
+                apiHost: apiHost, clientKey: clientKey,
+                features: stickyFeaturesPayload,
+                attributes: JSON(["id": "user-1", "deviceId": "device-1"]),
+                trackingClosure: { _, _ in },
+                stickyBucketService: service,
+                backgroundSync: false
+            ),
+            networkDispatcher: MockNetworkClient(successResponse: nil, error: nil),
+            ttlSeconds: 60,
+            cachingManager: cachingManager,
+            refreshHandler: nil
+        ).initializer()
+    }
+
+    func testClearStickyBucketsDropsInMemoryAndPersistedAssignments() {
+        let service = StickyBucketService(prefix: "sdk_clear_\(Int.random(in: 100_000...999_999))__")
+        let doc = StickyAssignmentsDocument(attributeName: "id", attributeValue: "user-1", assignments: ["my-exp__0": "1"])
+
+        let save = expectation(description: "seed doc")
+        service.saveAssignments(doc: doc) { _ in save.fulfill() }
+        waitForExpectations(timeout: 1)
+
+        let sdk = makeStickySDK(service: service, clientKey: "isolated-sticky-clear-test")
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||user-1"], "precondition: doc is loaded at init")
+
+        let cleared = expectation(description: "clear completed")
+        sdk.clearStickyBuckets { error in
+            XCTAssertNil(error)
+            cleared.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+
+        XCTAssertTrue(sdk.getGBContext().stickyBucketAssignmentDocs?.isEmpty ?? true, "in-memory docs should be gone")
+
+        let get = expectation(description: "persisted doc gone")
+        service.getAssignments(attributeName: "id", attributeValue: "user-1") { retrieved, _ in
+            XCTAssertNil(retrieved, "persisted doc should be gone, otherwise the next refresh reloads it")
+            get.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+    }
+
+    /// The whole point of the API: after the assignment is dropped, targeting is decided again
+    /// instead of the user staying enrolled on the strength of a stale sticky bucket.
+    func testClearStickyBucketsSurvivesAttributeRefresh() {
+        let service = StickyBucketService(prefix: "sdk_refresh_\(Int.random(in: 100_000...999_999))__")
+        let doc = StickyAssignmentsDocument(attributeName: "id", attributeValue: "user-1", assignments: ["my-exp__0": "1"])
+
+        let save = expectation(description: "seed doc")
+        service.saveAssignments(doc: doc) { _ in save.fulfill() }
+        waitForExpectations(timeout: 1)
+
+        let sdk = makeStickySDK(service: service, clientKey: "isolated-sticky-refresh-test")
+        sdk.clearStickyBuckets()
+
+        // setAttributes re-reads the service; a doc that was only cleared in memory would come back.
+        sdk.setAttributes(attributes: ["id": "user-1", "deviceId": "device-1"])
+
+        XCTAssertTrue(sdk.getGBContext().stickyBucketAssignmentDocs?.isEmpty ?? true)
+    }
+
+    func testClearStickyBucketsForAttributeKeepsOtherDocuments() {
+        let service = StickyBucketService(prefix: "sdk_attr_\(Int.random(in: 100_000...999_999))__")
+        let userDoc   = StickyAssignmentsDocument(attributeName: "id",       attributeValue: "user-1",   assignments: ["my-exp__0": "1"])
+        let deviceDoc = StickyAssignmentsDocument(attributeName: "deviceId", attributeValue: "device-1", assignments: ["my-exp__0": "0"])
+
+        let s1 = expectation(description: "seed user doc");   service.saveAssignments(doc: userDoc)   { _ in s1.fulfill() }
+        let s2 = expectation(description: "seed device doc"); service.saveAssignments(doc: deviceDoc) { _ in s2.fulfill() }
+        waitForExpectations(timeout: 1)
+
+        let sdk = makeStickySDK(service: service, clientKey: "isolated-sticky-attr-test")
+
+        sdk.clearStickyBuckets(forAttribute: "deviceId", value: "device-1")
+
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs?["deviceId||device-1"])
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||user-1"], "unrelated document must survive")
+
+        let get = expectation(description: "persisted user doc survives")
+        service.getAssignments(attributeName: "id", attributeValue: "user-1") { retrieved, _ in
+            XCTAssertNotNil(retrieved)
+            get.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+    }
+
+    func testClearStickyBucketsWithoutServiceIsNoOp() {
+        let sdk = makeSDK()
+
+        let cleared = expectation(description: "clear completed")
+        sdk.clearStickyBuckets { error in
+            XCTAssertNil(error)
+            cleared.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+
+        sdk.clearStickyBuckets(forAttribute: "id", value: "user-1")
+    }
 }

@@ -541,6 +541,85 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
+    /// Drops every sticky bucket assignment — both the persisted documents and the in-memory copy.
+    ///
+    /// Use this when the identity behind the existing assignments is no longer the one being
+    /// evaluated: typically right after login, when attributes loaded post-authentication make an
+    /// assignment created for the anonymous user wrong.
+    ///
+    /// While an assignment exists, sticky bucketing deliberately skips re-evaluating targeting
+    /// conditions, filters, namespaces and prerequisites (this matches the GrowthBook spec and the
+    /// other SDKs), so a user who has become ineligible stays enrolled. Dropping the assignment is
+    /// what forces the next evaluation to decide from scratch.
+    ///
+    /// Unlike `clearCache()`, the cached feature payload is left intact.
+    ///
+    /// - Note: no-op when no `StickyBucketService` is configured.
+    @objc public func clearStickyBuckets() {
+        clearStickyBuckets { _ in }
+    }
+
+    /// Drops every sticky bucket assignment and reports when the underlying service has finished.
+    ///
+    /// The in-memory documents are cleared synchronously, so an evaluation made right after this
+    /// call already ignores them. `completion` reports the result of the persistent delete, which
+    /// custom services may perform asynchronously — call `setAttributes(_:)` from there if the new
+    /// attributes must not be applied before the old documents are gone.
+    /// - Parameter completion: called with the service error, or `nil` on success.
+    @objc public func clearStickyBuckets(completion: @escaping (Error?) -> Void) {
+        withLock {
+            contextManager.updateEvalData { data in
+                data.stickyBucketAssignmentDocs = nil
+            }
+
+            guard let service = contextManager.getGlobalConfig().stickyBucketService else {
+                completion(nil)
+                return
+            }
+
+            guard let clearAll = service.clearAllAssignments else {
+                logger.warning("StickyBucketService does not implement clearAllAssignments — only the in-memory assignments were cleared.")
+                completion(nil)
+                return
+            }
+
+            clearAll { error in
+                if let error = error {
+                    logger.error("Failed to clear sticky bucket assignments: \(error.localizedDescription)")
+                }
+                completion(error)
+            }
+        }
+    }
+
+    /// Drops the sticky bucket assignments stored for a single attribute, keeping the rest.
+    ///
+    /// Use this for a surgical reset when only one identifier goes stale — e.g. dropping the
+    /// `deviceId`-scoped document after login while keeping the ones already keyed by user id.
+    /// - Parameters:
+    ///   - attributeName: the hash (or fallback) attribute the document is keyed by, e.g. `"deviceId"`.
+    ///   - value: the attribute value the document is keyed by.
+    @objc public func clearStickyBuckets(forAttribute attributeName: String, value: String) {
+        withLock {
+            contextManager.updateEvalData { data in
+                data.stickyBucketAssignmentDocs?.removeValue(forKey: "\(attributeName)||\(value)")
+            }
+
+            guard let service = contextManager.getGlobalConfig().stickyBucketService else { return }
+
+            guard let deleteAssignments = service.deleteAssignments else {
+                logger.warning("StickyBucketService does not implement deleteAssignments — only the in-memory assignments were cleared.")
+                return
+            }
+
+            deleteAssignments(attributeName, value) { error in
+                if let error = error {
+                    logger.error("Failed to delete sticky bucket assignments: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     /// Get Context - Holding the complete data regarding cached features & attributes etc.
     /// Note: This method is kept for backward compatibility but returns a Context created from ContextManager
     @objc public func getGBContext() -> Context {

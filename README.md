@@ -462,6 +462,31 @@ If you would like to implement Sticky Bucketing while using Remote Evaluation, y
 
 Sticky bucketing ensures that users see the same experiment variant, even when user session, user login status, or experiment parameters change. See the [Sticky Bucketing docs](/app/sticky-bucketing) for more information. If your organization and experiment supports sticky bucketing, you must implement an instance of the `StickyBucketService` to use Sticky Bucketing. For simple bucket persistence using the browser's LocalStorage (can be polyfilled for other environments).
 
+### Clearing sticky assignments
+
+While an assignment exists for the current `bucketVersion`, evaluation deliberately skips targeting conditions, filters, namespaces and prerequisites — that is what keeps enrollment stable, and it matches the behaviour of the other GrowthBook SDKs. A user who stops matching the targeting conditions therefore stays enrolled.
+
+If an assignment was made against the wrong identity — typically one created before login, when the attributes needed for targeting were not loaded yet — drop it so the next evaluation decides from scratch:
+
+```swift
+// After login: forget everything bucketed for the anonymous user
+sdk.clearStickyBuckets()
+
+// Or drop just one identifier, keeping the rest
+sdk.clearStickyBuckets(forAttribute: "deviceId", value: currentDeviceId)
+
+// Completion variant, for sequencing against a service that persists asynchronously
+sdk.clearStickyBuckets { _ in
+    sdk.setAttributes(attributes: attributesLoadedAfterLogin)
+}
+```
+
+Unlike `clearCache()`, this leaves the cached feature payload intact. Both the persisted documents and the SDK's in-memory copy are cleared.
+
+Prefer preventing the bad assignment over undoing it: if an experiment targets an attribute that only exists after authentication, add a presence check (e.g. `{"registrationDate": {"$exists": true}}`) to its targeting conditions so unauthenticated users never qualify and no document is written.
+
+Custom `StickyBucketServiceProtocol` implementations can support this by implementing the optional `deleteAssignments(attributeName:attributeValue:completion:)` and `clearAllAssignments(completion:)` methods. When they are missing, the SDK clears only its in-memory copy and logs a warning — the persisted documents come back on the next refresh.
+
 
 ## License
 

@@ -108,6 +108,86 @@ class StickyBucketServiceTests: XCTestCase {
         waitForExpectations(timeout: 1)
     }
 
+    // MARK: - deleteAssignments
+
+    func testDeleteAssignmentsRemovesOnlyTheTargetedDoc() {
+        let docA = StickyAssignmentsDocument(attributeName: "id",       attributeValue: "user-del",   assignments: ["exp__0": "a"])
+        let docB = StickyAssignmentsDocument(attributeName: "deviceId", attributeValue: "device-del", assignments: ["exp__0": "b"])
+
+        let s1 = expectation(description: "save A"); service.saveAssignments(doc: docA) { _ in s1.fulfill() }
+        let s2 = expectation(description: "save B"); service.saveAssignments(doc: docB) { _ in s2.fulfill() }
+        waitForExpectations(timeout: 1)
+
+        let del = expectation(description: "delete A")
+        service.deleteAssignments(attributeName: "id", attributeValue: "user-del") { error in
+            XCTAssertNil(error)
+            del.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+
+        let get = expectation(description: "getAll after delete")
+        service.getAllAssignments(attributes: ["id": "user-del", "deviceId": "device-del"]) { docs, _ in
+            XCTAssertNil(docs?["id||user-del"], "deleted doc should be gone")
+            XCTAssertNotNil(docs?["deviceId||device-del"], "untouched doc should survive")
+            get.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+    }
+
+    func testDeleteAssignmentsForUnknownKeyIsNotAnError() {
+        let exp = expectation(description: "delete missing")
+        service.deleteAssignments(attributeName: "id", attributeValue: "never-saved") { error in
+            XCTAssertNil(error)
+            exp.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+    }
+
+    // MARK: - clearAllAssignments
+
+    func testClearAllAssignmentsRemovesEveryDoc() {
+        let docA = StickyAssignmentsDocument(attributeName: "id",       attributeValue: "user-clear",   assignments: ["exp__0": "a"])
+        let docB = StickyAssignmentsDocument(attributeName: "deviceId", attributeValue: "device-clear", assignments: ["exp__0": "b"])
+
+        let s1 = expectation(description: "save A"); service.saveAssignments(doc: docA) { _ in s1.fulfill() }
+        let s2 = expectation(description: "save B"); service.saveAssignments(doc: docB) { _ in s2.fulfill() }
+        waitForExpectations(timeout: 1)
+
+        let clear = expectation(description: "clear all")
+        service.clearAllAssignments { error in
+            XCTAssertNil(error)
+            clear.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+
+        let get = expectation(description: "getAll after clear")
+        service.getAllAssignments(attributes: ["id": "user-clear", "deviceId": "device-clear"]) { docs, _ in
+            XCTAssertTrue(docs?.isEmpty ?? true)
+            get.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+    }
+
+    func testClearAllAssignmentsLeavesOtherPrefixesIntact() {
+        let otherService = StickyBucketService(prefix: "other_prefix_\(Int.random(in: 100_000...999_999))__")
+        let doc = StickyAssignmentsDocument(attributeName: "id", attributeValue: "kept-user", assignments: ["exp__0": "variant"])
+
+        let s1 = expectation(description: "save in service"); service.saveAssignments(doc: doc) { _ in s1.fulfill() }
+        let s2 = expectation(description: "save in other");   otherService.saveAssignments(doc: doc) { _ in s2.fulfill() }
+        waitForExpectations(timeout: 1)
+
+        let clear = expectation(description: "clear all")
+        service.clearAllAssignments { _ in clear.fulfill() }
+        waitForExpectations(timeout: 1)
+
+        let get = expectation(description: "other prefix survives")
+        otherService.getAssignments(attributeName: "id", attributeValue: "kept-user") { retrieved, _ in
+            XCTAssertNotNil(retrieved, "clearing one prefix must not touch documents of another")
+            get.fulfill()
+        }
+        waitForExpectations(timeout: 1)
+    }
+
     // MARK: - Different prefixes are isolated
 
     func testDifferentPrefixesDoNotShareData() {
