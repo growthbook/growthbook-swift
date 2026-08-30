@@ -383,6 +383,10 @@ protocol GrowthBookProtocol: AnyObject {
 @objc public class GrowthBookSDK: NSObject, FeaturesFlowDelegate {
     var refreshHandler: CacheRefreshHandler?
     private var subscriptions: [ExperimentRunCallback] = []
+    /// One-shot completions awaiting the next refresh cycle, used by the async `refresh()`
+    /// API. Kept separate from `refreshHandler` so the async wrapper never overwrites the
+    /// caller's persistent handler. Drained (and cleared) on the next `featuresUpdateIsComplete`.
+    private var refreshCompletions: [(SDKError?) -> Void] = []
     private var networkDispatcher: NetworkProtocol
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
@@ -531,6 +535,55 @@ protocol GrowthBookProtocol: AnyObject {
             } else {
                 featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL())
             }
+        }
+    }
+
+    /// Asynchronously refresh the feature cache.
+    ///
+    /// Swift Concurrency wrapper over `refreshCache()`: suspends until the refresh cycle
+    /// completes and rethrows any `SDKError` reported by the pipeline (e.g. a network
+    /// failure). The callback-based `refreshCache()` and `setRefreshHandler` remain
+    /// available and are not affected — a persistent `refreshHandler` still fires as well.
+    ///
+    /// - Note: Swift-only (async/continuation is not representable in Objective-C).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
+    public func refresh() async throws {
+        try await awaitRefreshCycle { [self] in refreshCache() }
+    }
+
+    /// Asynchronously trigger a remote evaluation.
+    ///
+    /// Swift Concurrency wrapper over `refreshForRemoteEval()`: posts the current attributes
+    /// and forced values to the remote-eval endpoint, suspends until the result is applied,
+    /// and rethrows any `SDKError`. Requires the SDK to be configured with `remoteEval: true`;
+    /// otherwise throws `SDKError.remoteEvalNotEnabled` — without this guard the continuation
+    /// would never resume, since `refreshForRemoteEval()` no-ops when remote eval is disabled.
+    ///
+    /// - Note: Swift-only (async/continuation is not representable in Objective-C).
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
+    public func evaluate() async throws {
+        guard contextManager.getGlobalConfig().remoteEval else {
+            throw SDKError.remoteEvalNotEnabled
+        }
+        try await awaitRefreshCycle { [self] in refreshForRemoteEval() }
+    }
+
+    /// Shared continuation plumbing for the async `refresh()` / `evaluate()` APIs. Registers a
+    /// one-shot completion *before* invoking `trigger` (so a synchronous completion is never
+    /// missed) and resumes exactly once when the next refresh cycle finishes.
+    @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
+    private func awaitRefreshCycle(_ trigger: () -> Void) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            withLock {
+                refreshCompletions.append { error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
+                    }
+                }
+            }
+            trigger()
         }
     }
 
@@ -697,6 +750,11 @@ protocol GrowthBookProtocol: AnyObject {
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {
         withLock {
             refreshHandler?(error)
+            // Fulfil any pending async refresh() callers. Snapshot-and-clear before
+            // invoking so each completion fires exactly once per refresh cycle.
+            let completions = refreshCompletions
+            refreshCompletions.removeAll()
+            completions.forEach { $0(error) }
         }
     }
 
