@@ -62,10 +62,17 @@ class FeaturesViewModel {
         }
         streamingUpdate.connect()
         
-        streamingUpdate.onDissconnect { [weak streamingUpdate] _, shouldReconnect, _ in
-            if let shouldReconnect = shouldReconnect, shouldReconnect {
-                streamingUpdate?.connect()
-            }
+        // The handler owns reconnecting, so there is nothing to do while it still intends to come
+        // back. Once it gives up, streaming is over for this instance and nothing else reports it,
+        // which would otherwise leave features silently frozen — so log that much. A cancelled task
+        // is our own `disconnect()` above (or in deinit) and is not a failure.
+        streamingUpdate.onDissconnect { statusCode, willReconnect, error in
+            guard willReconnect != true else { return }
+            let cancelled = error?.domain == NSURLErrorDomain && error?.code == NSURLErrorCancelled
+            guard !cancelled else { return }
+
+            let reason = error?.localizedDescription ?? statusCode.map { "HTTP \($0)" } ?? "unknown reason"
+            logger.error("Streaming stopped and will not reconnect: \(reason)")
         }
     }
     
