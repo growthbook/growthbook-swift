@@ -224,7 +224,15 @@ class ExperimentEvaluator {
         if let passthrough = meta?.passthrough {
             result.passthrough = passthrough
         }
-        
+
+        // Surface the contextual bandit selection for tracking, but only for a real exposure:
+        // a forced, filtered-out or QA-mode assignment did not use the bandit's weights.
+        if let contextualBandit = experiment.contextualBandit, hashUsed, inExperiment {
+            result.leafId = contextualBandit.leafId
+            result.variationWeights = contextualBandit.variationWeights
+            result.banditVersion = contextualBandit.banditVersion
+        }
+
         return result
     }
     

@@ -69,6 +69,12 @@ public struct FeatureRule: Codable, Sendable {
     public let phase: String?
     /// Array of tracking calls to fire
     public let tracks: [Track]?
+    /// Reference into the payload's `contextualBandits` map. When set, this rule is a contextual
+    /// bandit: its variations are carried in `contextualVariations` (so SDKs without bandit support
+    /// skip it) and its weights are resolved per-user from the referenced definition.
+    public let contextualBanditRef: String?
+    /// Variations for a contextual bandit rule. Used in place of `variations` when present.
+    public let contextualVariations: [JSON]?
 
     init(id: String? = "", condition: Condition? = nil,
          coverage: Float? = nil,
@@ -91,7 +97,9 @@ public struct FeatureRule: Codable, Sendable {
          seed: String? = nil,
          name: String? = nil,
          phase: String? = nil,
-         tracks: [Track]? = nil) {
+         tracks: [Track]? = nil,
+         contextualBanditRef: String? = nil,
+         contextualVariations: [JSON]? = nil) {
         self.id = id
         self.condition = condition
         self.coverage = coverage
@@ -115,9 +123,11 @@ public struct FeatureRule: Codable, Sendable {
         self.name = name
         self.phase = phase
         self.tracks = tracks
+        self.contextualBanditRef = contextualBanditRef
+        self.contextualVariations = contextualVariations
     }
-    
-    init(json: [String: JSON]) {        
+
+    init(json: [String: JSON]) {
         id = json["id"]?.stringValue ?? ""
         
         condition = json["condition"]
@@ -185,6 +195,10 @@ public struct FeatureRule: Codable, Sendable {
         tracks = json["tracks"]?.map({ key, value in
             Track(json: value.dictionaryValue)
         })
+
+        contextualBanditRef = json["contextualBanditRef"]?.string
+
+        contextualVariations = json["contextualVariations"]?.array
     }
 }
 
