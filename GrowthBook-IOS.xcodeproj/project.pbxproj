@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		15147AEF2F7E746400FC9112 /* GrowthBookModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15147AEE2F7E746300FC9112 /* GrowthBookModel.swift */; };
 		231FB2292910F78D0035546E /* json.json in Resources */ = {isa = PBXBuildFile; fileRef = 84391F2628016C85003309DC /* json.json */; };
+		843317122910F78D0035546E /* local-cases.json in Resources */ = {isa = PBXBuildFile; fileRef = 8433171328016C85003309DC /* local-cases.json */; };
 		5D5EAD1D2EF1DEA70049F432 /* LruETagCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5EAD1C2EF1DEA70049F432 /* LruETagCache.swift */; };
 		5D5EAD1F2EF1DED60049F432 /* LruETagCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D5EAD1E2EF1DED60049F432 /* LruETagCacheTests.swift */; };
 		84095C792817EC7800ADDF19 /* JsonManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84095C772817EAB700ADDF19 /* JsonManager.swift */; };
@@ -41,6 +42,7 @@
 		846A7A562D6CAE56007CCFD1 /* GlobalContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 846A7A552D6CAE53007CCFD1 /* GlobalContext.swift */; };
 		84CB1A012FB0000100AA0001 /* ContextualBandit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84CB1A002FB0000100AA0001 /* ContextualBandit.swift */; };
 		84CB1A032FB0000200AA0001 /* ContextualBanditTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84CB1A022FB0000200AA0001 /* ContextualBanditTests.swift */; };
+		843317102FB0000200AA0001 /* ContextualBanditSpecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843317112FB0000200AA0001 /* ContextualBanditSpecTests.swift */; };
 		8483E6FA2ABC60B900306B55 /* DecryptionUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8483E6F92ABC60B900306B55 /* DecryptionUtils.swift */; };
 		8484CC0C2817D7230092A39B /* (null) in Embed Frameworks */ = {isa = PBXBuildFile; platformFilter = ios; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		848B8044294B5CB900B22168 /* CryptoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 848B8043294B5CB900B22168 /* CryptoTests.swift */; };
@@ -167,6 +169,7 @@
 		B1A0000000000000000C0006 /* TypedFeatureValueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypedFeatureValueTests.swift; sourceTree = "<group>"; };
 		B1A0000000000000000C0008 /* UtilityMethodsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UtilityMethodsTests.swift; sourceTree = "<group>"; };
 		84391F2628016C85003309DC /* json.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = json.json; sourceTree = "<group>"; };
+		8433171328016C85003309DC /* local-cases.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = "local-cases.json"; sourceTree = "<group>"; };
 		844838342E054AD200784A36 /* NetworkRetryHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkRetryHandler.swift; sourceTree = "<group>"; };
 		84622ACF280AC1D70099AED2 /* Info.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		84628062280DAE2900C83CDE /* Common.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Common.swift; sourceTree = "<group>"; };
@@ -175,6 +178,7 @@
 		846A7A552D6CAE53007CCFD1 /* GlobalContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalContext.swift; sourceTree = "<group>"; };
 		84CB1A002FB0000100AA0001 /* ContextualBandit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualBandit.swift; sourceTree = "<group>"; };
 		84CB1A022FB0000200AA0001 /* ContextualBanditTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualBanditTests.swift; sourceTree = "<group>"; };
+		843317112FB0000200AA0001 /* ContextualBanditSpecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContextualBanditSpecTests.swift; sourceTree = "<group>"; };
 		8483E6F92ABC60B900306B55 /* DecryptionUtils.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecryptionUtils.swift; sourceTree = "<group>"; };
 		848B8043294B5CB900B22168 /* CryptoTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoTests.swift; sourceTree = "<group>"; };
 		849114BD280DA71E00C0B9A5 /* GrowthBookTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GrowthBookTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -344,6 +348,7 @@
 			isa = PBXGroup;
 			children = (
 				84391F2628016C85003309DC /* json.json */,
+				8433171328016C85003309DC /* local-cases.json */,
 			);
 			path = Source;
 			sourceTree = "<group>";
@@ -358,6 +363,7 @@
 				843316112FA3F76100D1C388 /* FeatureEvaluatorTests.swift */,
 				84CB1C002FB2000100AA0001 /* SavedGroupOperatorTests.swift */,
 				84CB1A022FB0000200AA0001 /* ContextualBanditTests.swift */,
+				843317112FB0000200AA0001 /* ContextualBanditSpecTests.swift */,
 				8433160F2FA3F3AE00D1C388 /* ConditionEvaluatorTests.swift */,
 				843316092FA2B6AD00D1C388 /* ConstantsAndModelTests.swift */,
 				8433160A2FA2B6AD00D1C388 /* ExtensionsTests.swift */,
@@ -529,6 +535,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				231FB2292910F78D0035546E /* json.json in Resources */,
+				843317122910F78D0035546E /* local-cases.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -559,6 +566,7 @@
 				843316122FA3F76100D1C388 /* FeatureEvaluatorTests.swift in Sources */,
 				84CB1C012FB2000100AA0001 /* SavedGroupOperatorTests.swift in Sources */,
 				84CB1A032FB0000200AA0001 /* ContextualBanditTests.swift in Sources */,
+				843317102FB0000200AA0001 /* ContextualBanditSpecTests.swift in Sources */,
 				843315FE2FA22A1B00D1C388 /* FeatureModelTests.swift in Sources */,
 				843315FF2FA22A1B00D1C388 /* CommonTests.swift in Sources */,
 				8433160C2FA2B6AD00D1C388 /* ExtensionsTests.swift in Sources */,
