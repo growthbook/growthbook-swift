@@ -1,7 +1,7 @@
 import Foundation
 
 /// Defines a single experiment
-@objc public class Experiment: NSObject, Codable {
+@objc public class Experiment: NSObject, Codable, @unchecked Sendable {
     /// The globally unique tracking key for the experiment
     public let key: String
     /// The different variations to choose between
@@ -209,7 +209,7 @@ import Foundation
 }
 
 /// The result of running an Experiment given a specific Context
-@objc public class ExperimentResult: NSObject, Codable {
+@objc public class ExperimentResult: NSObject, Codable, @unchecked Sendable {
     /// Whether or not the user is part of the experiment
     public let inExperiment: Bool
     /// The array index of the assigned variation

@@ -31,6 +31,7 @@
 		84CB1C012FB2000100AA0001 /* SavedGroupOperatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84CB1C002FB2000100AA0001 /* SavedGroupOperatorTests.swift */; };
 		843316142FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316132FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift */; };
 		843316162FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */; };
+		843317012FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843317002FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift */; };
 		843316182FA3FD1800D1C388 /* MiscCoverageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */; };
 		8433161B2FA9479100D1C388 /* GrowthBookPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 843316192FA9479100D1C388 /* GrowthBookPlugin.swift */; };
 		8433161D2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */; };
@@ -132,6 +133,7 @@
 		84CB1C002FB2000100AA0001 /* SavedGroupOperatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SavedGroupOperatorTests.swift; sourceTree = "<group>"; };
 		843316132FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExperimentEvaluatorTests.swift; sourceTree = "<group>"; };
 		843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturesViewModelExtendedTests.swift; sourceTree = "<group>"; };
+		843317002FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GBLoggerConcurrencyTests.swift; sourceTree = "<group>"; };
 		843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiscCoverageTests.swift; sourceTree = "<group>"; };
 		843316192FA9479100D1C388 /* GrowthBookPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookPlugin.swift; sourceTree = "<group>"; };
 		8433161C2FA9626300D1C388 /* GrowthBookTrackingPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GrowthBookTrackingPlugin.swift; sourceTree = "<group>"; };
@@ -349,6 +351,7 @@
 			8433161E2FA9FFB000D1C388 /* GrowthBookTrackingPluginTests.swift */,
 				843316172FA3FD1800D1C388 /* MiscCoverageTests.swift */,
 				843316152FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift */,
+				843317002FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift */,
 				843316132FA3F9B900D1C388 /* ExperimentEvaluatorTests.swift */,
 				843316112FA3F76100D1C388 /* FeatureEvaluatorTests.swift */,
 				84CB1C002FB2000100AA0001 /* SavedGroupOperatorTests.swift */,
@@ -543,6 +546,7 @@
 				849114C7280DA73000C0B9A5 /* FeaturesViewModelTests.swift in Sources */,
 				5D5EAD1F2EF1DED60049F432 /* LruETagCacheTests.swift in Sources */,
 				843316162FA3FAEF00D1C388 /* FeaturesViewModelExtendedTests.swift in Sources */,
+				843317012FA3FAEF00D1C388 /* GBLoggerConcurrencyTests.swift in Sources */,
 				843316062FA252B300D1C388 /* GrowthBookSDKTests.swift in Sources */,
 				849114C8280DA73000C0B9A5 /* ConditionTests.swift in Sources */,
 				849114C9280DA73000C0B9A5 /* ExperimentRunTests.swift in Sources */,

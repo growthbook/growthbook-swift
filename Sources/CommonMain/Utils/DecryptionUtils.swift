@@ -88,7 +88,7 @@ class AESCryptor {
     }
 }
 
-class DecryptionException: Error {
+class DecryptionException: Error, @unchecked Sendable {
     let errorMessage: String
 
     init(errorMessage: String) {
