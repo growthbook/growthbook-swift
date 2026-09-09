@@ -9,7 +9,14 @@ protocol FeaturesFlowDelegate: AnyObject {
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool)
     func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool)
     func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool)
+    /// A payload arrived that carries no bandit definitions at all — neither plain nor encrypted.
+    func contextualBanditsCleared(isRemote: Bool)
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool)
+}
+
+extension FeaturesFlowDelegate {
+    /// Default no-op: only GrowthBookSDK owns bandit state.
+    func contextualBanditsCleared(isRemote: Bool) {}
 }
 
 /// View Model for Features
@@ -118,7 +125,8 @@ class FeaturesViewModel {
             }
         }
 
-        if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache) {
+        if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache),
+           !contextualBanditsData.isEmpty {
             if let encryptionKey, !encryptionKey.isEmpty {
                 if let encryptedString = String(data: contextualBanditsData, encoding: .utf8),
                    let contextualBandits = Crypto().getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
@@ -273,6 +281,13 @@ class FeaturesViewModel {
                     manager.saveContent(fileName: Constants.contextualBanditsCache, content: contextualBanditsData)
                 }
                 delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: true)
+            } else {
+                // The payload carries no bandit definitions. Without this branch a previously cached
+                // definition would survive both in memory and on disk, and rules would keep bucketing
+                // on stale weights and a stale banditVersion instead of falling back to the aggregate
+                // weights, which is the documented behaviour for a missing reference.
+                manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+                delegate?.contextualBanditsCleared(isRemote: true)
             }
         } else {
             let error: SDKError = .failedParsedData

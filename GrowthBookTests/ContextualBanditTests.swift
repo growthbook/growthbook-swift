@@ -801,3 +801,105 @@ class ContextualBanditTests: XCTestCase {
         )
     }
 }
+
+// MARK: - Payload lifecycle
+
+/// A payload that carries no bandit definitions has to clear what a previous one established. Left
+/// in place, a cached definition keeps rules bucketing on stale weights and a stale banditVersion
+/// instead of falling back to the aggregate weights, which is the documented behaviour for a
+/// reference that cannot be resolved.
+final class ContextualBanditPayloadLifecycleTests: XCTestCase {
+
+    private final class Capture: FeaturesFlowDelegate {
+        var applied: [JSON] = []
+        var clearedCount = 0
+        func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {}
+        func featuresAPIModelSuccessfully(model: FeaturesDataModel) {}
+        func featuresFetchFailed(error: SDKError, isRemote: Bool) {}
+        func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
+        func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {}
+        func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {}
+        func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) {}
+        func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {
+            applied.append(contextualBandits)
+        }
+        func contextualBanditsCleared(isRemote: Bool) { clearedCount += 1 }
+    }
+
+    private let withBandits = """
+    {"features":{"flag":{"defaultValue":true}},"contextualBandits":{"bandit-1":{"banditVersion":3}}}
+    """
+    private let withoutBandits = """
+    {"features":{"flag":{"defaultValue":true}}}
+    """
+
+    func testPayloadOmittingBanditsClearsCacheAndNotifies() {
+        let manager = CachingManager(apiKey: UUID().uuidString)
+        manager.clearCache()
+        let capture = Capture()
+        let vm = FeaturesViewModel(
+            delegate: capture,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: nil)),
+            cachingManager: manager,
+            ttlSeconds: 60
+        )
+
+        vm.prepareFeaturesData(data: Data(withBandits.utf8))
+        XCTAssertEqual(capture.applied.count, 1, "Precondition: the definition is applied")
+        XCTAssertFalse(manager.getContent(fileName: Constants.contextualBanditsCache)?.isEmpty ?? true,
+                       "Precondition: the definition is cached")
+
+        vm.prepareFeaturesData(data: Data(withoutBandits.utf8))
+
+        XCTAssertEqual(capture.clearedCount, 1, "Omitting the definitions must be reported, not ignored")
+        XCTAssertEqual(capture.applied.count, 1, "Nothing new was applied")
+        XCTAssertTrue(manager.getContent(fileName: Constants.contextualBanditsCache)?.isEmpty ?? true,
+                      "The cached definition must not survive a payload that dropped it")
+    }
+
+    /// A cleared cache must not be read back as a definition on the next start.
+    func testClearedCacheIsNotReappliedFromDisk() {
+        let key = UUID().uuidString
+        let manager = CachingManager(apiKey: key)
+        manager.clearCache()
+        let first = Capture()
+        let vm = FeaturesViewModel(
+            delegate: first,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: nil)),
+            cachingManager: manager,
+            ttlSeconds: 60
+        )
+        vm.prepareFeaturesData(data: Data(withBandits.utf8))
+        vm.prepareFeaturesData(data: Data(withoutBandits.utf8))
+
+        // A fresh view model reads the cache on init, the way a cold start does.
+        let second = Capture()
+        _ = FeaturesViewModel(
+            delegate: second,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: nil)),
+            cachingManager: CachingManager(apiKey: key),
+            ttlSeconds: 60
+        )
+
+        XCTAssertTrue(second.applied.isEmpty,
+                      "An emptied cache entry must not be decoded back into a definition")
+    }
+
+    /// The SDK side: clearing drops the live value so evaluation falls back.
+    func testSDKDropsLiveValueWhenDefinitionsDisappear() {
+        let sdk = GrowthBookBuilder(
+            features: Data("{\"features\":{}}".utf8),
+            attributes: ["id": "user-1"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        ).initializer()
+
+        sdk.contextualBanditsFetchedSuccessfully(contextualBandits: JSON(["bandit-1": ["banditVersion": 3]]), isRemote: true)
+        XCTAssertNotNil(sdk.getGBContext().contextualBandits, "Precondition: a definition is live")
+
+        sdk.contextualBanditsCleared(isRemote: true)
+
+        XCTAssertNil(sdk.getGBContext().contextualBandits,
+                     "With no definitions left, rules must fall back to aggregate weights")
+    }
+}

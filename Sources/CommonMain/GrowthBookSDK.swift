@@ -795,6 +795,26 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
+    func contextualBanditsCleared(isRemote: Bool) {
+        withLock {
+            let stableSession = contextManager.getGlobalConfig().stableSession
+
+            // Same reasoning as applying new weights mid-session: dropping the definitions would
+            // re-bucket users. The cache is already cleared, so the next session starts without them.
+            if stableSession && banditsEstablished {
+                logger.info("stableSession: contextual bandits removed upstream — cleared from cache for next session, still applied now")
+                return
+            }
+
+            guard contextManager.getEvaluationData().contextualBandits != nil else { return }
+
+            logger.info("Contextual bandit definitions are gone from the payload — rules fall back to aggregate weights")
+            contextManager.updateEvalData { data in
+                data.contextualBandits = nil
+            }
+        }
+    }
+
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation
     @objc public func refreshForRemoteEval() {
         withLock {
