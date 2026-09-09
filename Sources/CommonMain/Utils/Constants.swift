@@ -8,6 +8,8 @@ public enum Constants {
     public static let featureCache = "FeatureCache"
     
     public static let savedGroupsCache = "SavedGroupsCache"
+
+    public static let contextualBanditsCache = "ContextualBanditsCache"
 }
 
 /// Type Alias for Feature in GrowthBook
@@ -86,6 +88,7 @@ public enum SDKErrorCode: String {
     case failedMissingKey
     case failedEncryptedFeatures
     case failedEncryptedSavedGroups
+    case failedEncryptedContextualBandits
     case failedParsedEncryptedData
     case failedToFetchData
     case invalidAPIURL
@@ -98,6 +101,7 @@ public enum SDKErrorCode: String {
     static let failedMissingKey = SDKError(code: .failedMissingKey)
     static let failedEncryptedFeatures = SDKError(code: .failedEncryptedFeatures)
     static let failedEncryptedSavedGroups = SDKError(code: .failedEncryptedSavedGroups)
+    static let failedEncryptedContextualBandits = SDKError(code: .failedEncryptedContextualBandits)
     static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
     static let failedToFetchData = SDKError(code: .failedToFetchData)
     static let invalidAPIURL = SDKError(code: .invalidAPIURL)

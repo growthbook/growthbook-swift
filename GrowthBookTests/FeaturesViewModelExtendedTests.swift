@@ -10,9 +10,11 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         var successCount = 0
         var failCount = 0
         var savedGroupsCount = 0
+        var contextualBanditsCount = 0
         var lastError: SDKError?
         var lastFeatures: Features?
         var lastSavedGroups: JSON?
+        var lastContextualBandits: JSON?
 
         func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
             successCount += 1
@@ -27,6 +29,11 @@ class FeaturesViewModelExtendedTests: XCTestCase {
             lastSavedGroups = savedGroups
         }
         func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) { failCount += 1 }
+        func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {
+            contextualBanditsCount += 1
+            lastContextualBandits = contextualBandits
+        }
+        func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) { failCount += 1 }
         func featuresAPIModelSuccessfully(model: FeaturesDataModel) {}
 
         // featuresUpdateIsComplete

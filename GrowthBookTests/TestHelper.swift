@@ -46,6 +46,20 @@ class TestHelper {
         return array?.arrayValue
     }
 
+    /// Condition cases this fork keeps that the canonical spec does not carry.
+    ///
+    /// They live in their own file so that `Source/json.json` stays a verbatim copy of upstream:
+    /// bumping the corpus is then a file swap that cannot silently drop them — which is exactly what
+    /// the 0.8.0 dry run did before this split.
+    func getLocalEvalConditionData() -> [JSON]? {
+        loadJSON(named: "local-cases", failIfMissing: true)?.dictionaryValue["evalCondition"]?.arrayValue
+    }
+
+    func getContextualBanditData() -> [JSON]? {
+        let array = testData?.dictionaryValue["contextualBandit"]
+        return array?.arrayValue
+    }
+
     func getRunExperimentData() -> [JSON]? {
         let array = testData?.dictionaryValue["run"]
         return array?.arrayValue
@@ -94,18 +108,29 @@ class TestHelper {
     /// testing none of the spec. Both bundles are consulted now, and a miss fails loudly instead of
     /// degrading to a no-op.
     private func loadTestData() -> JSON? {
+        loadJSON(named: "json", failIfMissing: true)
+    }
+
+    /// Reads a fixture file from whichever bundle carries it.
+    ///
+    /// `failIfMissing` is on for the conformance corpus, because every spec-driven test depends on
+    /// it and a silent miss reports success without evaluating anything.
+    private func loadJSON(named name: String, failIfMissing: Bool = false) -> JSON? {
         for bundle in Self.candidateBundles {
             guard
-                let path = bundle.path(forResource: "json", ofType: "json"),
+                let path = bundle.path(forResource: name, ofType: "json"),
                 let data = FileManager.default.contents(atPath: path),
-                let testData = try? JSON(data: data)
+                let json = try? JSON(data: data)
             else { continue }
 
-            return testData
+            return json
         }
 
-        XCTFail("Could not load the conformance fixtures (GrowthBookTests/Source/json.json). "
-                + "Every spec-driven test depends on them, so they must never be missing.")
+        if failIfMissing {
+            XCTFail("Could not load fixtures (GrowthBookTests/Source/\(name).json). "
+                    + "Spec-driven tests depend on them, so a missing file must fail rather than "
+                    + "quietly reduce the case set.")
+        }
         return nil
     }
 

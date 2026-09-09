@@ -46,6 +46,12 @@ import Foundation
     public let phase: String?
     /// Custom fields defined in the GrowthBook UI
     public let customFields: [String: JSON]?
+    /// The contextual bandit leaf selected for this user, when the originating feature rule
+    /// referenced a contextual bandit. Set during evaluation, not part of the API payload.
+    ///
+    /// Cleared again when the user was not hash-bucketed into the experiment, so a selection is
+    /// only ever exposed alongside an actual exposure.
+    public var contextualBandit: ContextualBandit?
 
     public init(key: String,
                 variations: [Any] = [],
@@ -234,6 +240,13 @@ import Foundation
     public let featureId: String?
     /// If sticky bucketing was used to assign a variation
     public let stickyBucketUsed: Bool?
+    /// The contextual bandit leaf whose weights were applied, or `-1` if a definition was found but
+    /// no leaf matched. `nil` when the experiment is not a contextual bandit.
+    public var leafId: Int?
+    /// The variation weights the contextual bandit applied for this user.
+    public var variationWeights: [Float]?
+    /// The version of the backend-computed weights that produced this assignment.
+    public var banditVersion: Int?
 
     public init(inExperiment: Bool,
          variationId: Int,
@@ -274,5 +287,10 @@ import Foundation
         hashUsed = json["hashUsed"]?.boolValue
         featureId = json["featureId"]?.stringValue
         stickyBucketUsed = json["stickyBucketUsed"]?.boolValue
+        leafId = json["leafId"]?.int
+        banditVersion = json["banditVersion"]?.int
+        if let variationWeights = json["variationWeights"]?.array {
+            self.variationWeights = JSON.convertToArrayFloat(jsonArray: variationWeights)
+        }
     }
 }
