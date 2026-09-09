@@ -4,6 +4,18 @@ import Foundation
     func getAssignments(attributeName: String, attributeValue: String, completion: @escaping (StickyAssignmentsDocument?, Error?) -> Void)
     func saveAssignments(doc: StickyAssignmentsDocument, completion: @escaping (Error?) -> Void)
     func getAllAssignments(attributes: [String: String], completion: @escaping ([String: StickyAssignmentsDocument]?, Error?) -> Void)
+
+    /// Removes the stored document for a single `attributeName||attributeValue` pair.
+    ///
+    /// Optional: custom services written against earlier SDK versions keep compiling. When it is
+    /// not implemented, `GrowthBookSDK.clearStickyBuckets(forAttribute:value:)` only drops the
+    /// in-memory copy and logs a warning — the persisted document reappears on the next refresh.
+    @objc optional func deleteAssignments(attributeName: String, attributeValue: String, completion: @escaping (Error?) -> Void)
+
+    /// Removes every stored document owned by this service.
+    ///
+    /// Optional, with the same caveat as `deleteAssignments(attributeName:attributeValue:completion:)`.
+    @objc optional func clearAllAssignments(completion: @escaping (Error?) -> Void)
 }
 
 @objc public class StickyBucketService: NSObject, StickyBucketServiceProtocol {
@@ -60,6 +72,20 @@ import Foundation
         completion(docs, nil)
     }
     
+    public func deleteAssignments(attributeName: String,
+                                  attributeValue: String,
+                                  completion: @escaping (Error?) -> Void) {
+        let key = "\(attributeName)||\(attributeValue)"
+
+        localStorage.removeContent(fileName: prefix + key)
+        completion(nil)
+    }
+
+    public func clearAllAssignments(completion: @escaping (Error?) -> Void) {
+        localStorage.removeContents(withPrefix: prefix)
+        completion(nil)
+    }
+
     private func getAssignmentsSync(attributeName: String, attributeValue: String) -> StickyAssignmentsDocument? {
         let key = "\(attributeName)||\(attributeValue)"
                         

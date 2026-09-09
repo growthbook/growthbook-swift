@@ -53,6 +53,36 @@ class CachingManagerTest: XCTestCase {
         }
     }
     
+    func testRemoveContentRemovesOnlyOneFile() throws {
+        let data = try JSON(["GrowthBook": "GrowthBook"]).rawData()
+        manager.saveContent(fileName: "gb-features.txt", content: data)
+        manager.saveContent(fileName: "gb-other.txt", content: data)
+
+        manager.removeContent(fileName: "gb-features.txt")
+
+        XCTAssertNil(manager.getContent(fileName: "gb-features.txt"))
+        XCTAssertNotNil(manager.getContent(fileName: "gb-other.txt"))
+    }
+
+    func testRemoveContentForMissingFileDoesNothing() {
+        manager.removeContent(fileName: "never-written.txt")
+
+        XCTAssertNil(manager.getContent(fileName: "never-written.txt"))
+    }
+
+    func testRemoveContentsWithPrefixRemovesMatchingFilesOnly() throws {
+        let data = try JSON(["GrowthBook": "GrowthBook"]).rawData()
+        manager.saveContent(fileName: "gbStickyBuckets__id||user-1.txt", content: data)
+        manager.saveContent(fileName: "gbStickyBuckets__id||user-2.txt", content: data)
+        manager.saveContent(fileName: "gb-features.txt", content: data)
+
+        manager.removeContents(withPrefix: "gbStickyBuckets__")
+
+        XCTAssertNil(manager.getContent(fileName: "gbStickyBuckets__id||user-1.txt"))
+        XCTAssertNil(manager.getContent(fileName: "gbStickyBuckets__id||user-2.txt"))
+        XCTAssertNotNil(manager.getContent(fileName: "gb-features.txt"), "features cache must survive a sticky-only purge")
+    }
+
     override func tearDown() {
            manager.clearCache()
            super.tearDown()
