@@ -533,7 +533,9 @@ class ConditionEvaluator {
             
             return negate ? !isMatch : isMatch
         } catch {
-            return false
+            // An invalid/incomparable pattern can't match, so the negated
+            // operator ($notRegex/$notRegexi) should report "not matching" as true.
+            return negate
         }
     }
 
