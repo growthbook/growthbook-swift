@@ -10,6 +10,10 @@ public enum Constants {
     public static let savedGroupsCache = "SavedGroupsCache"
 
     public static let contextualBanditsCache = "ContextualBanditsCache"
+
+    /// Error domain the network layer uses when it turns an HTTP status into an `NSError`, so the
+    /// status can be read back from `NSError.code`.
+    static let httpErrorDomain = "HTTPError"
 }
 
 /// Type Alias for Feature in GrowthBook
