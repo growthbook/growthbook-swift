@@ -310,6 +310,26 @@ class ConditionEvaluator {
         default: break
         }
 
+        // The version operators coerce their operands themselves (numbers become strings, everything
+        // else becomes "0"), so they are handled before the dispatch below, which branches on the
+        // shape of the attribute and would otherwise leave them unreachable for array or absent
+        // attributes and skip them whenever the condition value is not a string.
+        switch operatorKey {
+        case "$veq":
+            return Utils.paddedVersionString(input: attributeValue) == Utils.paddedVersionString(input: conditionValue)
+        case "$vne":
+            return Utils.paddedVersionString(input: attributeValue) != Utils.paddedVersionString(input: conditionValue)
+        case "$vgt":
+            return Utils.paddedVersionString(input: attributeValue) > Utils.paddedVersionString(input: conditionValue)
+        case "$vgte":
+            return Utils.paddedVersionString(input: attributeValue) >= Utils.paddedVersionString(input: conditionValue)
+        case "$vlt":
+            return Utils.paddedVersionString(input: attributeValue) < Utils.paddedVersionString(input: conditionValue)
+        case "$vlte":
+            return Utils.paddedVersionString(input: attributeValue) <= Utils.paddedVersionString(input: conditionValue)
+        default: break
+        }
+
         /// There are three operators where conditionValue is an array
         if let conditionValue = conditionJson.array, attributeValue != .null {
             switch operatorKey {
@@ -353,30 +373,6 @@ class ConditionEvaluator {
             }
         } else {
             switch operatorKey {
-            case "$veq":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.paddedVersionString(input: attributeString) == Utils.paddedVersionString(input: conditionString)
-                }
-            case "$vne":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.paddedVersionString(input: attributeString) != Utils.paddedVersionString(input: conditionString)
-                }
-            case "$vgt":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.paddedVersionString(input: attributeString) > Utils.paddedVersionString(input: conditionString)
-                }
-            case "$vgte":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.paddedVersionString(input: attributeString) >= Utils.paddedVersionString(input: conditionString)
-                }
-            case "$vlt":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.paddedVersionString(input: attributeString) < Utils.paddedVersionString(input: conditionString)
-                }
-            case "$vlte":
-                if let attributeString = attributeValue.string, let conditionString = conditionValue.string {
-                    return Utils.paddedVersionString(input: attributeString) <= Utils.paddedVersionString(input: conditionString)
-                }
             // Evaluate EQ operator - whether condition equals to attribute
             case "$eq":
                 return  attributeValue == conditionValue

@@ -205,8 +205,42 @@ class UtilsTests: XCTestCase {
         let startValue = "v1.2.3-rc.1+build123"
         let expectedValue = "    1-    2-    3-rc-    1"
         let endValue = Utils.paddedVersionString(input: startValue)
-        
+
         XCTAssertEqual(endValue, expectedValue)
+    }
+
+    /// Numeric parts wider than the padding target used to trap in `String(repeating:count:)`
+    func testPaddedVersionStringWithOversizedNumericParts() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "123456789"), "123456789")
+        XCTAssertEqual(Utils.paddedVersionString(input: "10222.1.1"), "10222-    1-    1-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: "20260910.1.0-rc.123456"), "20260910-    1-    0-rc-123456")
+    }
+
+    /// Only a leading `v` is stripped - a `v` inside a pre-release tag must survive
+    func testPaddedVersionStringKeepsInnerLetterV() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3-dev"), "    1-    2-    3-dev")
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.0.0-alpha.v1"), "    1-    0-    0-alpha-v1")
+    }
+
+    /// Empty parts are kept, so the part count (and the `~` suffix) matches the other SDKs
+    func testPaddedVersionStringKeepsEmptyParts() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1..2"), "    1--    2-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: "-1.2.3"), "-    1-    2-    3")
+    }
+
+    /// Non-ASCII digits are pre-release tags, not numbers
+    func testPaddedVersionStringDoesNotPadNonAsciiDigits() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3-٣"), "    1-    2-    3-٣")
+    }
+
+    func testPaddedVersionStringCoercesNonStringValues() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON(2)), "    2")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON(1.5)), "    1-    5")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON("1.2.3")), "    1-    2-    3-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON("")), "    0")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON(true)), "    0")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON.null), "    0")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON([1, 2])), "    0")
     }
     
     func testDecrypt() throws {
