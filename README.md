@@ -458,6 +458,56 @@ If you would like to implement Sticky Bucketing while using Remote Evaluation, y
 
 
 
+## Contextual Bandits
+
+Contextual bandits reallocate experiment traffic toward the best-performing variation *per user segment*. All of the optimisation happens on the GrowthBook backend — the SDK only consumes the ready weights, so no configuration is required. Support is automatic as soon as your payload contains contextual bandits.
+
+The feature payload gains a `contextualBandits` map (or `encryptedContextualBandits` when the endpoint is encrypted), keyed by bandit ref:
+
+```json
+{
+  "features": { "...": {} },
+  "contextualBandits": {
+    "bandit_abc123": {
+      "banditVersion": 4,
+      "contexts": [
+        { "leafId": 0, "condition": { "country": "US" }, "weights": [0.7, 0.3] },
+        { "leafId": 1, "condition": { "country": "CA" }, "weights": [0.2, 0.8] }
+      ]
+    }
+  }
+}
+```
+
+A feature rule opts in with `contextualBanditRef` and carries its variations under `contextualVariations`. At evaluation time the SDK walks the bandit's `contexts` in order, picks the first leaf whose `condition` matches the user's attributes, applies that leaf's `weights`, and then buckets the user through the normal hashing mechanism.
+
+The selection is reported on `ExperimentResult` so it can be attributed in your tracking callback:
+
+```swift
+var sdkInstance: GrowthBookSDK = GrowthBookBuilder(
+    apiHost: <GrowthBook/API_KEY>,
+    clientKey: <GrowthBook/ClientKey>,
+    attributes: <[String: Any]>,
+    trackingCallback: { experiment, experimentResult in
+        // nil unless the experiment is a contextual bandit
+        let leafId = experimentResult.leafId
+        let weights = experimentResult.variationWeights
+        let banditVersion = experimentResult.banditVersion
+    },
+    refreshHandler: { error in })
+    .initializer()
+```
+
+`leafId`, `variationWeights` and `banditVersion` are only set when the user was actually hash-bucketed into the experiment — a forced variation, a QA-mode assignment or a user filtered out by coverage leaves them `nil`.
+
+**Fallback behaviour**
+
+- No leaf condition matches the user → `leafId` is `-1` and the rule's own (aggregate) weights are used, or equal weights if the rule has none.
+- `contextualBanditRef` points at a definition missing from the payload → the rule is evaluated as a plain experiment with its own weights, and no bandit metadata is reported.
+
+Aggregate (non-contextual) bandits need nothing from this: they are delivered as ordinary experiments with server-computed weights and work through the existing bucketing and sticky bucketing paths.
+
+
 ## Sticky Bucketing
 
 Sticky bucketing ensures that users see the same experiment variant, even when user session, user login status, or experiment parameters change. See the [Sticky Bucketing docs](/app/sticky-bucketing) for more information. If your organization and experiment supports sticky bucketing, you must implement an instance of the `StickyBucketService` to use Sticky Bucketing. For simple bucket persistence using the browser's LocalStorage (can be polyfilled for other environments).

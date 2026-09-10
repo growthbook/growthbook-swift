@@ -1,0 +1,53 @@
+{
+  "_note": "Cases this fork keeps that the canonical GrowthBook spec does not carry. Kept in a separate file so bumping Source/json.json stays a verbatim copy of upstream and cannot silently drop them, which is exactly what happened during the 0.8.0 dry run. The $notRegex/$notRegexi operators are absent from packages/sdk-js/test/cases.json and from mongrule.ts, but growthbook#172 keeps them in this SDK for older stored configs.",
+  "evalCondition": [
+    [
+      "$notRegex - pass",
+      {
+        "userAgent": {
+          "$notRegex": "(Mobile|Tablet)"
+        }
+      },
+      {
+        "userAgent": "Chrome Desktop Browser"
+      },
+      true
+    ],
+    [
+      "$notRegex - fail",
+      {
+        "userAgent": {
+          "$notRegex": "(Mobile|Tablet)"
+        }
+      },
+      {
+        "userAgent": "Android Mobile Browser"
+      },
+      false
+    ],
+    [
+      "$notRegexi - pass",
+      {
+        "userAgent": {
+          "$notRegexi": "(mobile|tablet)"
+        }
+      },
+      {
+        "userAgent": "Chrome Desktop Browser"
+      },
+      true
+    ],
+    [
+      "$notRegexi - fail",
+      {
+        "userAgent": {
+          "$notRegexi": "(mobile|tablet)"
+        }
+      },
+      {
+        "userAgent": "Android Mobile Browser"
+      },
+      false
+    ]
+  ]
+}

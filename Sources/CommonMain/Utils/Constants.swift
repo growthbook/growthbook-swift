@@ -9,6 +9,8 @@ public enum Constants {
     
     public static let savedGroupsCache = "SavedGroupsCache"
 
+    public static let contextualBanditsCache = "ContextualBanditsCache"
+
     /// Error domain the network layer uses when it turns an HTTP status into an `NSError`, so the
     /// status can be read back from `NSError.code`.
     static let httpErrorDomain = "HTTPError"
@@ -90,6 +92,7 @@ public enum SDKErrorCode: String {
     case failedMissingKey
     case failedEncryptedFeatures
     case failedEncryptedSavedGroups
+    case failedEncryptedContextualBandits
     case failedParsedEncryptedData
     case failedToFetchData
     case invalidAPIURL
@@ -102,6 +105,7 @@ public enum SDKErrorCode: String {
     static let failedMissingKey = SDKError(code: .failedMissingKey)
     static let failedEncryptedFeatures = SDKError(code: .failedEncryptedFeatures)
     static let failedEncryptedSavedGroups = SDKError(code: .failedEncryptedSavedGroups)
+    static let failedEncryptedContextualBandits = SDKError(code: .failedEncryptedContextualBandits)
     static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
     static let failedToFetchData = SDKError(code: .failedToFetchData)
     static let invalidAPIURL = SDKError(code: .invalidAPIURL)

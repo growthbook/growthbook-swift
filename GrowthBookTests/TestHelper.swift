@@ -1,4 +1,5 @@
 import Foundation
+import XCTest
 
 @testable import GrowthBook
 
@@ -45,6 +46,20 @@ class TestHelper {
         return array?.arrayValue
     }
 
+    /// Condition cases this fork keeps that the canonical spec does not carry.
+    ///
+    /// They live in their own file so that `Source/json.json` stays a verbatim copy of upstream:
+    /// bumping the corpus is then a file swap that cannot silently drop them — which is exactly what
+    /// the 0.8.0 dry run did before this split.
+    func getLocalEvalConditionData() -> [JSON]? {
+        loadJSON(named: "local-cases", failIfMissing: true)?.dictionaryValue["evalCondition"]?.arrayValue
+    }
+
+    func getContextualBanditData() -> [JSON]? {
+        let array = testData?.dictionaryValue["contextualBandit"]
+        return array?.arrayValue
+    }
+
     func getRunExperimentData() -> [JSON]? {
         let array = testData?.dictionaryValue["run"]
         return array?.arrayValue
@@ -84,16 +99,48 @@ class TestHelper {
         testData?.dictionaryValue["decrypt"]?.arrayValue
     }
 
+    /// Loads the vendored conformance fixtures.
+    ///
+    /// The bundle differs per harness: SwiftPM puts declared resources in `Bundle.module`, while the
+    /// Xcode test target ships them inside the test bundle itself. Resolving only through
+    /// `Bundle(for:)` found nothing under SwiftPM, so every fixture-driven suite silently returned
+    /// early and reported success without evaluating a single case — `swift test` looked green while
+    /// testing none of the spec. Both bundles are consulted now, and a miss fails loudly instead of
+    /// degrading to a no-op.
     private func loadTestData() -> JSON? {
-        let bundle = Bundle(for: type(of: self))
-        guard
-            let path = bundle.path(forResource: "json", ofType: "json"),
-            let data = FileManager.default.contents(atPath: path)
-        else { return nil }
+        loadJSON(named: "json", failIfMissing: true)
+    }
 
-        let test = try? JSON(data: data)
+    /// Reads a fixture file from whichever bundle carries it.
+    ///
+    /// `failIfMissing` is on for the conformance corpus, because every spec-driven test depends on
+    /// it and a silent miss reports success without evaluating anything.
+    private func loadJSON(named name: String, failIfMissing: Bool = false) -> JSON? {
+        for bundle in Self.candidateBundles {
+            guard
+                let path = bundle.path(forResource: name, ofType: "json"),
+                let data = FileManager.default.contents(atPath: path),
+                let json = try? JSON(data: data)
+            else { continue }
 
-        return test
+            return json
+        }
+
+        if failIfMissing {
+            XCTFail("Could not load fixtures (GrowthBookTests/Source/\(name).json). "
+                    + "Spec-driven tests depend on them, so a missing file must fail rather than "
+                    + "quietly reduce the case set.")
+        }
+        return nil
+    }
+
+    private static var candidateBundles: [Bundle] {
+        var bundles: [Bundle] = []
+        #if SWIFT_PACKAGE
+        bundles.append(.module)
+        #endif
+        bundles.append(Bundle(for: TestHelper.self))
+        return bundles
     }
 }
 

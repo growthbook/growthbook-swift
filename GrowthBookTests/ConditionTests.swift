@@ -7,7 +7,9 @@ class ConditionTests: XCTestCase {
     var evalConditions: [JSON]?
 
     override func setUp() {
-        evalConditions = TestHelper().getEvalConditionData()
+        let helper = TestHelper()
+        // The canonical corpus plus the cases this fork keeps on its own (see getLocalEvalConditionData).
+        evalConditions = (helper.getEvalConditionData() ?? []) + (helper.getLocalEvalConditionData() ?? [])
     }
 
     func testConditions() throws {

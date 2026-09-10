@@ -293,7 +293,11 @@ public class Utils {
             let feature = features[id]
             if let rules = feature?.rules {
                 for rule in rules {
-                    if rule.variations != nil {
+                    // A contextual bandit rule carries its variations under contextualVariations, so
+                    // checking `variations` alone would leave its hash and fallback attributes
+                    // unregistered and the sticky bucket service would never be asked for that
+                    // experiment's assignment documents.
+                    if rule.variations != nil || rule.contextualVariations != nil {
                         attributes.insert(rule.hashAttribute ?? "id")
                         if let fallbackAttribute = rule.fallbackAttribute {
                             attributes.insert(fallbackAttribute)
@@ -447,7 +451,9 @@ public class Utils {
                                     url: context.url,
                                     trackingClosure: context.trackingClosure)
         
-        let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
+        let globalContext = GlobalContext(features: context.features,
+                                          savedGroups: context.savedGroups,
+                                          contextualBandits: context.contextualBandits)
         
         // should create manual force features
             let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: context.forcedFeatureValues)
