@@ -11,11 +11,17 @@ class ExperimentEvaluatorTests: XCTestCase {
         isEnabled: Bool = true,
         isQaMode: Bool = false,
         url: String? = nil,
-        features: Features = [:]
+        features: Features = [:],
+        stickyBucketService: StickyBucketServiceProtocol? = nil
     ) -> EvalContext {
         let globalContext = GlobalContext(features: features)
         let userContext = UserContext(attributes: attributes, forcedVariations: forcedVariations)
-        let options = ClientOptions(isEnabled: isEnabled, stickyBucketService: nil, isQaMode: isQaMode, trackingClosure: { _, _ in })
+        let options = ClientOptions(
+            isEnabled: isEnabled,
+            stickyBucketService: stickyBucketService,
+            isQaMode: isQaMode,
+            trackingClosure: { _, _ in }
+        )
         options.url = url
         return EvalContext(globalContext: globalContext, userContext: userContext, stackContext: StackContext(), options: options)
     }
@@ -92,6 +98,43 @@ class ExperimentEvaluatorTests: XCTestCase {
         let exp = Experiment(key: "exp", variations: [JSON("a"), JSON("b")], hashAttribute: "custom-id")
         let result = evaluate(exp, context: makeContext(attributes: JSON(["id": "user-1"])))
         XCTAssertFalse(result.inExperiment)
+    }
+
+    func testFallbackAttributeUsedWhenStickyBucketingDefaultsEnabled() {
+        let exp = Experiment(
+            key: "exp",
+            variations: [JSON("a"), JSON("b")],
+            hashAttribute: "id",
+            fallBackAttribute: "anonymousId",
+            hashVersion: 2,
+            coverage: 1.0
+        )
+        let result = evaluate(
+            exp,
+            context: makeContext(
+                attributes: JSON(["anonymousId": "anon-1"]),
+                stickyBucketService: NoopStickyBucketService()
+            )
+        )
+
+        XCTAssertTrue(result.inExperiment)
+        XCTAssertEqual(result.hashAttribute, "anonymousId")
+    }
+
+    func testExperimentUsesExplicitSeedBeforeExperimentKey() {
+        // For user 4, v1(custom-seed)=0.242 while v1(experiment-key)=0.966.
+        let exp = Experiment(
+            key: "experiment-key",
+            variations: [JSON("included"), JSON("excluded")],
+            hashVersion: 1,
+            ranges: [BucketRange(number1: 0.0, number2: 0.5)],
+            seed: "custom-seed"
+        )
+        let result = evaluate(exp, context: makeContext(attributes: JSON(["id": "4"])))
+
+        XCTAssertTrue(result.inExperiment)
+        XCTAssertEqual(result.value, JSON("included"))
+        XCTAssertEqual(result.bucket, 0.242)
     }
 
     // MARK: - Condition fails

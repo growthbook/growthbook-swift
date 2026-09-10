@@ -8,6 +8,8 @@ public enum Constants {
     public static let featureCache = "FeatureCache"
     
     public static let savedGroupsCache = "SavedGroupsCache"
+
+    public static let contextualBanditsCache = "ContextualBanditsCache"
 }
 
 /// Type Alias for Feature in GrowthBook
@@ -55,12 +57,13 @@ public struct BucketRange: Codable {
     }
     
     init(json: JSON) {
-        if json.arrayValue.isEmpty {
+        let values = json.arrayValue
+        if values.count < 2 {
             number1 = 0
             number2 = 0
         } else {
-            self.number1 = json.arrayValue[0].floatValue
-            self.number2 = json.arrayValue[1].floatValue
+            self.number1 = values[0].floatValue
+            self.number2 = values[1].floatValue
         }
     }
 
@@ -85,6 +88,7 @@ public enum SDKErrorCode: String {
     case failedMissingKey
     case failedEncryptedFeatures
     case failedEncryptedSavedGroups
+    case failedEncryptedContextualBandits
     case failedParsedEncryptedData
     case failedToFetchData
     case invalidAPIURL
@@ -97,6 +101,7 @@ public enum SDKErrorCode: String {
     static let failedMissingKey = SDKError(code: .failedMissingKey)
     static let failedEncryptedFeatures = SDKError(code: .failedEncryptedFeatures)
     static let failedEncryptedSavedGroups = SDKError(code: .failedEncryptedSavedGroups)
+    static let failedEncryptedContextualBandits = SDKError(code: .failedEncryptedContextualBandits)
     static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
     static let failedToFetchData = SDKError(code: .failedToFetchData)
     static let invalidAPIURL = SDKError(code: .invalidAPIURL)

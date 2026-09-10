@@ -7,7 +7,16 @@ protocol FeaturesFlowDelegate: AnyObject {
     func featuresFetchFailed(error: SDKError, isRemote: Bool)
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool)
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool)
+    func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool)
+    func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool)
+    /// A payload arrived that carries no bandit definitions at all — neither plain nor encrypted.
+    func contextualBanditsCleared(isRemote: Bool)
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool)
+}
+
+extension FeaturesFlowDelegate {
+    /// Default no-op: only GrowthBookSDK owns bandit state.
+    func contextualBanditsCleared(isRemote: Bool) {}
 }
 
 /// View Model for Features
@@ -56,7 +65,8 @@ class FeaturesViewModel {
         sseHandler = streamingUpdate
         
         streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
-            guard let jsonData = data?.data(using: .utf8) else { return }
+            guard let data = data, !data.isEmpty,
+                  let jsonData = data.data(using: .utf8) else { return }
             self?.prepareFeaturesData(data: jsonData)
         }
         streamingUpdate.connect()
@@ -112,6 +122,18 @@ class FeaturesViewModel {
                 }
             } else if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
+            }
+        }
+
+        if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache),
+           !contextualBanditsData.isEmpty {
+            if let encryptionKey, !encryptionKey.isEmpty {
+                if let encryptedString = String(data: contextualBanditsData, encoding: .utf8),
+                   let contextualBandits = Crypto().getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
+                    delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
+                }
+            } else if let contextualBandits = try? JSONDecoder().decode(JSON.self, from: contextualBanditsData) {
+                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
             }
         }
         return occurredError
@@ -236,6 +258,36 @@ class FeaturesViewModel {
                     manager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
+            }
+
+            if let encryptedContextualBandits = jsonPetitions.encryptedContextualBandits, !encryptedContextualBandits.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+                let crypto = Crypto()
+                if let contextualBandits = crypto.getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedContextualBandits, encryptionKey: encryptionKey) {
+                    if let encryptedContextualBanditsData = encryptedContextualBandits.data(using: .utf8) {
+                        manager.saveContent(fileName: Constants.contextualBanditsCache, content: encryptedContextualBanditsData)
+                    } else {
+                        logger.error("Failed encode contextual bandits")
+                    }
+                    delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: true)
+                } else {
+                    let error: SDKError = .failedEncryptedContextualBandits
+                    delegate?.contextualBanditsFetchFailed(error: error, isRemote: true)
+                    occurredError = error
+                    logger.error("Failed get contextual bandits from encrypted contextual bandits")
+                    return
+                }
+            } else if let contextualBandits = jsonPetitions.contextualBandits {
+                if let contextualBanditsData = try? JSONEncoder().encode(contextualBandits) {
+                    manager.saveContent(fileName: Constants.contextualBanditsCache, content: contextualBanditsData)
+                }
+                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: true)
+            } else {
+                // The payload carries no bandit definitions. Without this branch a previously cached
+                // definition would survive both in memory and on disk, and rules would keep bucketing
+                // on stale weights and a stale banditVersion instead of falling back to the aggregate
+                // weights, which is the documented behaviour for a missing reference.
+                manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+                delegate?.contextualBanditsCleared(isRemote: true)
             }
         } else {
             let error: SDKError = .failedParsedData

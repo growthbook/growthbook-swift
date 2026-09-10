@@ -38,6 +38,14 @@ class UtilsExtendedTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 
+    func testMalformedSingleValueRangeMatchesNobody() {
+        let range = BucketRange(json: JSON([0.5]))
+
+        XCTAssertEqual(range.number1, 0)
+        XCTAssertEqual(range.number2, 0)
+        XCTAssertFalse(Utils.inRange(n: 0.5, range: range))
+    }
+
     // MARK: - isFilteredOut
 
     func testIsFilteredOutReturnsFalseWhenHashInRange() {
@@ -67,6 +75,30 @@ class UtilsExtendedTests: XCTestCase {
     func testIsFilteredOutReturnsFalseForEmptyFilters() {
         let attributes = JSON(["id": "anything"])
         XCTAssertFalse(Utils.isFilteredOut(filters: [], attributes: attributes))
+    }
+
+    func testIsFilteredOutUsesEachFiltersHashAttribute() {
+        let attributes = JSON(["userId": "user-1"])
+        let filter = Filter(
+            attribute: "userId",
+            seed: "my-seed",
+            hashVersion: 2,
+            ranges: [BucketRange(number1: 0.0, number2: 1.0)],
+            fallbackAttribute: nil
+        )
+        XCTAssertFalse(Utils.isFilteredOut(filters: [filter], attributes: attributes))
+    }
+
+    func testIsFilteredOutReturnsTrueWhenHashAttributeIsMissing() {
+        let attributes = JSON(["id": "user-1"])
+        let filter = Filter(
+            attribute: "userId",
+            seed: "my-seed",
+            hashVersion: 2,
+            ranges: [BucketRange(number1: 0.0, number2: 1.0)],
+            fallbackAttribute: nil
+        )
+        XCTAssertTrue(Utils.isFilteredOut(filters: [filter], attributes: attributes))
     }
 
     // MARK: - isIncludedInRollout
@@ -146,6 +178,18 @@ class UtilsExtendedTests: XCTestCase {
             hashVersion: 1
         )
         XCTAssertTrue(withFallback)
+    }
+
+    func testIsIncludedInRolloutReturnsFalseWhenHashAttributeIsMissing() {
+        XCTAssertFalse(Utils.isIncludedInRollout(
+            attributes: JSON(["email": "user@example.com"]),
+            seed: "seed",
+            hashAttribute: "id",
+            fallbackAttribute: nil,
+            range: BucketRange(number1: 0.0, number2: 1.0),
+            coverage: nil,
+            hashVersion: 2
+        ))
     }
 
     // MARK: - getHashAttribute

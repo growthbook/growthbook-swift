@@ -176,6 +176,7 @@ class ExperimentEvaluator {
         let userInExperiment = result.inExperiment
         if experimentIsActive && userInExperiment && !ExperimentHelper.shared.isTracked(experiment, result) {
             context.options.trackingClosure(experiment, result)
+            context.options.pluginRegistry.onExperimentViewed(experiment: experiment, result: result, attributes: context.userContext.attributes)
         }
 
         // Return (in experiment, assigned variation)
@@ -223,11 +224,19 @@ class ExperimentEvaluator {
         if let passthrough = meta?.passthrough {
             result.passthrough = passthrough
         }
-        
+
+        // Surface the contextual bandit selection for tracking, but only for a real exposure:
+        // a forced, filtered-out or QA-mode assignment did not use the bandit's weights.
+        if let contextualBandit = experiment.contextualBandit, hashUsed, inExperiment {
+            result.leafId = contextualBandit.leafId
+            result.variationWeights = contextualBandit.variationWeights
+            result.banditVersion = contextualBandit.banditVersion
+        }
+
         return result
     }
     
     private func isStickyBucketingEnabledForExperiment(context: EvalContext, experiment: Experiment) -> Bool {
-        return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? true))
+        return (context.options.stickyBucketService != nil && !(experiment.disableStickyBucketing ?? false))
     }
 }

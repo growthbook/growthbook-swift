@@ -25,6 +25,8 @@ jobs:
       with:
         useConfigFile: true
         configFilePath: ./.github/gitversion.yml
+    - name: Update SDK version
+      run: sed -i '' "s/internal let gbSdkVersion = \".*\"/internal let gbSdkVersion = \"${{ steps.gitversion.outputs.SemVer }}\"/" Sources/CommonMain/Plugins/SDKVersion.swift
     - name: Select Xcode
       run: sudo xcode-select -switch /Applications/Xcode_15.2.app
     - name: Run Unit Test
