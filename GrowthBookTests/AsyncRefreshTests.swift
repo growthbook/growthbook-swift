@@ -134,4 +134,126 @@ final class AsyncRefreshTests: XCTestCase {
     private func sdk_clearCache() {
         CachingManager(apiKey: clientKey).clearCache()
     }
+
+    /// The reviewer's scenario on #179: two overlapping refreshes with opposite results, completing
+    /// in reverse order. Each caller must see the outcome of the request it started — before the
+    /// waiters were tied to their own fetch, whichever request finished first resumed all of them.
+    func testEachAwaiterResumesWithItsOwnRefreshResult() async throws {
+        sdk_clearCache()
+        let network = DeferredNetworkClient()
+        let sdk = GrowthBookBuilder(
+            apiHost: apiHost,
+            clientKey: clientKey,
+            encryptionKey: nil,
+            attributes: [:],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setNetworkDispatcher(networkDispatcher: network)
+        .initializer()
+
+        // init fetches on its own, and that request is one of the ones that must not resume a caller.
+        try await waitForParkedRequests(network, count: 1)
+
+        let failingOutcome = OutcomeBox()
+        let failingCaller = Task {
+            do { try await sdk.refresh(); failingOutcome.settle(nil) }
+            catch { failingOutcome.settle(error) }
+        }
+        try await waitForParkedRequests(network, count: 2)
+
+        let succeedingOutcome = OutcomeBox()
+        let succeedingCaller = Task {
+            do { try await sdk.refresh(); succeedingOutcome.settle(nil) }
+            catch { succeedingOutcome.settle(error) }
+        }
+        try await waitForParkedRequests(network, count: 3)
+
+        // Finish the second caller's request first, then init's — neither belongs to the first caller.
+        let payload = MockResponse().successResponse.data(using: .utf8) ?? Data()
+        network.complete(2, with: .success(payload))
+        _ = await succeedingCaller.value
+        network.complete(0, with: .success(payload))
+
+        // Waiting longer can only leave this caller suspended, which is the passing outcome; the
+        // failure it catches is a resume that carries someone else's result.
+        try await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertFalse(
+            failingOutcome.isSettled,
+            "a caller was resumed by a refresh it did not start"
+        )
+        XCTAssertNil(succeedingOutcome.storedError, "the second caller's own request succeeded")
+
+        network.complete(1, with: .failure(SDKError.failedToLoadData))
+        _ = await failingCaller.value
+
+        XCTAssertTrue(failingOutcome.isSettled, "the first caller should resume once its own request fails")
+        XCTAssertEqual((failingOutcome.storedError as? SDKError)?.code, .failedToFetchData)
+    }
+
+    private func waitForParkedRequests(_ network: DeferredNetworkClient, count: Int) async throws {
+        for _ in 0..<250 {
+            if network.parkedCount >= count { return }
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTFail("expected \(count) parked requests, saw \(network.parkedCount)")
+    }
+}
+
+/// Network double that parks every request, so a test decides what each one returns and in which
+/// order they finish.
+private final class DeferredNetworkClient: NetworkProtocol {
+    private let lock = NSLock()
+    private var parked: [(success: (Data) -> Void, failure: (Error) -> Void)] = []
+
+    var parkedCount: Int {
+        lock.lock(); defer { lock.unlock() }
+        return parked.count
+    }
+
+    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        lock.lock()
+        parked.append((success: successResult, failure: errorResult))
+        lock.unlock()
+    }
+
+    func consumePOSTRequest(url: String, params: [String: Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (any Error) -> Void) {
+        consumeGETRequest(url: url, successResult: successResult, errorResult: errorResult)
+    }
+
+    func complete(_ index: Int, with result: Result<Data, Error>) {
+        lock.lock()
+        let request = parked[index]
+        lock.unlock()
+        switch result {
+        case .success(let data): request.success(data)
+        case .failure(let error): request.failure(error)
+        }
+    }
+}
+
+/// Records how an awaiting caller resumed, so a test can assert that it has *not* resumed yet.
+private final class OutcomeBox {
+    private let lock = NSLock()
+    private var settled = false
+    private var error: Error?
+
+    var isSettled: Bool {
+        lock.lock(); defer { lock.unlock() }
+        return settled
+    }
+
+    var storedError: Error? {
+        lock.lock(); defer { lock.unlock() }
+        return error
+    }
+
+    func settle(_ error: Error?) {
+        lock.lock()
+        settled = true
+        self.error = error
+        lock.unlock()
+    }
 }

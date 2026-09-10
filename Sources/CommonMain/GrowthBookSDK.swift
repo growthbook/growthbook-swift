@@ -383,10 +383,6 @@ protocol GrowthBookProtocol: AnyObject {
 @objc public class GrowthBookSDK: NSObject, FeaturesFlowDelegate {
     var refreshHandler: CacheRefreshHandler?
     private var subscriptions: [ExperimentRunCallback] = []
-    /// One-shot completions awaiting the next refresh cycle, used by the async `refresh()`
-    /// API. Kept separate from `refreshHandler` so the async wrapper never overwrites the
-    /// caller's persistent handler. Drained (and cleared) on the next `featuresUpdateIsComplete`.
-    private var refreshCompletions: [(SDKError?) -> Void] = []
     private var networkDispatcher: NetworkProtocol
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
@@ -528,12 +524,19 @@ protocol GrowthBookProtocol: AnyObject {
 
     /// Manually Refresh Cache
     @objc public func refreshCache() {
+        performRefresh(completion: nil)
+    }
+
+    /// `refreshCache()` with an outcome handler for the caller that started it. Public callers
+    /// pass nil and keep using `refreshHandler`; the async wrapper passes a completion so it is
+    /// resumed by its own fetch rather than by whichever refresh finishes first.
+    private func performRefresh(completion: ((SDKError?) -> Void)?) {
         withLock {
             let globalConfig = contextManager.getGlobalConfig()
             if globalConfig.remoteEval {
-                refreshForRemoteEval()
+                performRemoteEval(completion: completion)
             } else {
-                featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL())
+                featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL(), completion: completion)
             }
         }
     }
@@ -548,7 +551,7 @@ protocol GrowthBookProtocol: AnyObject {
     /// - Note: Swift-only (async/continuation is not representable in Objective-C).
     @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
     public func refresh() async throws {
-        try await awaitRefreshCycle { [self] in refreshCache() }
+        try await awaitRefreshCycle { [self] completion in performRefresh(completion: completion) }
     }
 
     /// Asynchronously trigger a remote evaluation.
@@ -565,25 +568,39 @@ protocol GrowthBookProtocol: AnyObject {
         guard contextManager.getGlobalConfig().remoteEval else {
             throw SDKError.remoteEvalNotEnabled
         }
-        try await awaitRefreshCycle { [self] in refreshForRemoteEval() }
+        try await awaitRefreshCycle { [self] completion in performRemoteEval(completion: completion) }
     }
 
-    /// Shared continuation plumbing for the async `refresh()` / `evaluate()` APIs. Registers a
-    /// one-shot completion *before* invoking `trigger` (so a synchronous completion is never
-    /// missed) and resumes exactly once when the next refresh cycle finishes.
+    /// Shared continuation plumbing for the async `refresh()` / `evaluate()` APIs. The trigger
+    /// receives a completion tied to the fetch it starts, so overlapping refreshes — and refreshes
+    /// this caller never asked for, like the SSE stream — cannot resume it with their result.
     @available(iOS 13.0, tvOS 13.0, watchOS 6.0, macOS 10.15, visionOS 1.0, *)
-    private func awaitRefreshCycle(_ trigger: () -> Void) async throws {
+    private func awaitRefreshCycle(_ trigger: (@escaping (SDKError?) -> Void) -> Void) async throws {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            withLock {
-                refreshCompletions.append { error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume()
-                    }
+            let hasResumed = OneShot()
+            trigger { error in
+                guard hasResumed.claim() else { return }
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
                 }
             }
-            trigger()
+        }
+    }
+
+    /// Resuming a checked continuation twice traps, so a pipeline path that reported completion
+    /// twice would crash the app rather than the SDK absorbing it.
+    private final class OneShot {
+        private let lock = NSLock()
+        private var claimed = false
+
+        func claim() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            if claimed { return false }
+            claimed = true
+            return true
         }
     }
 
@@ -750,11 +767,6 @@ protocol GrowthBookProtocol: AnyObject {
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {
         withLock {
             refreshHandler?(error)
-            // Fulfil any pending async refresh() callers. Snapshot-and-clear before
-            // invoking so each completion fires exactly once per refresh cycle.
-            let completions = refreshCompletions
-            refreshCompletions.removeAll()
-            completions.forEach { $0(error) }
         }
     }
 
@@ -774,15 +786,25 @@ protocol GrowthBookProtocol: AnyObject {
 
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation
     @objc public func refreshForRemoteEval() {
+        performRemoteEval(completion: nil)
+    }
+
+    /// See `performRefresh(completion:)`.
+    private func performRemoteEval(completion: ((SDKError?) -> Void)?) {
         withLock {
             let globalConfig = contextManager.getGlobalConfig()
             let evalData = contextManager.getEvaluationData()
-            if !globalConfig.remoteEval { return }
+            if !globalConfig.remoteEval {
+                // Reachable only if remote eval is turned off between the call and the lock;
+                // report it rather than leaving an async caller suspended forever.
+                completion?(.remoteEvalNotEnabled)
+                return
+            }
             let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
             let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
             let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
-            featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
+            featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload, completion: completion)
         }
     }
 
