@@ -2,6 +2,282 @@ import XCTest
 
 @testable import GrowthBook
 
+// Captures getAllAssignments completions without calling them, so tests control exactly when — and
+// in which order — each async refresh resolves. Completions are queued rather than replaced, which
+// is what lets a test resolve a newer request before an older one that is still in flight.
+private class ManualStickyBucketService: NSObject, StickyBucketServiceProtocol {
+    private var pendingCompletions: [([String: StickyAssignmentsDocument]?, Error?) -> Void] = []
+
+    var pendingCount: Int { pendingCompletions.count }
+
+    func getAssignments(attributeName: String, attributeValue: String,
+                        completion: @escaping (StickyAssignmentsDocument?, Error?) -> Void) {
+        completion(nil, nil)
+    }
+
+    func saveAssignments(doc: StickyAssignmentsDocument, completion: @escaping (Error?) -> Void) {
+        completion(nil)
+    }
+
+    func getAllAssignments(attributes: [String: String],
+                           completion: @escaping ([String: StickyAssignmentsDocument]?, Error?) -> Void) {
+        pendingCompletions.append(completion)
+    }
+
+    /// Resolves the newest pending request and drops the rest, which is what this double did when
+    /// it held a single completion: a later `getAllAssignments` replaced — and so discarded — the
+    /// earlier one. Tests that drive one refresh at a time keep their previous behaviour.
+    func flush(docs: [String: StickyAssignmentsDocument] = [:]) {
+        guard let completion = pendingCompletions.last else { return }
+        pendingCompletions.removeAll()
+        completion(docs, nil)
+    }
+
+    /// Resolves one specific pending request, so a test can complete them out of order.
+    func complete(_ index: Int, with docs: [String: StickyAssignmentsDocument]) {
+        guard pendingCompletions.indices.contains(index) else { return }
+        let completion = pendingCompletions.remove(at: index)
+        completion(docs, nil)
+    }
+}
+
+private func makeSdk(attributes: [String: Any],
+                     service: StickyBucketServiceProtocol) -> GrowthBookSDK {
+    let emptyFeatures = try! JSONEncoder().encode([String: Feature]())
+    return GrowthBookBuilder(
+        features: emptyFeatures,
+        attributes: attributes,
+        trackingCallback: { _, _ in },
+        backgroundSync: false
+    )
+    .setStickyBucketService(stickyBucketService: service)
+    .initializer()
+}
+
+class StickyBucketUserSwitchTests: XCTestCase {
+
+    func testSetAttributesClearsStickyDocsBeforeRefreshCompletes() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "userA"], service: service)
+
+        let userADocs = ["id||userA": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userA",
+            assignments: ["exp-1__0": "control"]
+        )]
+        service.flush(docs: userADocs)
+        XCTAssertEqual(sdk.getGBContext().stickyBucketAssignmentDocs?["id||userA"]?.assignments["exp-1__0"], "control",
+                       "Precondition: userA docs must be loaded after init flush")
+
+        sdk.setAttributes(attributes: ["id": "userB"])
+
+        // Before the refresh completion fires, stale userA docs must already be gone.
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs,
+                     "Stale docs from previous user must be cleared synchronously on setAttributes")
+
+        let userBDocs = ["id||userB": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userB",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: userBDocs)
+        XCTAssertEqual(sdk.getGBContext().stickyBucketAssignmentDocs?["id||userB"]?.assignments["exp-1__0"], "variant",
+                       "userB docs must be loaded after refresh completes")
+    }
+
+    /// A custom service is free to resolve out of order, so the request started for userA can
+    /// complete after the one started for userB. The late userA documents belong to a user the SDK
+    /// has already left and must not win by completion order.
+    func testStaleRefreshCompletionDoesNotOverwriteNewerUser() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "userA"], service: service)
+
+        // Counts are compared relatively: how many refreshes init itself starts is a property of the
+        // build, not of the behaviour under test.
+        let afterInit = service.pendingCount
+        XCTAssertGreaterThan(afterInit, 0, "Precondition: init started a refresh for userA")
+
+        sdk.setAttributes(attributes: ["id": "userB"])
+        XCTAssertGreaterThan(service.pendingCount, afterInit, "setAttributes must start another refresh")
+
+        let userADocs = ["id||userA": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userA",
+            assignments: ["exp-1__0": "control"]
+        )]
+        let userBDocs = ["id||userB": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userB",
+            assignments: ["exp-1__0": "variant"]
+        )]
+
+        service.complete(service.pendingCount - 1, with: userBDocs)   // newest request wins the race
+        service.complete(0, with: userADocs)                          // superseded one lands afterwards
+
+        let docs = sdk.getGBContext().stickyBucketAssignmentDocs
+        XCTAssertEqual(docs?["id||userB"]?.assignments["exp-1__0"], "variant",
+                       "Documents of the current user must survive a late completion for the previous one")
+        XCTAssertNil(docs?["id||userA"],
+                     "Documents from the superseded request must be discarded, not merged in")
+    }
+
+    /// Control for the test above: in the natural order the newest completion is the one applied.
+    func testLatestRefreshCompletionIsAppliedWhenItResolvesLast() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "userA"], service: service)
+
+        sdk.setAttributes(attributes: ["id": "userB"])
+        XCTAssertGreaterThan(service.pendingCount, 1)
+
+        let userADocs = ["id||userA": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userA",
+            assignments: ["exp-1__0": "control"]
+        )]
+        let userBDocs = ["id||userB": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "userB",
+            assignments: ["exp-1__0": "variant"]
+        )]
+
+        service.complete(0, with: userADocs)                          // stale request resolves first
+        service.complete(service.pendingCount - 1, with: userBDocs)   // then the current one
+
+        let docs = sdk.getGBContext().stickyBucketAssignmentDocs
+        XCTAssertEqual(docs?["id||userB"]?.assignments["exp-1__0"], "variant")
+        XCTAssertNil(docs?["id||userA"], "The stale documents must not linger once the current request lands")
+    }
+
+    func testAppendAttributesClearsStickyDocsBeforeRefreshCompletes() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["deviceId": "device-1"], service: service)
+
+        let anonymousDocs = ["deviceId||device-1": StickyAssignmentsDocument(
+            attributeName: "deviceId", attributeValue: "device-1",
+            assignments: ["exp-1__0": "control"]
+        )]
+        service.flush(docs: anonymousDocs)
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs,
+                        "Precondition: anonymous docs must be loaded after init flush")
+
+        try? sdk.appendAttributes(attributes: ["id": "user-logged-in"])
+
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs,
+                     "Stale docs must be cleared synchronously on appendAttributes")
+
+        service.flush(docs: [:])
+        XCTAssertTrue(sdk.getGBContext().stickyBucketAssignmentDocs?.isEmpty ?? true)
+    }
+}
+
+class FeatureLoadRaceConditionTests: XCTestCase {
+
+    // Verifies that features are applied to the context only after sticky bucket
+    // docs are loaded, so an evaluation immediately after featuresFetchedSuccessfully
+    // never sees features without docs (Kotlin onPayloadReady pattern).
+    func testFeaturesAppliedAfterStickyDocsLoaded() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["id": "user-1"], service: service)
+
+        // Complete the init refresh.
+        service.flush(docs: [:])
+
+        // Simulate featuresFetchedSuccessfully by calling it directly.
+        let newFeatures: [String: Feature] = ["my-feature": Feature(defaultValue: JSON(true), rules: nil)]
+        sdk.featuresFetchedSuccessfully(features: newFeatures, isRemote: true)
+
+        // Before the sticky bucket refresh completion fires, features must NOT be applied yet.
+        XCTAssertNil(sdk.getFeatures()["my-feature"],
+                     "Features must not be visible before sticky bucket docs are loaded")
+
+        // Flush docs — features must appear together with docs.
+        let docs = ["id||user-1": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "user-1",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: docs)
+
+        XCTAssertNotNil(sdk.getFeatures()["my-feature"],
+                        "Features must be visible after sticky bucket docs are loaded")
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||user-1"],
+                        "Sticky docs must be loaded together with features")
+    }
+}
+
+class AttributeOverridesTests: XCTestCase {
+
+    // Verifies that refreshStickyBucketService uses merged (base + override) attributes
+    // for the getAllAssignments call, so docs keyed on override attributes are fetched.
+    func testAttributeOverridesAreUsedInStickyBucketLookup() {
+        let service = ManualStickyBucketService()
+        // Base attributes have no "id"; override supplies it.
+        let sdk = makeSdk(attributes: ["deviceId": "device-1"], service: service)
+        service.flush(docs: [:])
+
+        sdk.setAttributeOverrides(overrides: ["id": "user-from-override"])
+        let overrideDocs = ["id||user-from-override": StickyAssignmentsDocument(
+            attributeName: "id",
+            attributeValue: "user-from-override",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: overrideDocs)
+
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||user-from-override"],
+                        "Sticky doc keyed on override attribute must be fetched and loaded")
+    }
+
+    // Verifies that setAttributes clears attributeOverrides so the previous user's
+    // overrides don't bleed into the new user's sticky bucket lookup.
+    func testSetAttributesResetsAttributeOverrides() {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["deviceId": "device-1"], service: service)
+        service.flush(docs: [:])
+
+        sdk.setAttributeOverrides(overrides: ["id": "override-id"])
+        let overrideDocs = ["id||override-id": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "override-id",
+            assignments: ["exp-1__0": "control"]
+        )]
+        service.flush(docs: overrideDocs)
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||override-id"],
+                        "Precondition: override docs must be loaded")
+
+        // Switch user — must clear overrides so new user doesn't inherit them.
+        sdk.setAttributes(attributes: ["id": "new-user"])
+        let newUserDocs = ["id||new-user": StickyAssignmentsDocument(
+            attributeName: "id", attributeValue: "new-user",
+            assignments: ["exp-1__0": "variant"]
+        )]
+        service.flush(docs: newUserDocs)
+
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||override-id"],
+                     "Override docs from previous context must be gone after setAttributes")
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||new-user"],
+                        "New user docs must be loaded after setAttributes")
+    }
+
+    // Verifies that attributeOverrides are merged into userContext.attributes and
+    // therefore affect experiment evaluation (via hashAttribute lookup).
+    func testAttributeOverridesAreAppliedToEvaluation() {
+        let service = ManualStickyBucketService()
+        // Base attributes have no "id" — experiments hashing on "id" won't bucket the user.
+        let sdk = makeSdk(attributes: ["deviceId": "device-only"], service: service)
+        service.flush(docs: [:])
+
+        let experiment = Experiment(
+            key: "test-exp",
+            variations: [JSON("control"), JSON("variant")],
+            hashAttribute: "id",
+            coverage: 1.0
+        )
+
+        let before = sdk.run(experiment: experiment)
+        XCTAssertFalse(before.inExperiment, "Without id attribute, user must not be bucketed")
+
+        sdk.setAttributeOverrides(overrides: ["id": "user-with-override"])
+        // No flush needed: updateEvalData already invalidated the context cache,
+        // so the next run() call gets a fresh EvalContext with merged attributes.
+
+        let after = sdk.run(experiment: experiment)
+        XCTAssertTrue(after.inExperiment,
+                      "id from attributeOverrides must be applied to experiment evaluation")
+    }
+}
+
 class StickyBucketingFeatureTests: XCTestCase {
     var service: StickyBucketService!
     var evalConditions: [JSON]?
@@ -69,5 +345,70 @@ class StickyBucketingFeatureTests: XCTestCase {
         print("Failed TESTS - \(failedScenarios.count)")
 
         XCTAssertTrue(failedScenarios.count == 0)
+    }
+}
+
+// MARK: - Remote eval payload
+
+/// Records the POST body of every remote-eval request so tests can assert on what the server
+/// would actually be asked to evaluate.
+private class CapturingNetworkClient: NetworkProtocol {
+    private(set) var capturedParams: [[String: Any]] = []
+
+    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        successResult(Data("{\"features\":{}}".utf8))
+    }
+
+    func consumePOSTRequest(url: String, params: [String: Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+        capturedParams.append(params)
+        successResult(Data("{\"features\":{}}".utf8))
+    }
+
+    var lastAttributes: [String: Any]? { capturedParams.last?["attributes"] as? [String: Any] }
+}
+
+class RemoteEvalPayloadTests: XCTestCase {
+
+    private func makeRemoteEvalSdk(network: NetworkProtocol) -> GrowthBookSDK {
+        GrowthBookBuilder(apiHost: "https://host.com",
+                          clientKey: "key",
+                          attributes: ["id": "user-1", "country": "PL"],
+                          trackingCallback: { _, _ in },
+                          refreshHandler: nil,
+                          backgroundSync: false,
+                          remoteEval: true,
+                          // ttlSeconds: 0 keeps this test about payload content: the TTL gate on
+                          // remote-eval refreshes is a separate concern, fixed on its own branch.
+                          ttlSeconds: 0)
+            .setNetworkDispatcher(networkDispatcher: network)
+            .initializer()
+    }
+
+    /// Local evaluation runs on attributes with the overrides merged in, so the remote payload has
+    /// to carry the same effective attributes — otherwise the server evaluates a user the SDK has
+    /// already stopped seeing.
+    func testOverridesAreIncludedInRemoteEvalPayload() {
+        let network = CapturingNetworkClient()
+        let sdk = makeRemoteEvalSdk(network: network)
+
+        sdk.setAttributeOverrides(overrides: ["country": "UA"])
+
+        let attributes = network.lastAttributes
+        XCTAssertEqual(attributes?["country"] as? String, "UA",
+                       "The overridden attribute must be sent to the remote-eval endpoint")
+        XCTAssertEqual(attributes?["id"] as? String, "user-1",
+                       "Base attributes that are not overridden must still be sent")
+    }
+
+    /// Clearing the overrides has to be visible to the server too.
+    func testClearedOverridesRevertRemoteEvalPayloadToBaseAttributes() {
+        let network = CapturingNetworkClient()
+        let sdk = makeRemoteEvalSdk(network: network)
+
+        sdk.setAttributeOverrides(overrides: ["country": "UA"])
+        sdk.setAttributeOverrides(overrides: [String: Any]())
+
+        XCTAssertEqual(network.lastAttributes?["country"] as? String, "PL",
+                       "With the overrides lifted the payload must fall back to the base attributes")
     }
 }
