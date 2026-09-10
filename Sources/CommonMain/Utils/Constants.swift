@@ -92,6 +92,7 @@ public enum SDKErrorCode: String {
     case failedParsedEncryptedData
     case failedToFetchData
     case invalidAPIURL
+    case remoteEvalNotEnabled
 }
 
 /// GrowthBook Error Class to handle any error / exception scenario
@@ -105,6 +106,7 @@ public enum SDKErrorCode: String {
     static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
     static let failedToFetchData = SDKError(code: .failedToFetchData)
     static let invalidAPIURL = SDKError(code: .invalidAPIURL)
+    static let remoteEvalNotEnabled = SDKError(code: .remoteEvalNotEnabled)
 
     static func failedToFetchData(_ error: Error?) -> SDKError { .init(code: .failedToFetchData, underlying: error) }
     

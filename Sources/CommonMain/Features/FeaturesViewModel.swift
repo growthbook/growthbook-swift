@@ -141,15 +141,24 @@ class FeaturesViewModel {
     
     
     /// Fetch Features
-    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
+    ///
+    /// `completion` reports the outcome of *this* call. The delegate callback cannot serve that
+    /// purpose: every refresh source shares it — init, the SSE stream, a manual refresh — so a
+    /// caller waiting on the delegate can be resumed by someone else's fetch.
+    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil, completion: ((SDKError?) -> Void)? = nil) {
+        let finish: (SDKError?, Bool) -> Void = { [weak self] error, isRemote in
+            self?.delegate?.featuresUpdateIsComplete(error: error, isRemote: isRemote)
+            completion?(error)
+        }
+
         // Check for cache data
         fetchCachedFeatures(logging: true)
         guard let apiUrl else {
-            delegate?.featuresUpdateIsComplete(error: .invalidAPIURL, isRemote: false)
+            finish(.invalidAPIURL, false)
             return
         }
         guard isCacheExpired() else {
-            delegate?.featuresUpdateIsComplete(error: nil, isRemote: true)
+            finish(nil, true)
             return
         }
 
@@ -157,42 +166,43 @@ class FeaturesViewModel {
             dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { result in
                 switch result {
                 case .success(let data):
-                    self.prepareFeaturesData(data: data)
+                    self.prepareFeaturesData(data: data, completion: completion)
                 case .failure(let error):
                     logger.error("Failed get features: \(error.localizedDescription)")
                     let error: SDKError = .failedToLoadData
                     self.delegate?.featuresFetchFailed(error: error, isRemote: true)
-                    self.delegate?.featuresUpdateIsComplete(error: error, isRemote: true)
+                    finish(error, true)
                 }
             }
         } else {
             dataSource.fetchFeatures(apiUrl: apiUrl) { result in
                 switch result {
                 case .success(let data):
-                    self.prepareFeaturesData(data: data)
+                    self.prepareFeaturesData(data: data, completion: completion)
                 case .failure(let error):
                     if (error as NSError).code == 304 {
                         self.refreshExpiresAt()
                         let fetchCachedFeaturesError = self.fetchCachedFeatures(isRemote: true)
-                        self.delegate?.featuresUpdateIsComplete(error: fetchCachedFeaturesError, isRemote: true)
+                        finish(fetchCachedFeaturesError, true)
                         return
                     }
                     logger.info("Failed to get features from remote: \(error.localizedDescription)")
                     let sdkError: SDKError = .failedToFetchData(error)
                     self.delegate?.featuresFetchFailed(error: sdkError, isRemote: true)
                     self.fetchCachedFeatures(isRemote: true)
-                    self.delegate?.featuresUpdateIsComplete(error: sdkError, isRemote: true)
+                    finish(sdkError, true)
                 }
             }
         }
     }
     
     /// Cache API Response and push success event
-    func prepareFeaturesData(data: Data) {
+    func prepareFeaturesData(data: Data, completion: ((SDKError?) -> Void)? = nil) {
         // Call Success Delegate with mention of data available with remote
         var occurredError: SDKError? = nil
         defer {
             delegate?.featuresUpdateIsComplete(error: occurredError, isRemote: true)
+            completion?(occurredError)
         }
 
         let decoder = JSONDecoder()
