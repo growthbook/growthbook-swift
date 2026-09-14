@@ -183,7 +183,10 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         for _ in 0..<3 {
             plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         }
-        wait(for: [expectation], timeout: 10.0)
+        // Same ceiling as the rest of the class: the plugin's queue is `.utility`, and a runner
+        // building four platforms can starve it for seconds. Waiting longer cannot hide a broken
+        // flush — that never fulfils the expectation at any ceiling.
+        wait(for: [expectation], timeout: 30.0)
         withExtendedLifetime(plugin) {}
     }
 
