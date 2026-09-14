@@ -426,6 +426,35 @@ NotificationCenter.default.addObserver(
 
 > **Note:** `.setStableSession(true)` works with `backgroundSync: true` as well. SSE-pushed updates will keep the cache fresh in the background, and each new session starts with the latest payload.
 
+## Custom hosts and request headers
+
+Enterprise deployments usually sit behind a gateway, and GrowthBook Cloud serves streaming from a
+separate domain. Three options cover both:
+
+```swift
+let sdk = GrowthBookBuilder(
+    apiHost: "https://gateway.internal/growthbook",
+    clientKey: "sdk-abc123",
+    attributes: ["id": "user-1"],
+    trackingCallback: { _, _ in },
+    backgroundSync: true,
+    apiRequestHeaders: ["Authorization": "Bearer <token>"]        // feature + remote-eval requests
+)
+.setStreamingHost(streamingHost: "https://streaming.internal")     // SSE only; falls back to apiHost
+.setStreamingHostRequestHeaders(streamingHostRequestHeaders: [     // SSE only
+    "Authorization": "Bearer <streaming-token>"
+])
+.initializer()
+```
+
+Both header sets can also be replaced at runtime — `updateApiRequestHeaders(_:)` and
+`updateStreamingHostRequestHeaders(_:)`, the latter applying to the next streaming connection.
+
+Headers the SDK manages itself always win: `If-None-Match` and `Cache-Control` on feature requests,
+and `Accept`, `Cache-Control` and `Last-Event-Id` on the streaming connection. Anything else you set
+is sent as given.
+
+
 ## Streaming updates
 
 To enable streaming updates set backgroundSync variable to "true"
