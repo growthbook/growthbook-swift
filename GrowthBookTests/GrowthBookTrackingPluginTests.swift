@@ -183,7 +183,10 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         for _ in 0..<3 {
             plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         }
-        wait(for: [expectation], timeout: 10.0)
+        // Same ceiling as the rest of the class: the plugin's queue is `.utility`, and a runner
+        // building four platforms can starve it for seconds. Waiting longer cannot hide a broken
+        // flush — that never fulfils the expectation at any ceiling.
+        wait(for: [expectation], timeout: 30.0)
         withExtendedLifetime(plugin) {}
     }
 
@@ -238,30 +241,50 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     /// `batchSize: 1` flushes on enqueue, so by the time close() runs the event has already left
     /// the buffer and its request is in flight. close() must still wait for that request.
     func testCloseWaitsForRequestAlreadyInFlight() {
-        let lock = NSLock()
-        var didComplete = false
         let started = expectation(description: "request started")
 
-        // Ceilings are deliberately generous: a CI runner can starve the plugin's `.utility` queue
-        // for seconds, and neither the 0.3s in-flight window nor `batchTimeout` is what this test
-        // asserts — it asserts that close() does not return before the send finishes.
+        // The request's completion is held here instead of being scheduled on a delay: asserting
+        // ordering against a deadline means a runner that stalls long enough fails the test rather
+        // than the code. Nothing here waits on wall-clock time except the negative check below.
+        let heldCompletion = Atomic<(() -> Void)?>(nil)
         let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 30)) { _, completion in
+            heldCompletion.value = completion
             started.fulfill()
-            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
-                lock.lock(); didComplete = true; lock.unlock()
-                completion()
-            }
         }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         wait(for: [started], timeout: 30.0)
 
-        plugin.close()
+        let closeReturned = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            plugin.close()
+            closeReturned.signal()
+        }
 
-        lock.lock()
-        let completed = didComplete
-        lock.unlock()
-        XCTAssertTrue(completed, "close() returned while a submitted request was still in flight")
+        // close() must still be blocked while the request is unfinished. A loaded runner only makes
+        // this wait more likely to time out, which is the passing outcome — the failure it catches
+        // is close() returning early, which no amount of slowness can produce.
+        guard closeReturned.wait(timeout: .now() + 0.5) == .timedOut else {
+            return XCTFail("close() returned while a submitted request was still in flight")
+        }
+
+        heldCompletion.value?()
+        XCTAssertEqual(
+            closeReturned.wait(timeout: .now() + 30), .success,
+            "close() did not return after the in-flight request finished"
+        )
+    }
+
+    /// Minimal box so the send handler can hand the completion back to the test thread without
+    /// tripping the concurrency checker.
+    private final class Atomic<Value>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Value
+        init(_ value: Value) { stored = value }
+        var value: Value {
+            get { lock.lock(); defer { lock.unlock() }; return stored }
+            set { lock.lock(); stored = newValue; lock.unlock() }
+        }
     }
 
     /// The wait above must stay bounded: a request that never completes may delay shutdown by
