@@ -310,8 +310,13 @@ class ConditionEvaluator {
         default: break
         }
 
-        /// There are three operators where conditionValue is an array
-        if let conditionValue = conditionJson.array, attributeValue != .null {
+        // The membership operators are decided before the non-null gate below, because they must
+        // stay a true logical negation for an attribute the user does not have. `Common.isIn`
+        // already reports a null attribute as "not a member", so $in is false and $nin is true on
+        // their own merits. Returning only from inside the gate dropped out of the switch and
+        // yielded false for both, so a rule written as an exclusion silently matched nobody —
+        // the same defect #178 fixed for $inGroup / $notInGroup.
+        if let conditionValue = conditionJson.array {
             switch operatorKey {
             case "$in":
                 return Common.isIn(actual: attributeValue, expected: conditionValue)
@@ -321,6 +326,14 @@ class ConditionEvaluator {
                 return !Common.isIn(actual: attributeValue, expected: conditionValue)
             case "$nini":
                 return !Common.isIn(actual: attributeValue, expected: conditionValue, insensitive: true)
+            default: break
+            }
+        }
+
+        /// The remaining array operators keep the non-null gate: $all over an attribute the user
+        /// does not have is false, which matches the other SDKs.
+        if let conditionValue = conditionJson.array, attributeValue != .null {
+            switch operatorKey {
             case "$all":
                 return Common.isInAll(
                         actual: attributeValue,
