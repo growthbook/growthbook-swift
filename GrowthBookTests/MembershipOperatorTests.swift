@@ -112,4 +112,36 @@ class MembershipOperatorTests: XCTestCase {
     func testNotInDoesNotMatchArrayAttributeWithOverlap() {
         XCTAssertFalse(eval(["tags": ["$nin": ["a", "b"]]], ["tags": ["c", "a"]]))
     }
+
+    // MARK: - Multi-attribute AND form
+
+    /// The shape that surfaced this in practice (growthbook-swift#185): two exclusions combined,
+    /// where one attribute only exists after authentication. Every key in a condition object is
+    /// ANDed, so the absent half must not drag the whole rule to false — and must not loosen it
+    /// either: the exclusion still has to hold from both sides.
+    private func excludeBoth(_ attributes: [String: Any]) -> Bool {
+        eval(
+            ["plan": ["$nin": ["trial"]], "country": ["$nin": ["RU", "CN"]]],
+            attributes
+        )
+    }
+
+    func testAndFormMatchesWhenTheGatedAttributeIsAbsent() {
+        XCTAssertTrue(excludeBoth(["country": "US"]),
+                      "A logged-out user has no plan, so the plan exclusion holds and the rule applies")
+    }
+
+    func testAndFormStillExcludesOnThePresentAttribute() {
+        XCTAssertFalse(excludeBoth(["country": "RU"]),
+                       "The country exclusion must still bite while plan is absent")
+    }
+
+    func testAndFormStillExcludesOnTheGatedAttributeOnceItAppears() {
+        XCTAssertFalse(excludeBoth(["plan": "trial", "country": "US"]),
+                       "Once the user authenticates, the plan exclusion must bite")
+    }
+
+    func testAndFormMatchesWhenBothAttributesAreOutsideTheLists() {
+        XCTAssertTrue(excludeBoth(["plan": "pro", "country": "US"]))
+    }
 }
