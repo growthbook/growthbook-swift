@@ -152,14 +152,15 @@ public class Utils {
         return nil
     }
     
+    /// Width each numeric version part is padded to, so string comparison orders them numerically.
+    private static let versionPartWidth = 5
+
     /// Coerces a JSON value the same way the other SDKs do before padding it: numbers are stringified
-    /// and anything that is not a non-empty string falls back to "0", so an absent, boolean or
-    /// collection attribute compares as version "0" instead of failing the condition outright.
+    /// and anything that is not a string falls back to "0", so an absent, boolean or collection
+    /// attribute compares as version "0" instead of failing the condition outright.
     static func paddedVersionString(input: JSON) -> String {
         switch input.type {
-        case .number:
-            return paddedVersionString(input: input.numberValue.stringValue)
-        case .string where !input.stringValue.isEmpty:
+        case .number, .string:
             return paddedVersionString(input: input.stringValue)
         default:
             return paddedVersionString(input: "0")
@@ -167,10 +168,15 @@ public class Utils {
     }
 
     static func paddedVersionString(input: String) -> String {
+        // An empty version string is "0", matching the `!input` guard in the JS reference. This lives
+        // here rather than in the JSON overload because `JSON` is ExpressibleByStringLiteral: a bare
+        // string literal binds to this overload, so the two entry points would otherwise disagree.
+        let source = input.isEmpty ? "0" : input
+
         // Remove build info and leading `v` if any
         // Split version into parts (both core version numbers and pre-release tags)
         // "v1.2.3-rc.1+build123" -> ["1","2","3","rc","1"]
-        let stripped = input.replacingOccurrences(of: "(^v|\\+.*$)", with: "", options: .regularExpression)
+        let stripped = source.replacingOccurrences(of: "(^v|\\+.*$)", with: "", options: .regularExpression)
         var partArray = stripped.components(separatedBy: CharacterSet(charactersIn: ".-"))
 
         // If it's SemVer without a pre-release, add `~` to the end
@@ -181,10 +187,12 @@ public class Utils {
         }
 
         // Left pad each numeric part with spaces so string comparisons will work ("9">"10", but " 9"<"10")
-        // Parts already at least as long as the target width are left untouched, matching `padStart` elsewhere
+        // Parts already at least as long as the target width are left untouched, matching `padStart` elsewhere.
+        // `isASCII` is deliberate: `isNumber` alone admits ½ and XII, which are not version numbers.
         return partArray.map({ part in
-            guard part.count < 5, !part.isEmpty, part.allSatisfy({ $0.isASCII && $0.isNumber }) else { return part }
-            return String(repeating: " ", count: 5 - part.count) + part
+            let isNumeric = !part.isEmpty && part.allSatisfy { $0.isASCII && $0.isNumber }
+            guard isNumeric else { return part }
+            return String(repeating: " ", count: max(0, versionPartWidth - part.count)) + part
         }).joined(separator: "-")
     }
     

@@ -242,6 +242,24 @@ class UtilsTests: XCTestCase {
         XCTAssertEqual(Utils.paddedVersionString(input: JSON.null), "    0")
         XCTAssertEqual(Utils.paddedVersionString(input: JSON([1, 2])), "    0")
     }
+
+    /// `JSON` is ExpressibleByStringLiteral, so a bare string literal binds to the `String`
+    /// overload rather than the JSON one. The two must agree, or a caller gets a different answer
+    /// depending on a type inference they never see.
+    func testPaddedVersionStringOverloadsAgreeOnTheEmptyString() throws {
+        let fromString = Utils.paddedVersionString(input: "")
+        XCTAssertEqual(fromString, "    0", "An empty version string is \"0\", as in the JS reference")
+        XCTAssertEqual(fromString, Utils.paddedVersionString(input: JSON("")))
+    }
+
+    /// A numeric part at or beyond the target width is returned unchanged rather than trapping on
+    /// a negative repeat count. Kept next to the padding itself so the guard cannot drift away
+    /// from the subtraction it protects, which is how the original crash arose.
+    func testPaddedVersionStringDoesNotTrapOnOversizedSegments() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "12345"), "12345")
+        XCTAssertEqual(Utils.paddedVersionString(input: "123456"), "123456")
+        XCTAssertEqual(Utils.paddedVersionString(input: "20260910.1.0"), "20260910-    1-    0-~")
+    }
     
     func testDecrypt() throws {
         guard let testCases = TestHelper().getDecryptData() else { return }
