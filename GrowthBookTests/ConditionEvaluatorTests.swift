@@ -376,4 +376,32 @@ class ConditionEvaluatorTests: XCTestCase {
         let cond = JSON(["user.role": "admin"])
         XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: cond))
     }
+
+    // MARK: - Version operators
+
+    func testVersionOperatorWithLongNumericSegment() {
+        let attrs = JSON(["version": "20260910.1.1"])
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vgt": "20260909.9.9"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vlt": "20260911.0.0"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["version": "1.0.0"]), conditionObj: JSON(["version": ["$vlt": "123456789"]])))
+    }
+
+    func testVersionOperatorKeepsInnerLetterV() {
+        let attrs = JSON(["version": "1.2.3-dev"])
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$veq": "1.2.3-dev"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vne": "1.2.3-de"]])))
+    }
+
+    func testVersionOperatorCoercesNumericAttribute() {
+        let attrs = JSON(["version": 2])
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vgt": "1.0.0"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$veq": 2]])))
+    }
+
+    /// An absent, boolean or collection attribute is treated as version "0" rather than failing outright
+    func testVersionOperatorWithNonVersionAttribute() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vlt": "0.0.1"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["version": true]), conditionObj: JSON(["version": ["$veq": "0"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["version": ["1.0.0"]]), conditionObj: JSON(["version": ["$veq": "0"]])))
+    }
 }

@@ -152,28 +152,48 @@ public class Utils {
         return nil
     }
     
+    /// Width each numeric version part is padded to, so string comparison orders them numerically.
+    private static let versionPartWidth = 5
+
+    /// Coerces a JSON value the same way the other SDKs do before padding it: numbers are stringified
+    /// and anything that is not a string falls back to "0", so an absent, boolean or collection
+    /// attribute compares as version "0" instead of failing the condition outright.
+    static func paddedVersionString(input: JSON) -> String {
+        switch input.type {
+        case .number, .string:
+            return paddedVersionString(input: input.stringValue)
+        default:
+            return paddedVersionString(input: "0")
+        }
+    }
+
     static func paddedVersionString(input: String) -> String {
-        var parts = input.replacingOccurrences(of: "[v]", with: "", options: .regularExpression)
-        
-        if let range = parts.range(of: "+")?.lowerBound {
-            parts = String(parts.prefix(upTo: range))
-        }
-        
-        let stringArray = parts.components(separatedBy: [".", "-"])
-        
-        var partArray: [String] = []
-        
-        for part in stringArray {
-            if part != "" {
-                partArray.append(part)
-            }
-        }
-        
+        // An empty version string is "0", matching the `!input` guard in the JS reference. This lives
+        // here rather than in the JSON overload because `JSON` is ExpressibleByStringLiteral: a bare
+        // string literal binds to this overload, so the two entry points would otherwise disagree.
+        let source = input.isEmpty ? "0" : input
+
+        // Remove build info and leading `v` if any
+        // Split version into parts (both core version numbers and pre-release tags)
+        // "v1.2.3-rc.1+build123" -> ["1","2","3","rc","1"]
+        let stripped = source.replacingOccurrences(of: "(^v|\\+.*$)", with: "", options: .regularExpression)
+        var partArray = stripped.components(separatedBy: CharacterSet(charactersIn: ".-"))
+
+        // If it's SemVer without a pre-release, add `~` to the end
+        // ["1","0","0"] -> ["1","0","0","~"]
+        // "~" is the largest ASCII character, so this will make "1.0.0" greater than "1.0.0-beta" for example
         if partArray.count == 3 {
             partArray.append("~")
         }
-        
-        return partArray.map({ $0.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil ? String(repeating: " ", count: 5 - $0.count) + $0 : $0}).joined(separator: "-")
+
+        // Left pad each numeric part with spaces so string comparisons will work ("9">"10", but " 9"<"10")
+        // Parts already at least as long as the target width are left untouched, matching `padStart` elsewhere.
+        // `isASCII` is deliberate: `isNumber` alone admits ½ and XII, which are not version numbers.
+        return partArray.map({ part in
+            let isNumeric = !part.isEmpty && part.allSatisfy { $0.isASCII && $0.isNumber }
+            guard isNumeric else { return part }
+            return String(repeating: " ", count: max(0, versionPartWidth - part.count)) + part
+        }).joined(separator: "-")
     }
     
     static func convertJsonToDouble(from value: JSON?) -> Double? {
