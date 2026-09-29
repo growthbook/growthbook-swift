@@ -49,7 +49,7 @@ class ConditionEvaluator {
     /// This is the main function used to evaluate a condition. It loops through the condition key/value pairs and checks each entry:
     /// - attributes : User Attributes
     /// - condition : to be evaluated
-    func isEvalCondition(attributes: JSON, conditionObj: JSON, savedGroups: JSON? = nil) -> Bool {
+    func isEvalCondition(attributes: JSON, conditionObj: JSON, savedGroups: JSON? = nil, visited: Set<String> = []) -> Bool {
         if !conditionObj.arrayValue.isEmpty {
             return false
         }
@@ -57,16 +57,18 @@ class ConditionEvaluator {
         for (key, value) in conditionObj.dictionaryValue {
             switch key {
             case "$or":
-                guard isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
+                guard isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups, visited: visited) else { return false }
             case "$nor":
-                guard !isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
+                guard !isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups, visited: visited) else { return false }
             case "$and":
-                guard isEvalAnd(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
+                guard isEvalAnd(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups, visited: visited) else { return false }
             case "$not":
-                guard !isEvalCondition(attributes: attributes, conditionObj: value, savedGroups: savedGroups) else { return false }
+                guard !isEvalCondition(attributes: attributes, conditionObj: value, savedGroups: savedGroups, visited: visited) else { return false }
+            case "$savedGroup":
+                guard evalSavedGroup(attributes: attributes, reference: value, savedGroups: savedGroups, visited: visited) else { return false }
             default:
                 let element = getPath(obj: attributes, key: key)
-                guard isEvalConditionValue(conditionValue: value, attributeValue: element, savedGroups: savedGroups) else { return false }
+                guard isEvalConditionValue(conditionValue: value, attributeValue: element, savedGroups: savedGroups, visited: visited) else { return false }
             }
         }
         // If none of the entries failed their checks, `evalCondition` returns true
@@ -74,7 +76,7 @@ class ConditionEvaluator {
     }
 
     /// Evaluate OR conditions against given attributes
-    func isEvalOr(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool {
+    func isEvalOr(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?, visited: Set<String> = []) -> Bool {
         // If conditionObjs is empty, return true
         guard conditionObjs.isEmpty == false else {
             return true
@@ -82,7 +84,7 @@ class ConditionEvaluator {
         // Loop through the conditionObjects
         for item in conditionObjs {
             // If evalCondition(attributes, conditionObjs[i]) is true, break out of the loop and return true
-            if isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups) {
+            if isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups, visited: visited) {
                 return true
             }
         }
@@ -92,11 +94,11 @@ class ConditionEvaluator {
     }
 
     /// Evaluate AND conditions against given attributes
-    func isEvalAnd(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool {
+    func isEvalAnd(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?, visited: Set<String> = []) -> Bool {
         // Loop through the conditionObjects
         for item in conditionObjs {
             // If evalCondition(attributes, conditionObjs[i]) is false, break out of the loop and return false
-            if !isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups) {
+            if !isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups, visited: visited) {
                 return false
             }
         }
@@ -153,7 +155,7 @@ class ConditionEvaluator {
     }
 
     /// Evaluates Condition Value against given condition & attributes
-    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false) -> Bool {
+    func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false, visited: Set<String> = []) -> Bool {
         // Processing null values - handling this case separately
         
         if insensitive,
@@ -192,7 +194,7 @@ class ConditionEvaluator {
                     for i in 0..<conditionArray.count {
                         if !isEvalConditionValue(conditionValue: conditionArray[i],
                                                attributeValue: attributeArray[i],
-                                               savedGroups: savedGroups) {
+                                               savedGroups: savedGroups, visited: visited) {
                             return false
                         }
                     }
@@ -213,7 +215,7 @@ class ConditionEvaluator {
                        !isEvalOperatorCondition(operatorKey: key,
                                                attributeValue: unwrappedAttribute,
                                                conditionValue: value,
-                                               savedGroups: savedGroups) {
+                                               savedGroups: savedGroups, visited: visited) {
                         return false
                     }
                 }
@@ -232,19 +234,19 @@ class ConditionEvaluator {
     }
 
     /// This checks if attributeValue is an array, and if so at least one of the array items must match the condition
-    func isElemMatch(attributeValue: [JSON], condition: JSON, savedGroups: JSON?) -> Bool {
+    func isElemMatch(attributeValue: [JSON], condition: JSON, savedGroups: JSON?, visited: Set<String> = []) -> Bool {
 
         // Loop through items in attributeValue
         for item in attributeValue {
             // If isOperatorObject(condition)
             if isOperatorObject(obj: condition) {
                 // If evalConditionValue(condition, item), break out of loop and return true
-                if isEvalConditionValue(conditionValue: condition, attributeValue: item, savedGroups: savedGroups) {
+                if isEvalConditionValue(conditionValue: condition, attributeValue: item, savedGroups: savedGroups, visited: visited) {
                     return true
                 }
             }
             // Else if evalCondition(item, condition), break out of loop and return true
-            else if isEvalCondition(attributes: item, conditionObj: condition, savedGroups: savedGroups) {
+            else if isEvalCondition(attributes: item, conditionObj: condition, savedGroups: savedGroups, visited: visited) {
                 return true
             }
         }
@@ -256,7 +258,7 @@ class ConditionEvaluator {
     /// This function is just a case statement that handles all the possible operators
     ///
     /// There are basic comparison operators in the form attributeValue {op} conditionValue
-    func isEvalOperatorCondition(operatorKey: String, attributeValue: JSON, conditionValue: JSON, savedGroups: JSON? = nil) -> Bool {
+    func isEvalOperatorCondition(operatorKey: String, attributeValue: JSON, conditionValue: JSON, savedGroups: JSON? = nil, visited: Set<String> = []) -> Bool {
         let conditionJson = JSON(conditionValue)
         // Evaluate TYPE operator - whether both are of same type
         if operatorKey == "$type" {
@@ -265,7 +267,7 @@ class ConditionEvaluator {
 
         // Evaluate NOT operator - whether condition doesn't contain attribute
         if operatorKey == "$not" {
-            return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups)
+            return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups, visited: visited)
         }
 
         // Evaluate EXISTS operator - whether condition contains attribute
@@ -283,7 +285,7 @@ class ConditionEvaluator {
             return  getType(obj: attributeValue) == conditionJson.stringValue
         case "$not":
             if let conditionValue = conditionValue.dictionaryValue.values.first {
-                return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups)
+                return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups, visited: visited)
             }
         case "$exists":
             let targetPrimitiveValue = conditionJson.stringValue
@@ -302,11 +304,17 @@ class ConditionEvaluator {
         // Both always return: an absent attribute simply makes the user a non-member, so $inGroup is
         // false and $notInGroup is true. Returning only from inside a non-null guard would drop out
         // of the switch and yield false for both, breaking the negation.
+        //
+        // That negation does not hold for an entry these operators cannot read, and deliberately so:
+        // both fail closed. Substituting an empty list would be the loud failure, since $notInGroup
+        // would then pass everyone through an exclusion rule. See `savedGroupListValues`.
         switch operatorKey {
         case "$inGroup":
-            return Common.isIn(actual: attributeValue, expected: resolveSavedGroup(conditionValue, savedGroups))
+            guard let values = savedGroupListValues(conditionValue, savedGroups) else { return false }
+            return Common.isIn(actual: attributeValue, expected: values)
         case "$notInGroup":
-            return !Common.isIn(actual: attributeValue, expected: resolveSavedGroup(conditionValue, savedGroups))
+            guard let values = savedGroupListValues(conditionValue, savedGroups) else { return false }
+            return !Common.isIn(actual: attributeValue, expected: values)
         default: break
         }
 
@@ -348,7 +356,7 @@ class ConditionEvaluator {
                         savedGroups: savedGroups,
                         insensitive: true
                     ) { con, attr, groups in
-                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: false)
+                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: false, visited: visited)
                     }
             case "$alli":
                 return Common.isInAll(
@@ -357,7 +365,7 @@ class ConditionEvaluator {
                         savedGroups: savedGroups,
                         insensitive: true
                     ) { con, attr, groups in
-                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: true)
+                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: true, visited: visited)
                     }
             default: break
             }
@@ -365,10 +373,10 @@ class ConditionEvaluator {
             switch operatorKey {
             // Evaluate ELEMMATCH operator - whether condition matches attribute
             case "$elemMatch":
-                return  isElemMatch(attributeValue: attribute, condition: conditionValue, savedGroups: savedGroups)
+                return  isElemMatch(attributeValue: attribute, condition: conditionValue, savedGroups: savedGroups, visited: visited)
             // Evaluate SIE operator - whether condition size is same as that of attribute
             case "$size":
-                return isEvalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count), savedGroups: savedGroups)
+                return isEvalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count), savedGroups: savedGroups, visited: visited)
             default: break
             }
         } else {
@@ -514,6 +522,60 @@ class ConditionEvaluator {
         }
         return false
     }
+    
+    /// Resolves a `$savedGroup` reference: is the user a member of the group it names?
+    ///
+    /// Unlike `$inGroup`, this is a top-level operator with no attribute of its own, so the entry
+    /// decides what membership means — a list entry names the attribute to test, and a condition
+    /// entry is evaluated in full.
+    ///
+    /// Anything this SDK cannot make sense of matches nobody rather than throwing. A payload is
+    /// allowed to be newer than the SDK reading it, and a group type added later must neither take
+    /// the host app down nor quietly let everyone through.
+    ///
+    /// [visited] holds the ids currently being resolved, so a group that references itself —
+    /// directly or along a chain — stops instead of recursing forever.
+    ///
+    /// Lookups go through `JSON`'s key subscript rather than `.dictionary`, which copies the whole
+    /// object it is read from. A condition chain resolves one group per step, so reading the
+    /// payload through `.dictionary` here copied every saved group in it once per step.
+    private func evalSavedGroup(attributes: JSON, reference: JSON, savedGroups: JSON?, visited: Set<String>) -> Bool {
+        // The operator takes an object; a bare id string or an array is not one
+        guard reference.type == .dictionary else { return false }
+        guard let id = reference["id"].string, !visited.contains(id) else { return false }
+
+        // An override that is present but unusable is not ignored: falling back to the entry's own
+        // attribute would test a different population than the payload asked for.
+        var overrideKey: String? = nil
+        let rawKey = reference["attributeKey"]
+        if rawKey.exists() {
+            guard let key = rawKey.string else { return false }
+            overrideKey = key
+        }
+
+        // Absent from the payload, or a v1 bare array, which carries neither a type to act on nor
+        // an attribute for this operator to use
+        guard let savedGroups else { return false }
+        let entry = savedGroups[id]
+        guard entry.type == .dictionary else { return false }
+
+        switch entry["type"].string {
+        case "list":
+            guard let key = overrideKey ?? entry["attributeKey"].string,
+                  let values = entry["values"].array else { return false }
+            return Common.isIn(actual: getPath(obj: attributes, key: key) ?? .null, expected: values)
+
+        // A condition group has no single attribute, so an override has nothing to override
+        case "condition":
+            let condition = entry["condition"]
+            guard condition.type == .dictionary else { return false }
+            return isEvalCondition(attributes: attributes, conditionObj: condition, savedGroups: savedGroups, visited: visited.union([id]))
+
+        // A group type added after this SDK was built
+        default:
+            return false
+        }
+    }
 
     private func isContains(source: String, target: String, insensitive: Bool, negate: Bool) -> Bool {
         let convertedItem = target.replacingOccurrences(of: "([^\\\\])\\/", with: "$1\\/")
@@ -533,14 +595,33 @@ class ConditionEvaluator {
         }
     }
 
-    /// Resolves the members of a saved group for the `$inGroup` / `$notInGroup` operators.
+    /// The values `$inGroup` / `$notInGroup` compare against, or `nil` when the entry carries none
+    /// and both operators must therefore fail closed.
     ///
-    /// An unknown group id, a missing `savedGroups` object, a non-array group value, or a group id
-    /// that is not a string all resolve to an empty group — so membership is simply false and the
-    /// negation stays meaningful.
-    private func resolveSavedGroup(_ conditionValue: JSON, _ savedGroups: JSON?) -> [JSON] {
-        guard let groupId = conditionValue.string else { return [] }
-        return savedGroups?[groupId].array ?? []
+    /// A `savedGroups` entry is either the bare array these operators were built for, or a
+    /// `savedGroupReferencesV2` typed entry. Only the list flavour of the latter has values to
+    /// offer: a condition group is resolved through `$savedGroup`, which knows how to evaluate it
+    /// and where to find an attribute for it — neither of which is true here.
+    ///
+    /// The split between an absent id and an unreadable entry is deliberate. An unknown group id, a
+    /// missing `savedGroups` object, and a group id that is not a string all resolve to an empty
+    /// list, so membership is simply false and `$notInGroup` keeps passing — documented behaviour
+    /// every SDK implements, with its own conformance case. An entry that is present but cannot be
+    /// read resolves to `nil` instead, which the call site turns into false for both operators.
+    ///
+    /// The lookup goes through `JSON`'s key subscript, which is a dictionary hit, rather than
+    /// `.dictionary`, which copies every entry in the payload before one of them is read.
+    /// `exists()` is what separates an absent id from a present one, since the subscript answers
+    /// with a null `JSON` either way and only marks the former with an error.
+    private func savedGroupListValues(_ conditionValue: JSON, _ savedGroups: JSON?) -> [JSON]? {
+        guard let groupId = conditionValue.string, let savedGroups else { return [] }
+
+        let entry = savedGroups[groupId]
+        guard entry.exists() else { return [] }
+
+        if let array = entry.array { return array }
+        if entry.type == .dictionary, entry["type"].string == "list" { return entry["values"].array }
+        return nil
     }
 
     private func isPrimitive(value: JSON) -> Bool {
