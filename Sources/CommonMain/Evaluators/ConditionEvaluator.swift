@@ -156,36 +156,32 @@ class ConditionEvaluator {
 
     /// Evaluates Condition Value against given condition & attributes
     func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false, visited: Set<String> = []) -> Bool {
-        // Processing null values - handling this case separately
-        
-        if insensitive,
-               let condStr = conditionValue.string,
-               let attrStr = attributeValue?.string {
-                return condStr.lowercased() == attrStr.lowercased()
-            }
-        
-        if conditionValue.type == .null {
-            return attributeValue == nil || attributeValue?.type == .null
-        }
-        
         // Protection from nil values
         let unwrappedAttribute = attributeValue ?? .null
-        
-        // String comparison
-        if conditionValue.type == .string && unwrappedAttribute.type == .string {
-            return conditionValue.stringValue == unwrappedAttribute.stringValue
+
+        // A primitive condition converts the attribute to the condition's type before comparing,
+        // as the reference SDK does (`mongrule.ts`): `value + "" === condition` for a string,
+        // `value * 1 === condition` for a number, `!!value === condition` for a boolean. So
+        // `{"age": 25}` matches `"25"`, and `{"beta": true}` matches `1`.
+        switch conditionValue.type {
+        case .string:
+            let text = jsText(unwrappedAttribute)
+            return insensitive
+                ? text.lowercased() == conditionValue.stringValue.lowercased()
+                : text == conditionValue.stringValue
+        case .number:
+            if unwrappedAttribute.type == .number {
+                return conditionValue.doubleValue == unwrappedAttribute.doubleValue
+            }
+            return jsNumber(unwrappedAttribute) == conditionValue.doubleValue
+        case .bool:
+            return unwrappedAttribute.type != .null && isJsTruthy(unwrappedAttribute) == conditionValue.boolValue
+        case .null:
+            return unwrappedAttribute.type == .null
+        default:
+            break
         }
-        
-        // Number comparison
-        if conditionValue.type == .number && unwrappedAttribute.type == .number {
-            return conditionValue.doubleValue == unwrappedAttribute.doubleValue
-        }
-        
-        // Boolean comparison
-        if conditionValue.type == .bool && unwrappedAttribute.type == .bool {
-            return conditionValue.boolValue == unwrappedAttribute.boolValue
-        }
-        
+
         // Array comparison - more detailed with deep equality check
         if let conditionArray = conditionValue.array {
             if let attributeArray = unwrappedAttribute.array {
