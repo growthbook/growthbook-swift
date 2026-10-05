@@ -354,6 +354,46 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["v": ["$ne": "x"]])))
     }
 
+    // MARK: - Plain equality converts like the reference
+
+    /// Plain equality converts the attribute to the condition's type, as the reference SDK does:
+    /// `value + "" === condition`, `value * 1 === condition`, `!!value === condition`. The shared
+    /// spec fixtures only pair different types where the answer is false, so this went unnoticed.
+    func testPlainEqualityConvertsToAStringCondition() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["id": 25]), conditionObj: JSON(["id": "25"])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["flag": true]), conditionObj: JSON(["flag": "true"])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["c": "null"])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["c": "US"])))
+    }
+
+    func testPlainEqualityConvertsToANumberCondition() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["age": "25"]), conditionObj: JSON(["age": 25])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["age": " 25 "]), conditionObj: JSON(["age": 25])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["n": true]), conditionObj: JSON(["n": 1])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["n": 0])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["age": "abc"]), conditionObj: JSON(["age": 25])))
+    }
+
+    func testPlainEqualityConvertsToABooleanCondition() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": 1]), conditionObj: JSON(["beta": true])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": "x"]), conditionObj: JSON(["beta": true])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": 0]), conditionObj: JSON(["beta": false])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": ""]), conditionObj: JSON(["beta": false])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["beta": 0]), conditionObj: JSON(["beta": true])))
+        // `value !== null` comes first, so an absent attribute is never false-equal
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["beta": false])))
+    }
+
+    /// An array or object attribute converts too: `["x"] + ""` is `"x"`, `[5] * 1` is 5, and an
+    /// object's text is `"[object Object]"`.
+    func testPlainEqualityConvertsArrayAndObjectAttributes() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["t": ["x"]]), conditionObj: JSON(["t": "x"])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["t": ["y"]]), conditionObj: JSON(["t": "x"])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["t": [5]]), conditionObj: JSON(["t": 5])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["t": ["k": 5]]), conditionObj: JSON(["t": 5])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["t": ["k": "x"]]), conditionObj: JSON(["t": "x"])))
+    }
+
     // MARK: - $lt / $gt with string attributes
 
     func testLtWithStrings() {
