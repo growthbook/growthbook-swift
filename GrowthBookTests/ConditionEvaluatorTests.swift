@@ -232,6 +232,168 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON.null, conditionValue: JSON(0)))
     }
 
+    /// A numeric condition sent as a string is inclusive, like the numeric one: `age >= "18"` passes
+    /// for 18. The string branch used to compare with `>`, so the boundary value was excluded.
+    func testGteWithNumericAttrAndStringCondIsInclusive() {
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON(18), conditionValue: JSON("18")))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON(19), conditionValue: JSON("18")))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON(17), conditionValue: JSON("18")))
+    }
+
+    // MARK: - Range operators follow JavaScript's relational comparison
+
+    private func range(_ op: String, _ attribute: JSON, _ condition: JSON) -> Bool {
+        eval.isEvalOperatorCondition(operatorKey: op, attributeValue: attribute, conditionValue: condition)
+    }
+
+    /// Every range operator reads a numeric-string attribute against a number; `$gte` alone used not to.
+    func testRangeOperatorsAllReadANumericStringAgainstANumber() {
+        XCTAssertTrue(range("$gt", JSON("10"), JSON(9)))
+        XCTAssertTrue(range("$gte", JSON("10"), JSON(10)))
+        XCTAssertTrue(range("$lt", JSON("10"), JSON(11)))
+        XCTAssertTrue(range("$lte", JSON("10"), JSON(10)))
+    }
+
+    /// A value with no numeric reading is `NaN`, so no direction holds. `$gt` used to fall back to a
+    /// text comparison against the number's text, so `"abc" > 1`.
+    func testRangeOperatorsMatchNoDirectionForANonNumericString() {
+        for op in ["$lt", "$lte", "$gt", "$gte"] {
+            XCTAssertFalse(range(op, JSON("abc"), JSON(1)), "\(op) \"abc\" vs 1")
+            XCTAssertFalse(range(op, JSON(1), JSON("abc")), "\(op) 1 vs \"abc\"")
+        }
+    }
+
+    /// `Number()` trims whitespace and reads `""` as 0; `Double(String)` did neither.
+    func testRangeOperatorsConvertStringsAsJavaScriptNumberDoes() {
+        XCTAssertTrue(range("$lt", JSON(" 5 "), JSON(10)))
+        XCTAssertTrue(range("$lt", JSON(""), JSON(1)))
+        XCTAssertTrue(range("$lt", JSON("0x10"), JSON(20)))
+        XCTAssertTrue(range("$gt", JSON("0x10"), JSON(15)))
+        XCTAssertFalse(range("$lt", JSON("1f"), JSON(2)))
+        // Swift reads these, JavaScript does not
+        XCTAssertFalse(range("$lt", JSON("nan"), JSON(2)))
+        XCTAssertFalse(range("$lt", JSON("0x1p3"), JSON(20)))
+    }
+
+    /// `Number(true)` is 1 and `Number(false)` is 0; `Number(null)` is 0.
+    func testRangeOperatorsConvertBooleansAndNull() {
+        XCTAssertTrue(range("$gt", JSON(true), JSON(0)))
+        XCTAssertTrue(range("$lt", JSON(false), JSON(1)))
+        XCTAssertTrue(range("$lt", JSON.null, JSON("5")))
+    }
+
+    /// Two strings compare by UTF-16 code unit, as in JavaScript, which puts uppercase before lowercase.
+    func testRangeOperatorsCompareTwoStringsByCodeUnit() {
+        XCTAssertTrue(range("$lt", JSON("Zebra"), JSON("apple")))
+        XCTAssertFalse(range("$gt", JSON("AZL"), JSON("alphabet")))
+    }
+
+    // MARK: - $exists reads its value with JavaScript truthiness
+
+    private func exists(_ value: JSON, present: Bool) -> Bool {
+        eval.isEvalCondition(attributes: present ? JSON(["v": 1]) : JSON([:]), conditionObj: JSON(["v": ["$exists": value]]))
+    }
+
+    func testExistsBooleanValuesAreUnchanged() {
+        XCTAssertTrue(exists(true, present: true))
+        XCTAssertFalse(exists(true, present: false))
+        XCTAssertTrue(exists(false, present: false))
+        XCTAssertFalse(exists(false, present: true))
+    }
+
+    /// A falsy value — `0`, `""`, `null` — asks for an absent attribute, like `false`.
+    func testExistsFalsyValuesAskForAnAbsentAttribute() {
+        for value in [JSON(0), JSON(""), JSON.null] {
+            XCTAssertTrue(exists(value, present: false), "$exists: \(value) on an absent attribute")
+            XCTAssertFalse(exists(value, present: true), "$exists: \(value) on a present attribute")
+        }
+    }
+
+    /// Any other value asks for a present attribute. That includes the string "false", which is a
+    /// non-empty string and therefore truthy in JavaScript.
+    func testExistsTruthyValuesAskForAPresentAttribute() {
+        for value in [JSON(1), JSON(-1), JSON("yes"), JSON("false"), JSON([Any]()), JSON([String: Any]())] {
+            XCTAssertTrue(exists(value, present: true), "$exists: \(value) on a present attribute")
+            XCTAssertFalse(exists(value, present: false), "$exists: \(value) on an absent attribute")
+        }
+    }
+
+    func testExistsTreatsAStoredNullAsAbsent() {
+        let attributes = JSON(parseJSON: #"{"v": null}"#)
+        XCTAssertFalse(eval.isEvalCondition(attributes: attributes, conditionObj: JSON(["v": ["$exists": true]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attributes, conditionObj: JSON(["v": ["$exists": false]])))
+    }
+
+    // MARK: - $eq / $ne with array and object operands
+
+    /// Both operators reach an array attribute or an array condition instead of falling through to
+    /// false for both, which broke the negation.
+    func testEqNeAreANegationForArrayOperands() {
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$eq", attributeValue: JSON([1]), conditionValue: JSON("x")))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$ne", attributeValue: JSON([1]), conditionValue: JSON("x")))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$eq", attributeValue: JSON("x"), conditionValue: JSON(["x"])))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$ne", attributeValue: JSON("x"), conditionValue: JSON(["x"])))
+    }
+
+    /// The reference SDK's `===` is reference identity for arrays and objects, and a condition and an
+    /// attribute are decoded separately, so equal contents are still not `$eq`.
+    func testEqNeUseIdentityForCollectionsLikeTheReference() {
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$eq", attributeValue: JSON([1]), conditionValue: JSON([1])))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$ne", attributeValue: JSON([1]), conditionValue: JSON([1])))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$eq", attributeValue: JSON(["k": 1]), conditionValue: JSON(["k": 1])))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$ne", attributeValue: JSON(["k": 1]), conditionValue: JSON(["k": 1])))
+    }
+
+    /// Plain equality is not an operator and keeps comparing contents.
+    func testPlainEqualityStillComparesArrayContents() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["tags": ["a"]]), conditionObj: JSON(["tags": ["a"]])))
+    }
+
+    func testEqNeWithAbsentAttribute() {
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["v": ["$eq": "x"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["v": ["$ne": "x"]])))
+    }
+
+    // MARK: - Plain equality converts like the reference
+
+    /// Plain equality converts the attribute to the condition's type, as the reference SDK does:
+    /// `value + "" === condition`, `value * 1 === condition`, `!!value === condition`. The shared
+    /// spec fixtures only pair different types where the answer is false, so this went unnoticed.
+    func testPlainEqualityConvertsToAStringCondition() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["id": 25]), conditionObj: JSON(["id": "25"])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["flag": true]), conditionObj: JSON(["flag": "true"])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["c": "null"])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["c": "US"])))
+    }
+
+    func testPlainEqualityConvertsToANumberCondition() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["age": "25"]), conditionObj: JSON(["age": 25])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["age": " 25 "]), conditionObj: JSON(["age": 25])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["n": true]), conditionObj: JSON(["n": 1])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["n": 0])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["age": "abc"]), conditionObj: JSON(["age": 25])))
+    }
+
+    func testPlainEqualityConvertsToABooleanCondition() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": 1]), conditionObj: JSON(["beta": true])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": "x"]), conditionObj: JSON(["beta": true])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": 0]), conditionObj: JSON(["beta": false])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["beta": ""]), conditionObj: JSON(["beta": false])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["beta": 0]), conditionObj: JSON(["beta": true])))
+        // `value !== null` comes first, so an absent attribute is never false-equal
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["other": "x"]), conditionObj: JSON(["beta": false])))
+    }
+
+    /// An array or object attribute converts too: `["x"] + ""` is `"x"`, `[5] * 1` is 5, and an
+    /// object's text is `"[object Object]"`.
+    func testPlainEqualityConvertsArrayAndObjectAttributes() {
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["t": ["x"]]), conditionObj: JSON(["t": "x"])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["t": ["y"]]), conditionObj: JSON(["t": "x"])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["t": [5]]), conditionObj: JSON(["t": 5])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["t": ["k": 5]]), conditionObj: JSON(["t": 5])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["t": ["k": "x"]]), conditionObj: JSON(["t": "x"])))
+    }
+
     // MARK: - $lt / $gt with string attributes
 
     func testLtWithStrings() {
@@ -242,8 +404,12 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gt", attributeValue: JSON("banana"), conditionValue: JSON("apple")))
     }
 
+    /// Two strings compare as text in JavaScript even when both look numeric, so `"3" < "10"` is false
+    /// ("3" sorts after "1"). A numeric string against a number is compared as a number.
     func testLtWithStringNumbers() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("3"), conditionValue: JSON("10")))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("3"), conditionValue: JSON("10")))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("10"), conditionValue: JSON("9")))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("3"), conditionValue: JSON(10)))
     }
 
     // MARK: - $ini / $nini (case-insensitive in/nin)
@@ -276,6 +442,24 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: JSON([1, 5, 10]), conditionValue: JSON(["$gt": 4])))
     }
 
+    /// A null element is skipped, like the reference SDK: an array that merely contains a null no
+    /// longer satisfies a negation-flavoured body.
+    func testElemMatchSkipsNullElements() {
+        let withNull = JSON(parseJSON: #"[null]"#)
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: withNull, conditionValue: JSON(["$ne": "x"])))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: withNull, conditionValue: JSON(["$nin": ["x"]])))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: withNull, conditionValue: JSON(["$exists": false])))
+        // A present element alongside the null is still tested
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: JSON(parseJSON: #"[null, "y"]"#), conditionValue: JSON(["$ne": "x"])))
+    }
+
+    /// Falsy-but-present members are valid values and must still be tested.
+    func testElemMatchStillTestsFalsyElements() {
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: JSON([0]), conditionValue: JSON(["$eq": 0])))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: JSON([false]), conditionValue: JSON(["$eq": false])))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$elemMatch", attributeValue: JSON([""]), conditionValue: JSON(["$eq": ""])))
+    }
+
     func testSizeOperator() {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$size", attributeValue: JSON(["a", "b", "c"]), conditionValue: JSON(3)))
     }
@@ -306,6 +490,63 @@ class ConditionEvaluatorTests: XCTestCase {
     func testNotRegexi() {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("^world")))
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("hello")))
+    }
+
+    private func regex(_ attributes: String, _ condition: String) -> Bool {
+        eval.isEvalCondition(attributes: JSON(parseJSON: attributes), conditionObj: JSON(parseJSON: condition))
+    }
+
+    /// An array is matched as `Array.prototype.join` renders it, as in the reference SDK, and both
+    /// polarities agree on that text.
+    func testRegexMatchesAnArrayAsItsJoinedText() {
+        let tags = #"{"v": ["internal", "beta"]}"#
+        XCTAssertTrue(regex(tags, #"{"v": {"$regex": "^internal"}}"#))
+        XCTAssertFalse(regex(tags, #"{"v": {"$notRegex": "^internal"}}"#))
+        XCTAssertFalse(regex(tags, #"{"v": {"$not": {"$regex": "^internal"}}}"#))
+        // The joined text starts with the first element only
+        XCTAssertFalse(regex(tags, #"{"v": {"$regex": "^beta"}}"#))
+        XCTAssertTrue(regex(tags, #"{"v": {"$notRegex": "^beta"}}"#))
+    }
+
+    /// `join` renders a null element as empty and flattens a nested array into the same text.
+    func testRegexRendersArrayElementsAsJavaScriptJoinsThem() {
+        XCTAssertTrue(regex(#"{"v": [1, null, "a"]}"#, #"{"v": {"$regex": "^1,,a$"}}"#))
+        XCTAssertTrue(regex(#"{"v": [[1, 2], 3]}"#, #"{"v": {"$regex": "^1,2,3$"}}"#))
+        XCTAssertTrue(regex(#"{"v": [10.0, true]}"#, #"{"v": {"$regex": "^10,true$"}}"#))
+    }
+
+    func testRegexMatchesAnObjectAsObjectText() {
+        let object = #"{"v": {"k": "v"}}"#
+        XCTAssertTrue(regex(object, #"{"v": {"$regex": "^\\[object Object\\]$"}}"#))
+        XCTAssertFalse(regex(object, #"{"v": {"$regex": "k"}}"#))
+    }
+
+    func testRegexMatchesNumbersAndBooleansAsText() {
+        XCTAssertTrue(regex(#"{"v": 10.0}"#, #"{"v": {"$regex": "^10$"}}"#))
+        XCTAssertTrue(regex(#"{"v": 1.5}"#, #"{"v": {"$regex": "^1\\.5$"}}"#))
+        XCTAssertTrue(regex(#"{"v": true}"#, #"{"v": {"$regex": "^true$"}}"#))
+    }
+
+    /// An absent or null attribute has no text: it matches no pattern — not even one that matches the
+    /// empty string — and therefore does-not-match every one. It is deliberately not rendered as the
+    /// text "null" either, which would let a pattern like `ull` match a user without the attribute.
+    func testRegexNeverMatchesAnAbsentOrNullAttribute() {
+        for attributes in [#"{}"#, #"{"v": null}"#] {
+            XCTAssertFalse(regex(attributes, #"{"v": {"$regex": "^$"}}"#))
+            XCTAssertFalse(regex(attributes, #"{"v": {"$regex": ".*"}}"#))
+            XCTAssertFalse(regex(attributes, #"{"v": {"$regex": "ull"}}"#))
+            XCTAssertTrue(regex(attributes, #"{"v": {"$notRegex": "corp"}}"#))
+            XCTAssertTrue(regex(attributes, #"{"v": {"$notRegexi": "CORP"}}"#))
+        }
+    }
+
+    /// An unusable pattern fails both polarities, as the reference SDK's try/catch does; a numeric
+    /// pattern is no longer read as its text.
+    func testRegexWithAnUnusablePatternFailsBothPolarities() {
+        XCTAssertFalse(regex(#"{"v": "123"}"#, #"{"v": {"$regex": 12}}"#))
+        XCTAssertFalse(regex(#"{"v": "123"}"#, #"{"v": {"$notRegex": 12}}"#))
+        XCTAssertFalse(regex(#"{"v": "a"}"#, #"{"v": {"$regex": "("}}"#))
+        XCTAssertFalse(regex(#"{"v": "a"}"#, #"{"v": {"$notRegex": "("}}"#))
     }
 
     // MARK: - Version operators
