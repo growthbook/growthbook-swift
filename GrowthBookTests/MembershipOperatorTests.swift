@@ -144,4 +144,44 @@ class MembershipOperatorTests: XCTestCase {
     func testAndFormMatchesWhenBothAttributesAreOutsideTheLists() {
         XCTAssertTrue(excludeBoth(["plan": "pro", "country": "US"]))
     }
+
+    // MARK: - Non-string values in a case-insensitive list
+
+    /// Case folding only applies to strings. A number, a bool or null has no case to ignore, so the
+    /// insensitive operators must agree with their sensitive counterparts on those values.
+    /// Comparing only folded forms made them match nothing, which flipped `$nini` to "not in the
+    /// list" for a value plainly in it — reported on growthbook-swift#190 for a list containing null.
+
+    func testNiniDoesNotMatchANullThatIsInTheList() {
+        XCTAssertFalse(eval(["country": ["$nini": [NSNull(), "RU"]]], ["country": NSNull()]),
+                       "null is in the exclusion list, so $nini must not match")
+    }
+
+    func testNiniDoesNotMatchAnAbsentAttributeWhenTheListContainsNull() {
+        XCTAssertFalse(eval(["country": ["$nini": [NSNull(), "RU"]]], ["unrelated": "x"]),
+                       "An absent attribute reads as null, which the list contains")
+    }
+
+    func testNiniDoesNotMatchANumberThatIsInTheList() {
+        XCTAssertFalse(eval(["country": ["$nini": [1, "RU"]]], ["country": 1]))
+    }
+
+    func testIniMatchesANumberThatIsInTheList() {
+        XCTAssertTrue(eval(["country": ["$ini": [1, "RU"]]], ["country": 1]),
+                      "$ini must agree with $in on values that have no case")
+    }
+
+    func testNiniDoesNotMatchABoolThatIsInTheList() {
+        XCTAssertFalse(eval(["flag": ["$nini": [true]]], ["flag": true]))
+    }
+
+    /// The point of the insensitive variants still has to work.
+    func testIniStillIgnoresCaseForStrings() {
+        XCTAssertTrue(eval(["country": ["$ini": ["ru"]]], ["country": "RU"]))
+        XCTAssertFalse(eval(["country": ["$nini": ["ru"]]], ["country": "RU"]))
+    }
+
+    func testIniStillMatchesAnArrayAttributeIgnoringCase() {
+        XCTAssertTrue(eval(["tags": ["$ini": ["A"]]], ["tags": ["a", "b"]]))
+    }
 }
