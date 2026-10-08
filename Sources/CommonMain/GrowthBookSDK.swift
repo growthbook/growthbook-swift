@@ -633,6 +633,13 @@ protocol GrowthBookProtocol: AnyObject {
         withLock { contextManager.getEvaluationData().features }
     }
 
+    /// Read-only snapshot of the feature-cache state (last refresh, age, expiry).
+    /// Recomputed on each access. Swift-only (not exposed to Objective-C), consistent
+    /// with the SDK's other value-type members such as `getFeatureValue`.
+    public var cacheMetadata: CacheMetadata {
+        withLock { featureVM.cacheMetadata }
+    }
+
     /// Subscribe to all experiment execution events.
     /// - Parameter result: ExperimentRunCallback
     @objc public func subscribe(_ result: @escaping ExperimentRunCallback) {
