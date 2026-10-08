@@ -677,7 +677,13 @@ class ContextualBanditTests: XCTestCase {
             ttlSeconds: 0
         )
         .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { secondRefresh.fulfill() } })
-        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData))
+        // A permanent HTTP failure rather than a generic one: retries are classified now, and a
+        // retryable error would hold the refresh callback for the whole backoff before falling back.
+        // What this test cares about is the cache fallback, not the retry schedule.
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: nil,
+            error: NSError(domain: Constants.httpErrorDomain, code: 404)
+        ))
         .initializer()
         wait(for: [secondRefresh], timeout: 2.0)
 
