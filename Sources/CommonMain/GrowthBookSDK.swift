@@ -176,6 +176,18 @@ protocol GrowthBookProtocol: AnyObject {
         return self
     }
 
+    /// Sets headers applied to the streaming (SSE) connection.
+    ///
+    /// Separate from `apiRequestHeaders` because the streaming host is often a different origin with
+    /// its own credentials. Headers the SDK manages itself — `Accept`, `Cache-Control`,
+    /// `Last-Event-Id` — always win over these.
+    /// - Parameter streamingHostRequestHeaders: headers to send with the SSE request
+    /// - Returns: GrowthBookBuilder
+    @objc public func setStreamingHostRequestHeaders(streamingHostRequestHeaders: [String: String]) -> GrowthBookBuilder {
+        growthBookBuilderModel.streamingHostRequestHeaders = streamingHostRequestHeaders
+        return self
+    }
+
     /// Sets the service instance responsible for handling sticky bucketing operations.
     /// - Parameter stickyBucketService: StickyBucketServiceProtocol
     /// - Returns: GrowthBookBuilder
@@ -382,7 +394,7 @@ protocol GrowthBookProtocol: AnyObject {
         // so GrowthBookSDK.init() skips the automatic refreshCache() call.
         // nil means "no payload provided (or invalid/empty) — fall back to cache/network."
         let preloadedFeatures: Features? = hasPreloadedPayload ? initialFeatures : nil
-        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds, streamingHostRequestHeaders: growthBookBuilderModel.streamingHostRequestHeaders ?? [:])
     }
 
     /// Extracts the `contextualBandits` section from a preloaded (offline-mode) payload, decrypting
@@ -418,6 +430,9 @@ protocol GrowthBookProtocol: AnyObject {
     var refreshHandler: CacheRefreshHandler?
     private var subscriptions: [ExperimentRunCallback] = []
     private var networkDispatcher: NetworkProtocol
+    /// Headers for the streaming connection, read on every connect so a later
+    /// `updateStreamingHostRequestHeaders(_:)` applies to the next one.
+    private var streamingHostRequestHeaders: [String: String]
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
@@ -451,10 +466,12 @@ protocol GrowthBookProtocol: AnyObject {
          features: Features? = nil,
          savedGroups: JSON? = nil,
          cachingManager: CachingLayer,
-         ttlSeconds: Int) {
+         ttlSeconds: Int,
+         streamingHostRequestHeaders: [String: String] = [:]) {
         self.contextManager = contextManager
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
+        self.streamingHostRequestHeaders = streamingHostRequestHeaders
         self.savedGroupsValues = savedGroups
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
@@ -496,7 +513,7 @@ protocol GrowthBookProtocol: AnyObject {
 
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
         if let sseURL = contextManager.getSSEUrl(), globalConfig.backgroundSync {
-            featureVM.connectBackgroundSync(sseUrl: sseURL)
+            featureVM.connectBackgroundSync(sseUrl: sseURL, headers: streamingHostRequestHeaders)
         }
 
         // Logger setup. if we have logHandler we have to re-initialise logger
@@ -960,6 +977,9 @@ protocol GrowthBookProtocol: AnyObject {
 
     /// Updates streaming host request headers for SSE connections
     @objc public func updateStreamingHostRequestHeaders(_ headers: [String: String]) {
+        withLock {
+            streamingHostRequestHeaders = headers
+        }
         if let networkClient = networkDispatcher as? CoreNetworkClient {
             networkClient.streamingHostRequestHeaders = headers
         }
