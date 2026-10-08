@@ -4,11 +4,11 @@ import Foundation
 ///
 /// Implement this protocol to define specific implementation for Network Calls - to be made by SDK
 @objc public protocol NetworkProtocol: AnyObject {
-    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void)
-    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void)
+    func consumeGETRequest(url: String, successResult: @escaping @Sendable (Data) -> Void, errorResult: @escaping @Sendable (Error) -> Void)
+    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping @Sendable (Data) -> Void, errorResult: @escaping @Sendable (Error) -> Void)
 }
 
-class CoreNetworkClient: NetworkProtocol {
+class CoreNetworkClient: NetworkProtocol, @unchecked Sendable {
     var apiRequestHeaders: [String: String]
     var streamingHostRequestHeaders: [String: String]
     
@@ -33,15 +33,15 @@ class CoreNetworkClient: NetworkProtocol {
         self.streamingHostRequestHeaders = streamingHostRequestHeaders
     }
     
-    func consumeGETRequest(url: String, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+    func consumeGETRequest(url: String, successResult: @escaping @Sendable (Data) -> Void, errorResult: @escaping @Sendable (Error) -> Void) {
         perform(urlString: url, method: "GET", params: nil, successResult: successResult, errorResult: errorResult)
     }
-    
-    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+
+    func consumePOSTRequest(url: String, params: [String : Any], successResult: @escaping @Sendable (Data) -> Void, errorResult: @escaping @Sendable (Error) -> Void) {
         perform(urlString: url, method: "POST", params: params, successResult: successResult, errorResult: errorResult)
     }
-    
-    private func perform(urlString: String, method: String, params: [String: Any]?, successResult: @escaping (Data) -> Void, errorResult: @escaping (Error) -> Void) {
+
+    private func perform(urlString: String, method: String, params: [String: Any]?, successResult: @escaping @Sendable (Data) -> Void, errorResult: @escaping @Sendable (Error) -> Void) {
         guard let url = URL(string: urlString) else { return }
         
         var request = URLRequest(url: url)

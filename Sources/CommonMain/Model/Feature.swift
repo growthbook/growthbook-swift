@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Feature object consists of possible values plus rules for how to assign values to users.
-@objc public class Feature: NSObject, Codable, Sendable {
+@objc public class Feature: NSObject, Codable, @unchecked Sendable {
     /// The default value (should use null if not specified)
     public let defaultValue: JSON?
     /// Array of Rule objects that determine when and how the defaultValue gets overridden

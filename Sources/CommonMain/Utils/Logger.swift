@@ -1,8 +1,12 @@
  
 import Foundation
 
-// GrowthBook default logger
-var logger = GBLogger()
+// GrowthBook default logger.
+//
+// A `let`: nothing reassigns this reference, and a mutable global is rejected outright under the
+// Swift 6 language mode as unsafe shared state. Configuration still changes at runtime — through
+// GBLogger's own lock-guarded properties — so `logger.minLevel = ...` keeps working.
+let logger = GBLogger()
 
 @objc public enum LoggerLevel: NSInteger {
     case trace = 0

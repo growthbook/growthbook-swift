@@ -9,7 +9,7 @@ class FeaturesDataSource {
     }
 
     /// Executes API Call to fetch features
-    func fetchFeatures(apiUrl: String, fetchResult: @escaping (Result<Data, Error>) -> Void) {
+    func fetchFeatures(apiUrl: String, fetchResult: @escaping @Sendable (Result<Data, Error>) -> Void) {
         dispatcher.consumeGETRequest(url: apiUrl, successResult: { data in
             fetchResult(.success(data))
         }, errorResult: { error in
@@ -18,7 +18,7 @@ class FeaturesDataSource {
     }
     
     /// Executes API Call to fetch features and send data for remote eval
-    func fetchRemoteEval(apiUrl: String, params: RemoteEvalParams?, fetchResult: @escaping (Result<Data, Error>) -> Void) {
+    func fetchRemoteEval(apiUrl: String, params: RemoteEvalParams?, fetchResult: @escaping @Sendable (Result<Data, Error>) -> Void) {
         var payload: [String: Any] = [:]
         
         if let params = params {
