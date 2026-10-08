@@ -357,5 +357,57 @@ class ContextManagerTests: XCTestCase {
         XCTAssertEqual(finalData.attributes["id"].stringValue, "new-user")
         XCTAssertNotNil(finalData.stickyBucketAssignmentDocs)
     }
+
+    // MARK: - attributeOverrides
+
+    func testAttributeOverridesAreLayeredOverAttributes() {
+        contextManager.updateEvalData { data in
+            data.attributeOverrides = JSON(["name": "Overridden", "plan": "pro"])
+        }
+
+        let attributes = contextManager.getEvalContext().userContext.attributes
+
+        XCTAssertEqual(attributes["id"].stringValue, "user123", "Attributes not overridden are kept")
+        XCTAssertEqual(attributes["name"].stringValue, "Overridden", "An override wins over the base value")
+        XCTAssertEqual(attributes["plan"].stringValue, "pro", "An override may introduce a new attribute")
+    }
+
+    /// The overrides are an evaluation-time layer; the stored attributes stay as the app set them,
+    /// which is what allows the overrides to be lifted again.
+    func testAttributeOverridesDoNotMutateStoredAttributes() {
+        contextManager.updateEvalData { data in
+            data.attributeOverrides = JSON(["name": "Overridden"])
+        }
+        _ = contextManager.getEvalContext()
+
+        XCTAssertEqual(contextManager.getEvaluationData().attributes["name"].stringValue, "Test User")
+    }
+
+    func testEmptyAttributeOverridesLeaveAttributesUntouched() {
+        contextManager.updateEvalData { data in
+            data.attributeOverrides = JSON([:])
+        }
+
+        let attributes = contextManager.getEvalContext().userContext.attributes
+
+        XCTAssertEqual(attributes["name"].stringValue, "Test User")
+        XCTAssertEqual(attributes.dictionaryValue.count, 2)
+    }
+
+    /// Setting an override must be reflected immediately: the built context is cached, so a change
+    /// that did not invalidate it would keep evaluating against the previous attributes.
+    func testChangingAttributeOverridesInvalidatesTheCachedContext() {
+        XCTAssertEqual(contextManager.getEvalContext().userContext.attributes["name"].stringValue, "Test User")
+
+        contextManager.updateEvalData { data in
+            data.attributeOverrides = JSON(["name": "Overridden"])
+        }
+        XCTAssertEqual(contextManager.getEvalContext().userContext.attributes["name"].stringValue, "Overridden")
+
+        contextManager.updateEvalData { data in
+            data.attributeOverrides = JSON([:])
+        }
+        XCTAssertEqual(contextManager.getEvalContext().userContext.attributes["name"].stringValue, "Test User")
+    }
 }
 

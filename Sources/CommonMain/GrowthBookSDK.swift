@@ -421,7 +421,6 @@ protocol GrowthBookProtocol: AnyObject {
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
-    private var attributeOverrides: JSON = JSON()
     private var savedGroupsValues: JSON?
     private var evalContext: EvalContext? = nil
     private var ttlSeconds: Int
@@ -926,13 +925,32 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
-    /// Sets custom attribute values that override the default ones
-    /// - Parameter overrides: Ant
+    /// Sets attribute values that take precedence over the ones passed to `setAttributes`.
+    ///
+    /// Overrides are layered on top of the base attributes for every evaluation — targeting
+    /// conditions, experiment hashing and sticky bucket lookups all see them — while `attributes`
+    /// itself is left untouched, so `getGBAttributes()` still reports what the app set. Pass an
+    /// empty map to lift the overrides again.
+    ///
+    /// When a `StickyBucketService` is configured, the previously loaded assignment documents are
+    /// dropped: they are keyed by the old attribute values, and the refresh that follows reloads
+    /// the documents for the overridden ones.
+    /// - Parameter overrides: Any
     @objc public func setAttributeOverrides(overrides: Any) {
         withLock {
-            self.attributeOverrides = JSON(overrides)
             let globalConfig = self.contextManager.getGlobalConfig()
-            if globalConfig.stickyBucketService != nil {
+            let hasStickyBucketService = globalConfig.stickyBucketService != nil
+
+            self.contextManager.updateEvalData { data in
+                data.attributeOverrides = JSON(overrides)
+                // Only safe to drop when a service can reload them; without one the documents came
+                // from the init context and could not be recovered.
+                if hasStickyBucketService {
+                    data.stickyBucketAssignmentDocs = nil
+                }
+            }
+
+            if hasStickyBucketService {
                 self.refreshStickyBucketService()
             }
             self.refreshForRemoteEval()
@@ -975,14 +993,14 @@ protocol GrowthBookProtocol: AnyObject {
         let globalConfig = contextManager.getGlobalConfig()
         guard let service = globalConfig.stickyBucketService else { return }
 
-        let evalData = contextManager.getEvaluationData()
         let context = contextManager.getEvalContext()
-
 
         Utils.refreshStickyBuckets(
             stickyBucketService: service,
             context: context,
-            attributes: evalData.attributes,
+            // The context's attributes, not the raw evaluation data: documents must be looked up by
+            // the same values the evaluation hashes on, which includes any attribute overrides.
+            attributes: context.userContext.attributes,
             data: data
         ) { [weak self] docs in
             guard let self = self else { return }
