@@ -114,6 +114,10 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     /// Sends whatever is buffered and waits for every request already accepted to finish, leaving
     /// the plugin running.
     ///
+    /// The wait is capped at `batchTimeout`, so a request slower than that is still in flight when
+    /// this returns — a hung connection delays the caller by at most that long rather than
+    /// indefinitely, at the cost of making the return no proof of delivery.
+    ///
     /// The timer keeps its schedule: this is the call an app makes on the way to the background,
     /// where the buffer must be delivered but recording resumes on the next foreground. `close`
     /// is the one that ends the plugin.

@@ -290,11 +290,30 @@ class TrackingPluginParityTests: XCTestCase {
     /// the SDK has to dispatch them explicitly for these to be seen.
     private final class RecordingPlugin: GrowthBookPlugin {
         private let lock = NSLock()
-        private(set) var flushes = 0
-        private(set) var closes = 0
+        private var _flushes = 0
+        private var _closes = 0
+        private var _featureEvaluations = 0
 
-        func flush() { lock.lock(); flushes += 1; lock.unlock() }
-        func close() { lock.lock(); closes += 1; lock.unlock() }
+        var flushes: Int { lock.lock(); defer { lock.unlock() }; return _flushes }
+        var closes: Int { lock.lock(); defer { lock.unlock() }; return _closes }
+        var featureEvaluations: Int { lock.lock(); defer { lock.unlock() }; return _featureEvaluations }
+
+        func flush() { lock.lock(); _flushes += 1; lock.unlock() }
+        func close() { lock.lock(); _closes += 1; lock.unlock() }
+        func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
+            lock.lock(); _featureEvaluations += 1; lock.unlock()
+        }
+    }
+
+    /// Stands in for a plugin whose flush is waiting on a slow network request.
+    private final class BlockingPlugin: GrowthBookPlugin {
+        let entered = DispatchSemaphore(value: 0)
+        let release = DispatchSemaphore(value: 0)
+
+        func flush() {
+            entered.signal()
+            release.wait()
+        }
     }
 
     private func makeSDK(with plugin: GrowthBookPlugin) -> GrowthBookSDK {
@@ -339,5 +358,165 @@ class TrackingPluginParityTests: XCTestCase {
         sdk.close()
 
         XCTAssertEqual(plugin.closes, 1)
+    }
+
+    // MARK: - Shutdown
+
+    /// `close` promises that nothing is recorded afterwards. Stopping the plugin's own timer is not
+    /// enough: evaluations kept arriving, filled the buffer and a full batch sent another request.
+    func testClosingStopsFurtherEventsReachingPlugins() {
+        let plugin = RecordingPlugin()
+        let sdk = makeSDK(with: plugin)
+
+        _ = sdk.evalFeature(id: "before-close")
+        sdk.close()
+        _ = sdk.evalFeature(id: "after-close")
+
+        XCTAssertEqual(plugin.featureEvaluations, 1, "Closing must end recording, not just stop the timer")
+    }
+
+    func testFlushingAfterCloseDoesNothing() {
+        let plugin = RecordingPlugin()
+        let sdk = makeSDK(with: plugin)
+
+        sdk.close()
+        sdk.flush()
+
+        XCTAssertEqual(plugin.flushes, 0, "There is nothing left to deliver once the plugin has ended")
+    }
+
+    /// `deinit` closes too, so a shutdown the app performs itself must not be repeated.
+    func testClosingTwiceShutsPluginsDownOnce() {
+        let plugin = RecordingPlugin()
+        let sdk = makeSDK(with: plugin)
+
+        sdk.close()
+        sdk.close()
+
+        XCTAssertEqual(plugin.closes, 1)
+    }
+
+    // MARK: - Locking
+
+    /// `flush` used to hold the SDK lock while the plugin waited on its network request, so an app
+    /// flushing on a background thread froze any feature read on the main thread for as long as the
+    /// request took — up to `batchTimeout`. Moving the flush off the main thread did not help,
+    /// because the lock was the thing being contended.
+    func testAFlushInProgressDoesNotBlockFeatureReads() {
+        let plugin = BlockingPlugin()
+        let sdk = makeSDK(with: plugin)
+
+        DispatchQueue.global().async { sdk.flush() }
+        XCTAssertEqual(plugin.entered.wait(timeout: .now() + 5), .success, "flush never started")
+
+        let read = expectation(description: "feature read completes while the flush is in flight")
+        DispatchQueue.global().async {
+            _ = sdk.evalFeature(id: "my-flag")
+            read.fulfill()
+        }
+        let outcome = XCTWaiter().wait(for: [read], timeout: 5)
+
+        // Release the flush before asserting, so a failure does not strand the background thread.
+        plugin.release.signal()
+        XCTAssertEqual(outcome, .completed, "A flush in progress must not block feature evaluation")
+    }
+
+    // MARK: - The real plugin's flush
+
+    /// The cases above drive a stand-in plugin, which proves the SDK dispatches `flush` but says
+    /// nothing about what `GrowthBookTrackingPlugin.flush` actually does. These drive the real one.
+    func testTheRealPluginFlushDeliversABufferedBatch() {
+        var sent: [[String: Any]] = []
+        let plugin = GrowthBookTrackingPlugin(
+            config: .init(batchSize: 1000, batchTimeout: 600)
+        ) { request, completion in
+            if let body = request.httpBody,
+               let batch = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]] {
+                sent.append(contentsOf: batch)
+            }
+            completion()
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: Experiment(key: "real-flush", variations: ["a", "b"]),
+                                  result: experimentResult(), attributes: JSON([:]))
+
+        plugin.flush()
+
+        XCTAssertEqual(sent.count, 1, "Neither the batch size nor the timer was reached — only flush delivers this")
+    }
+
+    /// The reason `flush` waits on the in-flight group rather than on the buffer: a batch that has
+    /// already been handed to a request is no longer in the buffer, so waiting on the buffer alone
+    /// would return while that request was still running.
+    func testTheRealPluginFlushWaitsForARequestAlreadyInFlight() {
+        let started = DispatchSemaphore(value: 0)
+        let finished = NSLock()
+        var requestCompleted = false
+        var flushReturnedBeforeRequest = false
+
+        let plugin = GrowthBookTrackingPlugin(
+            config: .init(batchSize: 1, batchTimeout: 600)
+        ) { _, completion in
+            started.signal()
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
+                finished.lock(); requestCompleted = true; finished.unlock()
+                completion()
+            }
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        // batchSize 1 sends immediately, so this request is in flight before flush is called.
+        plugin.onExperimentViewed(experiment: Experiment(key: "real-inflight", variations: ["a", "b"]),
+                                  result: experimentResult(), attributes: JSON([:]))
+        XCTAssertEqual(started.wait(timeout: .now() + 5), .success, "the request never started")
+
+        plugin.flush()
+
+        finished.lock(); flushReturnedBeforeRequest = !requestCompleted; finished.unlock()
+        XCTAssertFalse(flushReturnedBeforeRequest, "flush must wait for sends that already left the buffer")
+    }
+
+    /// The wait is bounded, which is the limit the public documentation has to be honest about: a
+    /// request slower than `batchTimeout` is still running when `flush` returns.
+    func testTheRealPluginFlushGivesUpAfterTheBatchTimeout() {
+        let release = DispatchSemaphore(value: 0)
+        let plugin = GrowthBookTrackingPlugin(
+            config: .init(batchSize: 1000, batchTimeout: 0.5)
+        ) { _, completion in
+            DispatchQueue.global().async {
+                release.wait()
+                completion()
+            }
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: Experiment(key: "real-timeout", variations: ["a", "b"]),
+                                  result: experimentResult(), attributes: JSON([:]))
+
+        let start = Date()
+        plugin.flush()
+        let waited = Date().timeIntervalSince(start)
+
+        release.signal()
+        XCTAssertLessThan(waited, 5, "flush must not block indefinitely on a hung request")
+    }
+
+    /// `flush` is the backgrounding call, so the plugin has to keep working when the app returns.
+    func testTheRealPluginKeepsRecordingAfterAFlush() {
+        var batches = 0
+        let plugin = GrowthBookTrackingPlugin(
+            config: .init(batchSize: 1000, batchTimeout: 600)
+        ) { _, completion in
+            batches += 1
+            completion()
+        }
+        plugin.initialize(clientKey: "sdk-test")
+
+        plugin.onExperimentViewed(experiment: Experiment(key: "real-resume-1", variations: ["a", "b"]),
+                                  result: experimentResult(), attributes: JSON([:]))
+        plugin.flush()
+        plugin.onExperimentViewed(experiment: Experiment(key: "real-resume-2", variations: ["a", "b"]),
+                                  result: experimentResult(), attributes: JSON([:]))
+        plugin.flush()
+
+        XCTAssertEqual(batches, 2, "Recording must resume after a flush")
     }
 }

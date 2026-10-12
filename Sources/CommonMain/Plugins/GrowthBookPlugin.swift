@@ -15,7 +15,8 @@ public protocol GrowthBookPlugin: AnyObject {
     /// Called every time a feature flag is evaluated.
     func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?)
 
-    /// Sends any buffered data without shutting down, and blocks until it has left.
+    /// Sends any buffered data without shutting down, blocking until it has left or the
+    /// implementation's own time limit expires — returning is not a guarantee of delivery.
     ///
     /// Separate from `close` because an app heading to the background needs its buffer delivered
     /// but expects to keep recording when it returns; `close` ends the plugin for good.
@@ -23,6 +24,9 @@ public protocol GrowthBookPlugin: AnyObject {
 
     /// Called when the SDK is shut down. Implementations should flush any buffered
     /// data synchronously before returning.
+    ///
+    /// The registry stops dispatching events once this has been called, so an implementation does
+    /// not have to guard against later callbacks itself.
     func close()
 }
 
