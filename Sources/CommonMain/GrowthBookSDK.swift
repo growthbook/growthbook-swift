@@ -271,6 +271,17 @@ protocol GrowthBookProtocol: AnyObject {
         return self
     }
 
+    /// Registers the built-in tracking plugin. The Objective-C entry point to `addPlugin`.
+    ///
+    /// `GrowthBookPlugin` carries `JSON` and the SDK's Swift model types, none of which are
+    /// representable in Objective-C, so the protocol itself cannot cross the bridge. Exposing the
+    /// built-in plugin covers what an Objective-C app actually needs; a custom plugin still has to
+    /// be written in Swift.
+    @objc public func addTrackingPlugin(_ plugin: GrowthBookTrackingPlugin) -> GrowthBookBuilder {
+        growthBookBuilderModel.plugins.append(plugin)
+        return self
+    }
+
     @objc public func initializer() -> GrowthBookSDK {
         let globalConfig = GlobalConfig(
             apiHost: growthBookBuilderModel.apiHost,
@@ -439,6 +450,59 @@ protocol GrowthBookProtocol: AnyObject {
     /// is bucketed into, so under stableSession they must be frozen for the session just like the
     /// features are.
     private var banditsEstablished: Bool = false
+
+    /// Delivers what plugins have buffered, and waits for it to leave the device.
+    ///
+    /// Call this when the app is heading to the background. Nothing else flushes: the tracking
+    /// plugin batches for up to `batchTimeout` seconds, and `deinit` does not run when the system
+    /// kills a suspended app — which is how most iOS apps end. Those events are simply lost.
+    ///
+    /// **Returning does not prove delivery.** The wait is bounded by the tracking plugin's
+    /// `batchTimeout`, so a request slower than that is still in flight when this returns, and is
+    /// lost if the app is killed straight afterwards.
+    ///
+    /// Plugins keep running afterwards, so recording resumes when the app returns.
+    @objc public func flush() {
+        // The registry is read under the lock; the plugins are called without it. Holding the lock
+        // across the call would make a flush that is waiting on a slow request block every feature
+        // read on other threads for as long as that request took.
+        let registry = withLock { contextManager.getGlobalConfig().pluginRegistry }
+        registry.flush()
+    }
+
+    /// Records an event of the app's own, alongside the exposures and evaluations the SDK tracks
+    /// by itself.
+    ///
+    /// Buffered and batched like every other event, so it is subject to the same loss on
+    /// termination — call `flush` when the app goes to the background. Unlike the SDK's own
+    /// events these are never deduplicated: a repeat is a second occurrence, not a redundant
+    /// re-evaluation.
+    ///
+    /// - Parameters:
+    ///   - eventName: The event's name, as it should appear in analysis.
+    ///   - properties: The event's own fields. Omit for an event that carries none.
+    @objc public func logEvent(_ eventName: String, properties: [String: Any]? = nil) {
+        withLock {
+            let context = contextManager.getEvalContext()
+            contextManager.getGlobalConfig().pluginRegistry.logEvent(
+                eventName: eventName,
+                properties: properties.map { JSON($0) },
+                attributes: context.userContext.attributes
+            )
+        }
+    }
+
+    /// Shuts plugins down, flushing what they hold first.
+    ///
+    /// Unlike `flush`, this ends them: nothing is recorded afterwards, and later evaluations are
+    /// dropped rather than buffered. `deinit` calls it too, but relying on that means the timing is
+    /// whenever the instance happens to be released. Calling it more than once is harmless.
+    ///
+    /// The same bounded wait as `flush` applies to whatever is delivered on the way out.
+    @objc public func close() {
+        let registry = withLock { contextManager.getGlobalConfig().pluginRegistry }
+        registry.close()
+    }
 
     deinit {
         contextManager.getGlobalConfig().pluginRegistry.close()
