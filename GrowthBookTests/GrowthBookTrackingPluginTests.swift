@@ -172,19 +172,32 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     // MARK: - Batch size flush
 
     func testFlushWhenBatchSizeReached() {
-        let expectation = expectation(description: "flush on batch size")
+        var batches: [[[String: Any]]] = []
+        var urls: [String] = []
         let plugin = makePlugin(batchSize: 3, batchTimeout: 60) { request in
-            XCTAssertTrue(request.url?.absoluteString.contains("client_key=sdk-test") == true)
-            let events = try! JSONSerialization.jsonObject(with: request.httpBody!) as! [[String: Any]]
-            XCTAssertEqual(events.count, 3)
-            expectation.fulfill()
+            urls.append(request.url?.absoluteString ?? "")
+            if let body = request.httpBody,
+               let batch = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]] {
+                batches.append(batch)
+            }
         }
         plugin.initialize(clientKey: "sdk-test")
-        for _ in 0..<3 {
-            plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        // One more event than the batch size. If reaching the size sends, the fourth event is left
+        // over and the trailing flush sends it separately — 3 then 1. If it does not, nothing goes
+        // until the flush and all four arrive as one batch. Three events could not tell those apart,
+        // because the flush alone would also have produced a single batch of three.
+        for index in 0..<4 {
+            plugin.onExperimentViewed(experiment: Experiment(key: "batch-exp-\(index)", variations: [JSON(0), JSON(1)]),
+                                      result: makeExperimentResult(), attributes: nil)
         }
-        wait(for: [expectation], timeout: 10.0)
-        withExtendedLifetime(plugin) {}
+
+        // `flush()` is a `queue.sync`, so it drains the asyncs above and the assertions below need
+        // no wall-clock wait. That wait is what used to fail this test on a loaded CI runner: a
+        // starved `.utility` queue missed the ceiling and the code was never at fault.
+        plugin.flush()
+
+        XCTAssertEqual(batches.map(\.count), [3, 1], "Reaching the batch size must send on its own")
+        XCTAssertTrue(urls.first?.contains("client_key=sdk-test") == true)
     }
 
     func testNoFlushBeforeBatchSizeReached() {
@@ -206,11 +219,14 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         let plugin = makePlugin(batchSize: 100, batchTimeout: 0.1) { _ in expectation.fulfill() }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
-        // The flush runs on a `.utility` queue, which a CI runner can starve for seconds while it
-        // builds for four simulator platforms. What is asserted here is that the timer flushes at
-        // all, not that it flushes within a given second, so keep the ceiling generous: the wait
-        // returns on fulfillment, so a higher ceiling costs nothing when the timer fires on time.
-        wait(for: [expectation], timeout: 30.0)
+        // A liveness check: what is asserted is that the timer flushes at all, never that it does
+        // so within a given second. The flush runs on a `.utility` queue, which a CI runner
+        // building four simulator platforms can starve for a long time — 30s was not enough on one
+        // such run, and the code was not at fault. The wait returns the moment it is fulfilled, so
+        // a generous ceiling costs a healthy run nothing and only delays the report of a genuine
+        // never-flushes regression. Unlike the batch-size case above, there is nothing to
+        // synchronise on here: the trigger is wall-clock by definition.
+        wait(for: [expectation], timeout: 120.0)
         withExtendedLifetime(plugin) {}
     }
 
