@@ -126,6 +126,20 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     /// plugin has accepted has finished — including requests started earlier by the flush timer
     /// or by `batchSize`, which are no longer in the buffer. Waiting is bounded by `batchTimeout`,
     /// so a hung connection delays shutdown by at most that long.
+    /// Sends whatever is buffered and waits for every request already accepted to finish, leaving
+    /// the plugin running.
+    ///
+    /// The timer keeps its schedule: this is the call an app makes on the way to the background,
+    /// where the buffer must be delivered but recording resumes on the next foreground. `close`
+    /// is the one that ends the plugin.
+    public func flush() {
+        if DispatchQueue.getSpecific(key: Self.queueKey) == true {
+            flushAndWaitOnQueue()
+        } else {
+            queue.sync { self.flushAndWaitOnQueue() }
+        }
+    }
+
     public func close() {
         if DispatchQueue.getSpecific(key: Self.queueKey) == true {
             // Already on the queue (e.g. deinit triggered by a queue closure).
@@ -160,6 +174,13 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         eventQueue = []
         guard !events.isEmpty else { return }
         post(events: events, completion: nil)
+    }
+
+    private func flushAndWaitOnQueue() {
+        flushOnQueue()
+        // Waiting on the buffer alone would return immediately whenever a flush has just handed its
+        // events to a request, so wait on the in-flight sends — the batch above is one of them.
+        _ = inFlight.wait(timeout: .now() + config.batchTimeout)
     }
 
     private func closeOnQueue() {

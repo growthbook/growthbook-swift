@@ -23,6 +23,10 @@ public final class PluginRegistry {
         for plugin in plugins { plugin.onFeatureEvaluated(featureKey: featureKey, result: result, attributes: attributes) }
     }
 
+    func flush() {
+        for plugin in plugins { plugin.flush() }
+    }
+
     func close() {
         for plugin in plugins { plugin.close() }
     }

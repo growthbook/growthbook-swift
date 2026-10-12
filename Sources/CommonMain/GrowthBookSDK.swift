@@ -440,6 +440,25 @@ protocol GrowthBookProtocol: AnyObject {
     /// features are.
     private var banditsEstablished: Bool = false
 
+    /// Delivers everything plugins have buffered, and returns once it has left the device.
+    ///
+    /// Call this when the app is heading to the background. Nothing else flushes: the tracking
+    /// plugin batches for up to `batchTimeout` seconds, and `deinit` does not run when the system
+    /// kills a suspended app — which is how most iOS apps end. Those events are simply lost.
+    ///
+    /// Plugins keep running afterwards, so recording resumes when the app returns.
+    @objc public func flush() {
+        withLock { contextManager.getGlobalConfig().pluginRegistry.flush() }
+    }
+
+    /// Shuts plugins down, flushing what they hold first.
+    ///
+    /// Unlike `flush`, this ends them: nothing is recorded afterwards. `deinit` calls it too, but
+    /// relying on that means the timing is whenever the instance happens to be released.
+    @objc public func close() {
+        withLock { contextManager.getGlobalConfig().pluginRegistry.close() }
+    }
+
     deinit {
         contextManager.getGlobalConfig().pluginRegistry.close()
     }
