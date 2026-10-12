@@ -186,6 +186,9 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         // over and the trailing flush sends it separately — 3 then 1. If it does not, nothing goes
         // until the flush and all four arrive as one batch. Three events could not tell those apart,
         // because the flush alone would also have produced a single batch of three.
+        //
+        // The experiments are distinct because identical exposures are deduplicated: repeating one
+        // would never fill the batch. This case is about the batch-size trigger, not about deduping.
         for index in 0..<4 {
             plugin.onExperimentViewed(experiment: Experiment(key: "batch-exp-\(index)", variations: [JSON(0), JSON(1)]),
                                       result: makeExperimentResult(), attributes: nil)

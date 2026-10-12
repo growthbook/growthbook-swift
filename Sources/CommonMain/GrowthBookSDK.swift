@@ -271,6 +271,17 @@ protocol GrowthBookProtocol: AnyObject {
         return self
     }
 
+    /// Registers the built-in tracking plugin. The Objective-C entry point to `addPlugin`.
+    ///
+    /// `GrowthBookPlugin` carries `JSON` and the SDK's Swift model types, none of which are
+    /// representable in Objective-C, so the protocol itself cannot cross the bridge. Exposing the
+    /// built-in plugin covers what an Objective-C app actually needs; a custom plugin still has to
+    /// be written in Swift.
+    @objc public func addTrackingPlugin(_ plugin: GrowthBookTrackingPlugin) -> GrowthBookBuilder {
+        growthBookBuilderModel.plugins.append(plugin)
+        return self
+    }
+
     @objc public func initializer() -> GrowthBookSDK {
         let globalConfig = GlobalConfig(
             apiHost: growthBookBuilderModel.apiHost,
@@ -457,6 +468,28 @@ protocol GrowthBookProtocol: AnyObject {
         // read on other threads for as long as that request took.
         let registry = withLock { contextManager.getGlobalConfig().pluginRegistry }
         registry.flush()
+    }
+
+    /// Records an event of the app's own, alongside the exposures and evaluations the SDK tracks
+    /// by itself.
+    ///
+    /// Buffered and batched like every other event, so it is subject to the same loss on
+    /// termination — call `flush` when the app goes to the background. Unlike the SDK's own
+    /// events these are never deduplicated: a repeat is a second occurrence, not a redundant
+    /// re-evaluation.
+    ///
+    /// - Parameters:
+    ///   - eventName: The event's name, as it should appear in analysis.
+    ///   - properties: The event's own fields. Omit for an event that carries none.
+    @objc public func logEvent(_ eventName: String, properties: [String: Any]? = nil) {
+        withLock {
+            let context = contextManager.getEvalContext()
+            contextManager.getGlobalConfig().pluginRegistry.logEvent(
+                eventName: eventName,
+                properties: properties.map { JSON($0) },
+                attributes: context.userContext.attributes
+            )
+        }
     }
 
     /// Shuts plugins down, flushing what they hold first.
