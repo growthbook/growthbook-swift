@@ -513,6 +513,92 @@ Aggregate (non-contextual) bandits need nothing from this: they are delivered as
 Sticky bucketing ensures that users see the same experiment variant, even when user session, user login status, or experiment parameters change. See the [Sticky Bucketing docs](/app/sticky-bucketing) for more information. If your organization and experiment supports sticky bucketing, you must implement an instance of the `StickyBucketService` to use Sticky Bucketing. For simple bucket persistence using the browser's LocalStorage (can be polyfilled for other environments).
 
 
+## Plugins
+
+A plugin receives the SDK's lifecycle and evaluation events. Register as many as you like on the builder; each is called after your own `trackingCallback` has run.
+
+```swift
+let sdk = GrowthBookBuilder(url: url, attributes: attrs, trackingCallback: { _, _ in })
+    .addPlugin(GrowthBookTrackingPlugin())
+    .initializer()
+```
+
+Implement `GrowthBookPlugin` for your own. Every method has a default no-op, so override only what you need:
+
+| Method | Called when |
+| --- | --- |
+| `initialize(clientKey:)` | Once, at SDK init |
+| `onExperimentViewed(experiment:result:attributes:)` | A user is exposed to a variation |
+| `onFeatureEvaluated(featureKey:result:attributes:)` | A feature is evaluated |
+| `logEvent(eventName:properties:attributes:)` | The app called `sdk.logEvent(...)` |
+| `flush()` | Deliver buffered data, keep running |
+| `close()` | Shut down for good |
+
+### GrowthBookTrackingPlugin
+
+Batches experiment exposures and feature evaluations and POSTs them to the GrowthBook ingest endpoint.
+
+```swift
+let plugin = GrowthBookTrackingPlugin(config: .init(
+    ingestorHost: "https://us1.gb-ingest.com",
+    batchSize: 100,
+    batchTimeout: 10,
+    dedupeCacheSize: 1000,
+    enableFeatureUsageEvents: true
+))
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `ingestorHost` | `https://us1.gb-ingest.com` | Ingest endpoint |
+| `batchSize` | `100` | Send once this many events are buffered |
+| `batchTimeout` | `10` | Seconds between timed sends; also caps how long `flush`/`close` block |
+| `dedupeCacheSize` | `1000` | Recent events remembered when suppressing duplicates; `0` disables deduping |
+| `enableFeatureUsageEvents` | `true` | When false, stop reporting feature evaluations |
+
+**Deduplication.** A flag read on every screen produces the same event over and over, so identical exposures and evaluations are suppressed. The key is the event name plus the event's own fields — deliberately not the attributes, since a feature evaluation carries no unit identity and keying on attributes would defeat deduping for any app that updates them. Events from `logEvent` are never deduplicated: the app chose to send each one.
+
+> **Switching users.** Because attributes are outside the key, calling `setAttributes` to switch user does not reset deduplication: an evaluation already seen for the previous user is suppressed for the next one, for as long as it stays in the cache. This matches the JS SDK. If your app signs users in and out and you need every user's first evaluation recorded, set `dedupeCacheSize: 0` to send everything.
+
+**Turning off usage events.** `enableFeatureUsageEvents: false` drops feature evaluations only. Experiment exposures and custom events still send, so you keep your experiment data while shedding the much larger volume of usage events.
+
+### Custom events
+
+```swift
+sdk.logEvent("checkout_completed", properties: ["total": 42])
+```
+
+The event is buffered and batched like any other, and carries whatever attributes are set at the time it is logged.
+
+### Flushing
+
+Events are buffered for up to `batchTimeout` seconds. `deinit` does not run when the system kills a suspended app — which is how most iOS apps end — so **call `flush()` when your app goes to the background**, or those events are lost:
+
+```swift
+func applicationDidEnterBackground(_ application: UIApplication) {
+    sdk.flush()
+}
+```
+
+`flush()` delivers the buffer and waits for it to leave the device, then leaves the plugins running so recording resumes when the app returns.
+
+**Returning is not proof of delivery.** The wait is capped at `batchTimeout`, so a request slower than that is still in flight when `flush()` returns and is lost if the app is killed straight afterwards.
+
+`close()` also delivers the buffer, but ends the plugins: nothing is recorded afterwards and later evaluations are dropped rather than buffered. Calling it more than once is harmless, and the SDK calls it on deallocation anyway — call it yourself when you want the timing to be yours.
+
+### Objective-C
+
+`GrowthBookPlugin` carries `JSON` and the SDK's Swift model types, so the protocol itself cannot cross the bridge. The built-in plugin has its own entry point; a custom plugin still has to be written in Swift.
+
+```objc
+GrowthBookTrackingPlugin *plugin = [[GrowthBookTrackingPlugin alloc] init];
+GrowthBookSDK *sdk = [[builder addTrackingPlugin:plugin] initializer];
+
+[sdk logEvent:@"checkout_completed" properties:@{@"total": @42}];
+[sdk flush];
+```
+
+
 ## License
 
 This project uses the MIT license. The core GrowthBook app will always remain open and free, although we may add some commercial enterprise add-ons in the future.

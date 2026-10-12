@@ -11,7 +11,7 @@ import Foundation
 ///
 /// If initialised with an empty `clientKey` the plugin degrades to no-op behaviour
 /// so it never crashes the host app.
-public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
+public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
 
     // MARK: - Config
 
@@ -19,19 +19,31 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         public let ingestorHost: String
         public let batchSize: Int
         public let batchTimeout: TimeInterval
+        /// How many recent event keys to remember when suppressing duplicates. Zero turns
+        /// deduplication off and sends every evaluation.
+        public let dedupeCacheSize: Int
+        /// When false, feature evaluations stop being reported. Experiment exposures and events
+        /// raised through `logEvent` are unaffected — an app that only needs exposures can drop
+        /// the far larger volume of usage events without losing its experiment data.
+        public let enableFeatureUsageEvents: Bool
 
         public static let defaultIngestorHost = "https://us1.gb-ingest.com"
         public static let defaultBatchSize    = 100
         public static let defaultBatchTimeout: TimeInterval = 10.0
+        public static let defaultDedupeCacheSize = 1000
 
         public init(
             ingestorHost: String = defaultIngestorHost,
             batchSize: Int = defaultBatchSize,
-            batchTimeout: TimeInterval = defaultBatchTimeout
+            batchTimeout: TimeInterval = defaultBatchTimeout,
+            dedupeCacheSize: Int = defaultDedupeCacheSize,
+            enableFeatureUsageEvents: Bool = true
         ) {
             self.ingestorHost = ingestorHost
             self.batchSize = batchSize
             self.batchTimeout = batchTimeout
+            self.dedupeCacheSize = dedupeCacheSize
+            self.enableFeatureUsageEvents = enableFeatureUsageEvents
         }
     }
 
@@ -46,6 +58,7 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     private var isInitialized = false
     private var eventQueue: [IngestEvent] = []
     private var flushTimer: DispatchSourceTimer?
+    private let dedupeCache: DedupeCache
 
     private let queue = DispatchQueue(label: "com.growthbook.tracking-plugin", qos: .utility)
     // Used to detect re-entrant calls to close() from deinit triggered on the queue thread.
@@ -61,13 +74,38 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
 
     public init(config: Config = Config()) {
         self.config = config
+        self.dedupeCache = DedupeCache(capacity: config.dedupeCacheSize)
 
         let sessionConfig = URLSessionConfiguration.default
         sessionConfig.urlCache = nil
         sessionConfig.requestCachePolicy = .reloadIgnoringLocalCacheData
         self.urlSession = URLSession(configuration: sessionConfig)
         self.sendHandler = nil
+        super.init()
         queue.setSpecific(key: Self.queueKey, value: true)
+    }
+
+    /// Objective-C entry point. `Config` is a Swift struct and cannot cross the bridge, so its
+    /// fields are taken individually here.
+    @objc public convenience init(
+        ingestorHost: String,
+        batchSize: Int,
+        batchTimeout: TimeInterval,
+        dedupeCacheSize: Int,
+        enableFeatureUsageEvents: Bool
+    ) {
+        self.init(config: Config(
+            ingestorHost: ingestorHost,
+            batchSize: batchSize,
+            batchTimeout: batchTimeout,
+            dedupeCacheSize: dedupeCacheSize,
+            enableFeatureUsageEvents: enableFeatureUsageEvents
+        ))
+    }
+
+    /// Objective-C entry point using the defaults.
+    @objc public convenience override init() {
+        self.init(config: Config())
     }
 
     // Internal — lets tests intercept requests without URLProtocol.
@@ -76,9 +114,11 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
         sendHandler: @escaping (URLRequest, @escaping () -> Void) -> Void
     ) {
         self.config = config
+        self.dedupeCache = DedupeCache(capacity: config.dedupeCacheSize)
         let sessionConfig = URLSessionConfiguration.default
         self.urlSession = URLSession(configuration: sessionConfig)
         self.sendHandler = sendHandler
+        super.init()
         queue.setSpecific(key: Self.queueKey, value: true)
     }
 
@@ -105,9 +145,17 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     }
 
     public func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
+        guard config.enableFeatureUsageEvents else { return }
         queue.async {
             guard self.isInitialized else { return }
             self.enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: attributes ?? JSON([:]))))
+        }
+    }
+
+    public func logEvent(eventName: String, properties: JSON?, attributes: JSON?) {
+        queue.async {
+            guard self.isInitialized else { return }
+            self.enqueue(.custom(CustomEvent(eventName: eventName, properties: properties, attributes: attributes ?? JSON([:]))))
         }
     }
 
@@ -144,6 +192,12 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     // MARK: - Private helpers (called from queue)
 
     private func enqueue(_ event: IngestEvent) {
+        // A flag that is read on every screen produces the same evaluation over and over; sending
+        // each one costs bandwidth and tells the ingestor nothing it did not already have.
+        if let key = event.dedupeKey, dedupeCache.insertAndReportDuplicate(key) {
+            return
+        }
+
         eventQueue.append(event)
         if eventQueue.count >= config.batchSize {
             flushOnQueue()
