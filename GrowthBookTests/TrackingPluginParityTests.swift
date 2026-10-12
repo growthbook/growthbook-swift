@@ -434,7 +434,7 @@ class TrackingPluginParityTests: XCTestCase {
                let batch = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]] {
                 sent.append(contentsOf: batch)
             }
-            completion()
+            completion(true)
         }
         plugin.initialize(clientKey: "sdk-test")
         plugin.onExperimentViewed(experiment: Experiment(key: "real-flush", variations: ["a", "b"]),
@@ -460,7 +460,7 @@ class TrackingPluginParityTests: XCTestCase {
             started.signal()
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
                 finished.lock(); requestCompleted = true; finished.unlock()
-                completion()
+                completion(true)
             }
         }
         plugin.initialize(clientKey: "sdk-test")
@@ -484,7 +484,7 @@ class TrackingPluginParityTests: XCTestCase {
         ) { _, completion in
             DispatchQueue.global().async {
                 release.wait()
-                completion()
+                completion(true)
             }
         }
         plugin.initialize(clientKey: "sdk-test")
@@ -506,7 +506,7 @@ class TrackingPluginParityTests: XCTestCase {
             config: .init(batchSize: 1000, batchTimeout: 600)
         ) { _, completion in
             batches += 1
-            completion()
+            completion(true)
         }
         plugin.initialize(clientKey: "sdk-test")
 

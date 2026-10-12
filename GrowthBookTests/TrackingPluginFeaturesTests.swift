@@ -41,7 +41,7 @@ final class TrackingPluginFeaturesTests: XCTestCase {
             )
         ) { request, completion in
             recorder.record(request)
-            completion()
+            completion(true)
         }
     }
 
@@ -173,6 +173,102 @@ final class TrackingPluginFeaturesTests: XCTestCase {
         }
         XCTAssertEqual(features, ["flag-a", "flag-b", "flag-c"],
                        "flag-a was refreshed and must not have been evicted")
+    }
+
+    // MARK: - Failed sends
+
+    /// The cache records an evaluation when it is accepted, before anything is known about whether
+    /// it will arrive. A batch dropped while the device is offline would otherwise suppress its
+    /// events for good — and because re-evaluating one refreshes its place in the cache, it would
+    /// never age out either, so a single offline moment ends a flag's reporting for the session.
+    func testADroppedBatchDoesNotSuppressItsEventsForEver() {
+        var attempts = 0
+        var succeeds = false
+        let plugin = GrowthBookTrackingPlugin(
+            config: .init(batchSize: 1000, batchTimeout: 600)
+        ) { _, finish in
+            attempts += 1
+            finish(succeeds)
+        }
+        plugin.initialize(clientKey: "sdk-test")
+
+        plugin.onFeatureEvaluated(featureKey: "my-flag", result: featureResult(), attributes: nil)
+        plugin.flush()
+        XCTAssertEqual(attempts, 1)
+
+        succeeds = true
+        plugin.onFeatureEvaluated(featureKey: "my-flag", result: featureResult(), attributes: nil)
+        plugin.flush()
+
+        XCTAssertEqual(attempts, 2, "The evaluation was never delivered, so it must be sent again")
+    }
+
+    /// The mirror image: a batch that did land must stay suppressed, or deduping would do nothing.
+    func testADeliveredBatchKeepsItsEventsSuppressed() {
+        var attempts = 0
+        let plugin = GrowthBookTrackingPlugin(
+            config: .init(batchSize: 1000, batchTimeout: 600)
+        ) { _, finish in
+            attempts += 1
+            finish(true)
+        }
+        plugin.initialize(clientKey: "sdk-test")
+
+        plugin.onFeatureEvaluated(featureKey: "my-flag", result: featureResult(), attributes: nil)
+        plugin.flush()
+        plugin.onFeatureEvaluated(featureKey: "my-flag", result: featureResult(), attributes: nil)
+        plugin.flush()
+
+        XCTAssertEqual(attempts, 1)
+    }
+
+    /// Only the failed batch's own keys come back; a flag delivered earlier stays suppressed.
+    func testOnlyTheFailedBatchGetsItsKeysBack() {
+        var attempts = 0
+        var succeeds = true
+        let plugin = GrowthBookTrackingPlugin(
+            config: .init(batchSize: 1000, batchTimeout: 600)
+        ) { _, finish in
+            attempts += 1
+            finish(succeeds)
+        }
+        plugin.initialize(clientKey: "sdk-test")
+
+        plugin.onFeatureEvaluated(featureKey: "delivered", result: featureResult(), attributes: nil)
+        plugin.flush()
+
+        succeeds = false
+        plugin.onFeatureEvaluated(featureKey: "dropped", result: featureResult(), attributes: nil)
+        plugin.flush()
+
+        succeeds = true
+        plugin.onFeatureEvaluated(featureKey: "delivered", result: featureResult(), attributes: nil)
+        plugin.onFeatureEvaluated(featureKey: "dropped", result: featureResult(), attributes: nil)
+        plugin.flush()
+
+        // 1: delivered. 2: dropped. 3: the retry of dropped alone — `delivered` is still suppressed.
+        XCTAssertEqual(attempts, 3)
+    }
+
+    // MARK: - Shutdown
+
+    /// `PluginRegistry` drops the lock before dispatching, so an evaluation can pass its open check
+    /// and reach the plugin after a concurrent `close()` has finished. The plugin has to be inert
+    /// on its own account — the registry's latch cannot be the only defence.
+    func testThePluginIgnoresEventsAdmittedAfterItsOwnClose() {
+        let recorder = Recorder()
+        let plugin = makePlugin(into: recorder)
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.close()
+
+        plugin.onFeatureEvaluated(featureKey: "after-close", result: featureResult(), attributes: nil)
+        plugin.onExperimentViewed(experiment: experiment(key: "after-close-exposure"),
+                                  result: experimentResult(), attributes: nil)
+        plugin.logEvent(eventName: "after_close", properties: nil, attributes: nil)
+        // A second close would send anything that had been buffered by the calls above.
+        plugin.close()
+
+        XCTAssertTrue(recorder.events.isEmpty, "A closed plugin must not buffer or send anything")
     }
 
     // MARK: - logEvent

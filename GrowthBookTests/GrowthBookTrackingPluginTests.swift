@@ -145,7 +145,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
     ) -> GrowthBookTrackingPlugin {
         GrowthBookTrackingPlugin(config: .init(batchSize: batchSize, batchTimeout: batchTimeout)) { request, completion in
             onRequest?(request)
-            completion()
+            completion(true)
         }
     }
 
@@ -268,7 +268,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
             started.fulfill()
             DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) {
                 lock.lock(); didComplete = true; lock.unlock()
-                completion()
+                completion(true)
             }
         }
         plugin.initialize(clientKey: "sdk-test")

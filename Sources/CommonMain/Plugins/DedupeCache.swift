@@ -13,7 +13,10 @@ final class DedupeCache {
 
     private final class Node {
         let key: String
-        var prev: Node?
+        /// Weak, or two neighbours would hold each other alive: `a.next` points at `b` while
+        /// `b.prev` points back at `a`. The dictionary below owns every node, so releasing the
+        /// cache drops those owning references and the chain then unwinds from the head.
+        weak var prev: Node?
         var next: Node?
         init(key: String) { self.key = key }
     }
@@ -52,6 +55,14 @@ final class DedupeCache {
             nodes.removeValue(forKey: oldest.key)
         }
         return false
+    }
+
+    /// Forgets `key`, so the next identical event is reported rather than suppressed. Used when a
+    /// batch fails to send: the events it carried were never delivered, so nothing has been said
+    /// about them yet.
+    func remove(_ key: String) {
+        guard let node = nodes.removeValue(forKey: key) else { return }
+        detach(node)
     }
 
     // MARK: - List plumbing

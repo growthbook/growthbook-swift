@@ -31,8 +31,10 @@ public protocol GrowthBookPlugin: AnyObject {
     /// Called when the SDK is shut down. Implementations should flush any buffered
     /// data synchronously before returning.
     ///
-    /// The registry stops dispatching events once this has been called, so an implementation does
-    /// not have to guard against later callbacks itself.
+    /// The registry stops dispatching once this has been called, but it releases its lock before
+    /// calling plugins, so a callback that passed that check concurrently can still arrive
+    /// afterwards. An implementation that must record nothing after shutdown has to make itself
+    /// inert here rather than rely on the registry alone.
     func close()
 }
 
