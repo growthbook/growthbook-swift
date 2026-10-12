@@ -318,23 +318,28 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         plugin.onFeatureEvaluated(featureKey: "my-feature", result: featureResult, attributes: nil)
         plugin.close()
         XCTAssertEqual(capturedEvents?.first?["event_name"] as? String, "Feature Evaluated")
-        let props = capturedEvents?.first?["properties"] as? [String: Any]
+        let props = capturedEvents?.first?["properties_json"] as? [String: Any]
         XCTAssertEqual(props?["feature"] as? String, "my-feature")
     }
 
+    /// `id` is one of the keys the ingestor reads as the unit's identity, so it is promoted to
+    /// `device_id` and everything else is left in `context_json`.
     func testAttributesIncludedInEventPayload() {
-        var capturedAttrs: [String: Any]?
+        var capturedEvent: [String: Any]?
         let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { request in
             let events = try? JSONSerialization.jsonObject(with: request.httpBody!) as? [[String: Any]]
-            capturedAttrs = events?.first?["attributes"] as? [String: Any]
+            capturedEvent = events?.first
         }
         plugin.initialize(clientKey: "sdk-test")
         let attrs = JSON(["id": "user-1", "plan": "pro"])
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: attrs)
         plugin.close()
-        XCTAssertEqual(capturedAttrs?["id"] as? String, "user-1")
-        XCTAssertEqual(capturedAttrs?["plan"] as? String, "pro")
-        XCTAssertEqual(capturedAttrs?["sdk_language"] as? String, "swift")
-        XCTAssertNotNil(capturedAttrs?["sdk_version"])
+        XCTAssertEqual(capturedEvent?["device_id"] as? String, "user-1")
+        XCTAssertEqual(capturedEvent?["sdk_language"] as? String, "swift")
+        XCTAssertNotNil(capturedEvent?["sdk_version"])
+
+        let context = capturedEvent?["context_json"] as? [String: Any]
+        XCTAssertEqual(context?["plan"] as? String, "pro")
+        XCTAssertNil(context?["id"], "A promoted key must not be duplicated into context_json")
     }
 }

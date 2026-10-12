@@ -14,7 +14,16 @@ class TrackingPluginParityTests: XCTestCase {
     }
 
     private func properties(of value: Encodable) throws -> [String: Any] {
-        try XCTUnwrap(try encoded(value)["properties"] as? [String: Any])
+        try XCTUnwrap(try encoded(value)["properties_json"] as? [String: Any])
+    }
+
+    private func featureEvent(attributes: JSON) -> FeatureEvaluatedEvent {
+        FeatureEvaluatedEvent(
+            featureKey: "my-flag",
+            result: FeatureResult(value: JSON("on"), isOn: true, source: "force",
+                                  experiment: nil, result: nil, ruleId: "rule-1"),
+            attributes: attributes
+        )
     }
 
     /// Minimal type-erasing wrapper so both event structs can go through one helper.
@@ -144,6 +153,135 @@ class TrackingPluginParityTests: XCTestCase {
         let event = FeatureEvaluatedEvent(featureKey: "my-flag", result: result, attributes: JSON([:]))
 
         XCTAssertEqual(try properties(of: event)["ruleId"] as? String, "")
+    }
+
+    // MARK: - Envelope
+
+    /// The ingestor reads the event's own fields from `properties_json`. Under any other key they
+    /// arrive as an unread blob, so every event lands with no properties at all.
+    func testEventFieldsAreSentUnderPropertiesJson() throws {
+        let payload = try encoded(featureEvent(attributes: JSON([:])))
+
+        XCTAssertNotNil(payload["properties_json"] as? [String: Any])
+        XCTAssertNil(payload["properties"], "`properties` is not a key the ingestor reads")
+    }
+
+    /// These are the columns the events are joined to a user on. Left inside the attributes blob
+    /// they parse fine and every identity column comes back empty.
+    func testIdentityAttributesArePromotedToTopLevelColumns() throws {
+        let payload = try encoded(featureEvent(attributes: JSON([
+            "user_id": "u-1",
+            "device_id": "d-1",
+            "page_id": "p-1",
+            "session_id": "s-1"
+        ])))
+
+        XCTAssertEqual(payload["user_id"] as? String, "u-1")
+        XCTAssertEqual(payload["device_id"] as? String, "d-1")
+        XCTAssertEqual(payload["page_id"] as? String, "p-1")
+        XCTAssertEqual(payload["session_id"] as? String, "s-1")
+    }
+
+    func testDeviceIdFallsBackThroughAnonymousIdThenId() throws {
+        let viaAnonymous = try encoded(featureEvent(attributes: JSON(["anonymous_id": "anon-1", "id": "id-1"])))
+        XCTAssertEqual(viaAnonymous["device_id"] as? String, "anon-1")
+
+        let viaId = try encoded(featureEvent(attributes: JSON(["id": "id-1"])))
+        XCTAssertEqual(viaId["device_id"] as? String, "id-1")
+    }
+
+    /// Null and absent are different to the ingestor: an absent key leaves the column unwritten.
+    func testIdentityColumnsAreNullRatherThanAbsentWhenUnknown() throws {
+        let payload = try encoded(featureEvent(attributes: JSON([:])))
+
+        for key in ["user_id", "device_id", "page_id", "session_id"] {
+            XCTAssertTrue(payload[key] is NSNull, "\(key) must be written as null, not omitted")
+        }
+    }
+
+    /// A non-string identity attribute is not a usable id. Passing it through unchanged would make
+    /// the column's type depend on what the host app happened to set.
+    func testNonStringIdentityAttributeIsSentAsNull() throws {
+        let payload = try encoded(featureEvent(attributes: JSON(["user_id": 42])))
+
+        XCTAssertTrue(payload["user_id"] is NSNull)
+    }
+
+    func testRemainingAttributesGoToContextJsonWithoutTheIdentityKeys() throws {
+        let payload = try encoded(featureEvent(attributes: JSON([
+            "user_id": "u-1",
+            "anonymous_id": "anon-1",
+            "pageTitle": "Home",
+            "country": "UA",
+            "plan": "pro"
+        ])))
+
+        let context = try XCTUnwrap(payload["context_json"] as? [String: Any])
+        XCTAssertEqual(context["country"] as? String, "UA")
+        XCTAssertEqual(context["plan"] as? String, "pro")
+        XCTAssertNil(context["user_id"], "Promoted keys must not be duplicated into context_json")
+        XCTAssertNil(context["anonymous_id"])
+        XCTAssertNil(context["pageTitle"])
+        XCTAssertNil(payload["attributes"], "`attributes` is not a key the ingestor reads")
+    }
+
+    /// The SDK identifiers used to be merged into the attributes the app supplied, which both hid
+    /// them from the columns that report them and let an app attribute named `sdk_version`
+    /// overwrite the real one.
+    func testSdkIdentifiersAreTopLevelAndNotMixedIntoAttributes() throws {
+        let payload = try encoded(featureEvent(attributes: JSON(["country": "UA"])))
+
+        XCTAssertEqual(payload["sdk_language"] as? String, "swift")
+        XCTAssertEqual(payload["sdk_version"] as? String, gbSdkVersion)
+        XCTAssertEqual(payload["url"] as? String, "")
+
+        let context = try XCTUnwrap(payload["context_json"] as? [String: Any])
+        XCTAssertNil(context["sdk_language"], "SDK identifiers are columns, not user attributes")
+        XCTAssertNil(context["sdk_version"])
+    }
+
+    func testCampaignAttributesArePromotedWhenPresent() throws {
+        let payload = try encoded(featureEvent(attributes: JSON([
+            "utmSource": "newsletter",
+            "utmMedium": "email",
+            "utmCampaign": "spring",
+            "utmTerm": "swift",
+            "utmContent": "cta",
+            "pageTitle": "Home"
+        ])))
+
+        XCTAssertEqual(payload["utm_source"] as? String, "newsletter")
+        XCTAssertEqual(payload["utm_medium"] as? String, "email")
+        XCTAssertEqual(payload["utm_campaign"] as? String, "spring")
+        XCTAssertEqual(payload["utm_term"] as? String, "swift")
+        XCTAssertEqual(payload["utm_content"] as? String, "cta")
+        XCTAssertEqual(payload["page_title"] as? String, "Home")
+    }
+
+    /// Unlike the identity columns, these are omitted rather than nulled when the app never set
+    /// them — a null here would read as "this event had no campaign" instead of "not tracked".
+    func testCampaignAttributesAreOmittedWhenAbsent() throws {
+        let payload = try encoded(featureEvent(attributes: JSON([:])))
+
+        for key in ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "page_title"] {
+            XCTAssertNil(payload[key], "\(key) must be absent, not null, when untracked")
+        }
+    }
+
+    /// Both event types share one envelope; the experiment path is the one that carries identity.
+    func testExperimentEventUsesTheSameEnvelope() throws {
+        let event = ExperimentViewedEvent(
+            experiment: Experiment(key: "exp-envelope", variations: ["a", "b"]),
+            result: experimentResult(),
+            attributes: JSON(["user_id": "u-9", "country": "UA"])
+        )
+        let payload = try encoded(event)
+
+        XCTAssertEqual(payload["event_name"] as? String, "Experiment Viewed")
+        XCTAssertEqual(payload["user_id"] as? String, "u-9")
+        XCTAssertNotNil(payload["properties_json"] as? [String: Any])
+        let context = try XCTUnwrap(payload["context_json"] as? [String: Any])
+        XCTAssertEqual(context["country"] as? String, "UA")
     }
 
     // MARK: - Flushing

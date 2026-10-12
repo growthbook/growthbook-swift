@@ -6,7 +6,7 @@ import Foundation
 /// **Wire contract**
 /// - Endpoint:  POST `{ingestorHost}/track?client_key={clientKey}`
 /// - Default host: `https://us1.gb-ingest.com`
-/// - Body: `[{ "event": "...", ... }, ...]`  (plain JSON array)
+/// - Body: a plain JSON array of `IngestEnvelope` payloads
 /// - Headers: `Content-Type: application/json`, `User-Agent: growthbook-swift-sdk/{version}`
 ///
 /// If initialised with an empty `clientKey` the plugin degrades to no-op behaviour
@@ -100,32 +100,17 @@ public final class GrowthBookTrackingPlugin: GrowthBookPlugin {
     public func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
         queue.async {
             guard self.isInitialized else { return }
-            self.enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result, attributes: Self.mergedAttributes(attributes))))
+            self.enqueue(.experimentViewed(ExperimentViewedEvent(experiment: experiment, result: result, attributes: attributes ?? JSON([:]))))
         }
     }
 
     public func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
         queue.async {
             guard self.isInitialized else { return }
-            self.enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: Self.mergedAttributes(attributes))))
+            self.enqueue(.featureEvaluated(FeatureEvaluatedEvent(featureKey: featureKey, result: result, attributes: attributes ?? JSON([:]))))
         }
     }
 
-    private static func mergedAttributes(_ userAttributes: JSON?) -> JSON {
-        var merged: [String: Any] = [
-            "sdk_language": "swift",
-            "sdk_version": sdkVersion
-        ]
-        if let dict = userAttributes?.object as? [String: Any] {
-            for (key, value) in dict { merged[key] = value }
-        }
-        return JSON(merged)
-    }
-
-    /// Stops the flush timer, sends any buffered events, and blocks until every request the
-    /// plugin has accepted has finished — including requests started earlier by the flush timer
-    /// or by `batchSize`, which are no longer in the buffer. Waiting is bounded by `batchTimeout`,
-    /// so a hung connection delays shutdown by at most that long.
     /// Sends whatever is buffered and waits for every request already accepted to finish, leaving
     /// the plugin running.
     ///
