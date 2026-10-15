@@ -298,6 +298,12 @@ protocol GrowthBookProtocol: AnyObject {
         // applied independently of hasPreloadedPayload: a payload can legitimately carry bandits
         // while the features themselves come from cache or network.
         var initialContextualBandits: JSON? = nil
+        // Saved groups travel in the same envelope as the features and must reach evaluation:
+        // without them every `$inGroup` resolves against an empty group and, worse, every
+        // `$notInGroup` matches, so a rule meant to exclude a group would apply to everyone.
+        // Applied independently of hasPreloadedPayload — a payload can carry saved groups while
+        // the features themselves come from cache or network.
+        var initialSavedGroups: JSON? = nil
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
@@ -308,6 +314,10 @@ protocol GrowthBookProtocol: AnyObject {
             if let featuresModel = try? decoder.decode(FeaturesDataModel.self, from: featuresData),
                featuresModel.features != nil || featuresModel.encryptedFeatures != nil {
                 initialContextualBandits = parsePreloadedContextualBandits(
+                    from: featuresModel,
+                    encryptionKey: growthBookBuilderModel.encryptionKey
+                )
+                initialSavedGroups = parsePreloadedSavedGroups(
                     from: featuresModel,
                     encryptionKey: growthBookBuilderModel.encryptionKey
                 )
@@ -354,7 +364,7 @@ protocol GrowthBookProtocol: AnyObject {
             stickyBucketAssignmentDocs: nil,
             stickyBucketIdentifierAttributes: nil,
             features: initialFeatures,
-            savedGroups: nil,
+            savedGroups: initialSavedGroups,
             contextualBandits: initialContextualBandits,
             url: nil,
             forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues
@@ -408,6 +418,32 @@ protocol GrowthBookProtocol: AnyObject {
             return contextualBandits
         }
         return model.contextualBandits
+    }
+
+    /// Extracts the `savedGroups` section from a preloaded (offline-mode) payload, decrypting it
+    /// first when the payload uses `encryptedSavedGroups`.
+    ///
+    /// Returns `nil` when the payload carries no saved groups or when decryption fails. Note that
+    /// `nil` is not a neutral outcome for evaluation: conditions using `$notInGroup` will match
+    /// every user, so a decryption failure is logged as an error rather than passed over silently.
+    private func parsePreloadedSavedGroups(from model: FeaturesDataModel, encryptionKey: String?) -> JSON? {
+        if let encryptedSavedGroups = model.encryptedSavedGroups, !encryptedSavedGroups.isEmpty {
+            guard let encryptionKey, !encryptionKey.isEmpty else {
+                logger.error("Preloaded payload has encryptedSavedGroups but no encryption key was provided. " +
+                             "Saved group conditions will not evaluate correctly.")
+                return nil
+            }
+            guard let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(
+                encryptedString: encryptedSavedGroups,
+                encryptionKey: encryptionKey
+            ) else {
+                logger.error("Failed to decrypt saved groups from preloaded payload. " +
+                             "Saved group conditions will not evaluate correctly.")
+                return nil
+            }
+            return savedGroups
+        }
+        return model.savedGroups
     }
 }
 
