@@ -308,6 +308,25 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("hello")))
     }
 
+    // An invalid pattern can't be matched, so $regex/$regexi report "no match" (false)
+    // while their negations $notRegex/$notRegexi report "not matching" (true) —
+    // matching the corrected behavior in the JS/Go/Rust/Python SDKs.
+    func testRegexOperatorReturnsFalseForInvalidPattern() {
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$regex", attributeValue: JSON("hello"), conditionValue: JSON("[")))
+    }
+
+    func testRegexiOperatorReturnsFalseForInvalidPattern() {
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$regexi", attributeValue: JSON("hello"), conditionValue: JSON("[")))
+    }
+
+    func testNotRegexReturnsTrueForInvalidPattern() {
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$notRegex", attributeValue: JSON("hello"), conditionValue: JSON("[")))
+    }
+
+    func testNotRegexiReturnsTrueForInvalidPattern() {
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("hello"), conditionValue: JSON("[")))
+    }
+
     // MARK: - Version operators
 
     func testVeqOperator() {
