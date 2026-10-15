@@ -300,8 +300,8 @@ class GrowthBookSDKTests: XCTestCase {
                 if error != nil { exp.fulfill() }
             }
         ).initializer()
+        sdk.featureVM.maxRetryAttempts = 0  // disable retry so failure is immediate in this test
 
-        _ = sdk
         wait(for: [exp], timeout: 2.0)
     }
 

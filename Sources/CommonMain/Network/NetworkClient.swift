@@ -98,7 +98,7 @@ class CoreNetworkClient: NetworkProtocol {
                 
                 // Handle 304 Not Modified - data hasn't changed
                 if status == 304 {
-                    let notModifiedError = NSError(domain: "HTTPError", code: 304, userInfo: [
+                    let notModifiedError = NSError(domain: Constants.httpErrorDomain, code: 304, userInfo: [
                         NSLocalizedDescriptionKey: "Not Modified - Use cached data"
                     ])
                     errorResult(notModifiedError)
@@ -106,7 +106,7 @@ class CoreNetworkClient: NetworkProtocol {
                 }
                 
                 if status >= 400 {
-                    let httpError = NSError(domain: "HTTPError", code: httpResponse.statusCode, userInfo: [
+                    let httpError = NSError(domain: Constants.httpErrorDomain, code: httpResponse.statusCode, userInfo: [
                         NSLocalizedDescriptionKey: "HTTP Error: \(httpResponse.statusCode)"
                     ])
                     errorResult(httpError)
