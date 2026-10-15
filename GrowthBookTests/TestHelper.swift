@@ -98,6 +98,15 @@ class TestHelper {
     func getDecryptData() -> [JSON]? {
         testData?.dictionaryValue["decrypt"]?.arrayValue
     }
+    
+    func savedGroupReferencesV2(_ section: String) -> [JSON]? {
+        testData?.dictionaryValue["savedGroupReferencesV2"]?.dictionaryValue[section]?.arrayValue
+    }
+    
+    func getSavedGroupReferencesV2ConditionData() -> [JSON]? { savedGroupReferencesV2("evalCondition") }
+    func getSavedGroupReferencesV2FeatureData()   -> [JSON]? { savedGroupReferencesV2("feature") }
+    func getSavedGroupReferencesV2RunData()       -> [JSON]? { savedGroupReferencesV2("run") }
+    
 
     /// Loads the vendored conformance fixtures.
     ///
