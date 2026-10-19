@@ -271,16 +271,34 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
         wait(for: [started], timeout: 30.0)
 
+        let closeStarted = DispatchSemaphore(value: 0)
         let closeReturned = DispatchSemaphore(value: 0)
         DispatchQueue.global().async {
+            closeStarted.signal()
             plugin.close()
             closeReturned.signal()
         }
 
+        // Wait for the worker to be running before timing anything. The negative check below only
+        // means something once close() is under way; it used to begin as soon as the work was
+        // *queued*, so a worker the runner scheduled late let the window expire on its own, which
+        // read as "still blocked" and hid a close() that never waits at all.
+        //
+        // Requiring this signal also makes the test fail, rather than quietly pass, when the worker
+        // never runs — the right way round for a check that otherwise cannot be made.
+        XCTAssertEqual(
+            closeStarted.wait(timeout: .now() + 30), .success,
+            "the shutdown worker never started, so nothing below was actually verified"
+        )
+
         // close() must still be blocked while the request is unfinished. A loaded runner only makes
         // this wait more likely to time out, which is the passing outcome — the failure it catches
         // is close() returning early, which no amount of slowness can produce.
-        guard closeReturned.wait(timeout: .now() + 0.5) == .timedOut else {
+        //
+        // What is left between the signal above and close() blocking is a single `queue.sync` hop
+        // onto an idle serial queue. A close() that does not wait makes that same hop and then
+        // returns, so a window this much larger than the hop is what separates the two.
+        guard closeReturned.wait(timeout: .now() + 1.0) == .timedOut else {
             return XCTFail("close() returned while a submitted request was still in flight")
         }
 
