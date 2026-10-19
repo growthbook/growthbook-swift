@@ -250,6 +250,72 @@ final class TrackingPluginFeaturesTests: XCTestCase {
         XCTAssertEqual(attempts, 3)
     }
 
+    /// Requests can finish out of order, so a failure must only forget the cache entry its own
+    /// batch created. The entry is keyed by content, so an older batch failing late would otherwise
+    /// remove an identical entry that a newer, successful batch had put there — and the next
+    /// evaluation would be sent again despite having been delivered.
+    func testALateFailureDoesNotForgetAnEntryANewerRequestDelivered() {
+        let held = Held()
+        let plugin = GrowthBookTrackingPlugin(
+            // One entry, so the middle evaluation evicts the first and the third is accepted anew.
+            // `batchTimeout` is short because these requests are deliberately left unfinished, and
+            // the barrier below waits on them.
+            config: .init(batchSize: 1, batchTimeout: 0.2, dedupeCacheSize: 1)
+        ) { request, finish in
+            let body = request.httpBody.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] }
+            let feature = (body?.first?["properties_json"] as? [String: Any])?["feature"] as? String
+            held.append(feature ?? "?", finish)
+        }
+        plugin.initialize(clientKey: "sdk-test")
+
+        plugin.onFeatureEvaluated(featureKey: "A", result: featureResult(), attributes: nil)
+        plugin.onFeatureEvaluated(featureKey: "B", result: featureResult(), attributes: nil)
+        plugin.onFeatureEvaluated(featureKey: "A", result: featureResult(), attributes: nil)
+        plugin.flush()
+        XCTAssertEqual(held.features, ["A", "B", "A"], "all three should have been sent")
+
+        // The newer A lands, then the original A fails — the out-of-order case.
+        held.finish(2, true)
+        held.finish(1, true)
+        held.finish(0, false)
+
+        plugin.onFeatureEvaluated(featureKey: "A", result: featureResult(), attributes: nil)
+        plugin.flush()
+
+        XCTAssertEqual(held.features.count, 3, "A was already delivered; re-sending it is avoidable traffic")
+        held.finishAll()
+    }
+
+    /// The send handler runs on the plugin's queue while the test reads from its own thread.
+    private final class Held {
+        private let lock = NSLock()
+        private var entries: [(feature: String, finish: (Bool) -> Void)] = []
+        private var done: Set<Int> = []
+
+        var features: [String] { lock.lock(); defer { lock.unlock() }; return entries.map(\.feature) }
+
+        func append(_ feature: String, _ finish: @escaping (Bool) -> Void) {
+            lock.lock(); entries.append((feature, finish)); lock.unlock()
+        }
+
+        /// Each completion balances one `inFlight.enter()`, so calling one twice would make the
+        /// group leave more often than it entered and trap.
+        func finish(_ index: Int, _ succeeded: Bool) {
+            lock.lock()
+            let finish = done.insert(index).inserted ? entries[index].finish : nil
+            lock.unlock()
+            finish?(succeeded)
+        }
+
+        /// Balances whatever is still outstanding, so nothing is left waiting on teardown.
+        func finishAll() {
+            lock.lock()
+            let pending = entries.indices.filter { done.insert($0).inserted }.map { entries[$0].finish }
+            lock.unlock()
+            for finish in pending { finish(true) }
+        }
+    }
+
     // MARK: - Shutdown
 
     /// `PluginRegistry` drops the lock before dispatching, so an evaluation can pass its open check
@@ -453,18 +519,23 @@ final class TrackingPluginFeaturesTests: XCTestCase {
 
 final class DedupeCacheTests: XCTestCase {
 
+    /// `admit` returns the entry it created, or nil when the key is a duplicate.
+    private func isDuplicate(_ cache: DedupeCache, _ key: String) -> Bool {
+        cache.admit(key) == nil
+    }
+
     func testReportsADuplicateOnlyOnTheSecondSighting() {
         let cache = DedupeCache(capacity: 10)
 
-        XCTAssertFalse(cache.insertAndReportDuplicate("a"))
-        XCTAssertTrue(cache.insertAndReportDuplicate("a"))
+        XCTAssertFalse(isDuplicate(cache, "a"))
+        XCTAssertTrue(isDuplicate(cache, "a"))
     }
 
     func testNeverGrowsBeyondItsCapacity() {
         let cache = DedupeCache(capacity: 3)
 
         for index in 0..<100 {
-            _ = cache.insertAndReportDuplicate("key-\(index)")
+            _ = cache.admit("key-\(index)")
         }
 
         XCTAssertEqual(cache.count, 3)
@@ -473,27 +544,27 @@ final class DedupeCacheTests: XCTestCase {
     func testEvictsTheLeastRecentlyUsedEntry() {
         let cache = DedupeCache(capacity: 2)
 
-        _ = cache.insertAndReportDuplicate("a")
-        _ = cache.insertAndReportDuplicate("b")
-        _ = cache.insertAndReportDuplicate("a")   // refreshes a, so b is now oldest
-        _ = cache.insertAndReportDuplicate("c")   // evicts b
+        _ = cache.admit("a")
+        _ = cache.admit("b")
+        _ = cache.admit("a")   // refreshes a, so b is now oldest
+        _ = cache.admit("c")   // evicts b
 
-        XCTAssertTrue(cache.insertAndReportDuplicate("a"), "a was refreshed and must survive")
-        XCTAssertFalse(cache.insertAndReportDuplicate("b"), "b was the least recently used")
+        XCTAssertTrue(isDuplicate(cache, "a"), "a was refreshed and must survive")
+        XCTAssertFalse(isDuplicate(cache, "b"), "b was the least recently used")
     }
 
     /// Single-entry and zero capacities are the cases most likely to walk off the end of the list.
     func testHandlesDegenerateCapacities() {
         let single = DedupeCache(capacity: 1)
-        XCTAssertFalse(single.insertAndReportDuplicate("a"))
-        XCTAssertTrue(single.insertAndReportDuplicate("a"))
-        XCTAssertFalse(single.insertAndReportDuplicate("b"))
-        XCTAssertFalse(single.insertAndReportDuplicate("a"), "a was evicted by b")
+        XCTAssertFalse(isDuplicate(single, "a"))
+        XCTAssertTrue(isDuplicate(single, "a"))
+        XCTAssertFalse(isDuplicate(single, "b"))
+        XCTAssertFalse(isDuplicate(single, "a"), "a was evicted by b")
         XCTAssertEqual(single.count, 1)
 
         let disabled = DedupeCache(capacity: 0)
-        XCTAssertFalse(disabled.insertAndReportDuplicate("a"))
-        XCTAssertFalse(disabled.insertAndReportDuplicate("a"))
+        XCTAssertFalse(isDuplicate(disabled, "a"))
+        XCTAssertFalse(isDuplicate(disabled, "a"))
         XCTAssertEqual(disabled.count, 0)
     }
 
@@ -501,7 +572,48 @@ final class DedupeCacheTests: XCTestCase {
     func testTreatsANegativeCapacityAsDisabled() {
         let cache = DedupeCache(capacity: -5)
 
-        XCTAssertFalse(cache.insertAndReportDuplicate("a"))
-        XCTAssertFalse(cache.insertAndReportDuplicate("a"))
+        XCTAssertFalse(isDuplicate(cache, "a"))
+        XCTAssertFalse(isDuplicate(cache, "a"))
+    }
+
+    // MARK: - Withdrawing
+
+    func testWithdrawingAnEntryLetsTheKeyBeAdmittedAgain() {
+        let cache = DedupeCache(capacity: 10)
+
+        let entry = try? XCTUnwrap(cache.admit("a"))
+        XCTAssertTrue(isDuplicate(cache, "a"))
+
+        cache.withdraw(try! XCTUnwrap(entry))
+
+        XCTAssertFalse(isDuplicate(cache, "a"), "the entry was withdrawn, so this is a fresh sighting")
+    }
+
+    /// The case the review found: entries are keyed by content, so withdrawing by key alone would
+    /// forget an identical entry admitted since — one a newer, successful batch is relying on.
+    func testWithdrawingAStaleEntryLeavesTheCurrentOneAlone() {
+        let cache = DedupeCache(capacity: 1)
+
+        let first = try! XCTUnwrap(cache.admit("a"))
+        _ = cache.admit("b")                                    // evicts a
+        let second = try! XCTUnwrap(cache.admit("a"))           // a is admitted afresh
+
+        cache.withdraw(first)
+
+        XCTAssertTrue(isDuplicate(cache, "a"), "the current entry for a must survive a stale withdrawal")
+        cache.withdraw(second)
+        XCTAssertFalse(isDuplicate(cache, "a"), "withdrawing the current entry does take effect")
+    }
+
+    func testWithdrawingAnAlreadyEvictedEntryIsHarmless() {
+        let cache = DedupeCache(capacity: 1)
+
+        let entry = try! XCTUnwrap(cache.admit("a"))
+        _ = cache.admit("b")                                    // evicts a
+
+        cache.withdraw(entry)
+
+        XCTAssertTrue(isDuplicate(cache, "b"), "b must be untouched")
+        XCTAssertEqual(cache.count, 1)
     }
 }

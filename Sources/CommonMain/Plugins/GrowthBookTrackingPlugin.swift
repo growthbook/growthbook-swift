@@ -56,7 +56,15 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
     // All mutable state is accessed exclusively from `queue`.
     private var clientKey: String = ""
     private var isInitialized = false
-    private var eventQueue: [IngestEvent] = []
+    /// An event waiting to be sent, together with the cache entry admitting it created. The entry
+    /// travels with the event so that a batch which fails withdraws exactly the entries it made,
+    /// and not an identical one a later batch has since put there.
+    private struct BufferedEvent {
+        let event: IngestEvent
+        let dedupeEntry: DedupeCache.Entry?
+    }
+
+    private var eventQueue: [BufferedEvent] = []
     private var flushTimer: DispatchSourceTimer?
     private let dedupeCache: DedupeCache
 
@@ -196,11 +204,13 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
     private func enqueue(_ event: IngestEvent) {
         // A flag that is read on every screen produces the same evaluation over and over; sending
         // each one costs bandwidth and tells the ingestor nothing it did not already have.
-        if let key = event.dedupeKey, dedupeCache.insertAndReportDuplicate(key) {
-            return
+        var entry: DedupeCache.Entry?
+        if let key = event.dedupeKey {
+            guard let admitted = dedupeCache.admit(key) else { return }
+            entry = admitted
         }
 
-        eventQueue.append(event)
+        eventQueue.append(BufferedEvent(event: event, dedupeEntry: entry))
         if eventQueue.count >= config.batchSize {
             flushOnQueue()
         }
@@ -218,7 +228,7 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
         let events = eventQueue
         eventQueue = []
         guard !events.isEmpty else { return }
-        post(events: events, completion: nil)
+        post(buffered: events, completion: nil)
     }
 
     private func flushAndWaitOnQueue() {
@@ -241,7 +251,7 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
         let events = eventQueue
         eventQueue = []
         if !events.isEmpty {
-            post(events: events, completion: nil)
+            post(buffered: events, completion: nil)
         }
         // Waiting on `eventQueue` alone would return immediately whenever a flush has just
         // handed its events to a request, so wait on the in-flight sends instead — the batch
@@ -249,20 +259,21 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
         _ = inFlight.wait(timeout: .now() + config.batchTimeout)
     }
 
-    private func post(events: [IngestEvent], completion: (() -> Void)?) {
+    private func post(buffered: [BufferedEvent], completion: (() -> Void)?) {
         let key = clientKey
+        let events = buffered.map(\.event)
 
-        // The keys were recorded when these events were accepted, before anything was known about
-        // whether they would arrive. A batch that never lands has to give them back, or the
+        // The entries were recorded when these events were accepted, before anything was known
+        // about whether they would arrive. A batch that never lands has to give them back, or the
         // evaluations it carried stay suppressed — and because re-evaluating one refreshes its
         // place in the cache, they would never age out either.
-        let dedupeKeys = events.compactMap(\.dedupeKey)
+        let dedupeEntries = buffered.compactMap(\.dedupeEntry)
 
         guard
             let body = try? JSONEncoder().encode(events),
             let url = URL(string: "\(config.ingestorHost)/track?client_key=\(key)")
         else {
-            releaseDedupeKeys(dedupeKeys)
+            releaseDedupeEntries(dedupeEntries)
             completion?()
             return
         }
@@ -276,7 +287,7 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
         // Balanced in `finish`, which every send path calls exactly once.
         inFlight.enter()
         let finish: (Bool) -> Void = { [weak self, inFlight] succeeded in
-            if !succeeded { self?.releaseDedupeKeys(dedupeKeys) }
+            if !succeeded { self?.releaseDedupeEntries(dedupeEntries) }
             inFlight.leave()
             completion?()
         }
@@ -296,13 +307,13 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
     /// Lets a failed batch's events be reported again. Dispatched onto the queue when called from
     /// a URLSession callback; run inline when the caller is already on it, so a send that fails
     /// synchronously has given the keys back before the next event is admitted.
-    private func releaseDedupeKeys(_ keys: [String]) {
-        guard !keys.isEmpty else { return }
+    private func releaseDedupeEntries(_ entries: [DedupeCache.Entry]) {
+        guard !entries.isEmpty else { return }
 
         if DispatchQueue.getSpecific(key: Self.queueKey) == true {
-            for key in keys { dedupeCache.remove(key) }
+            for entry in entries { dedupeCache.withdraw(entry) }
         } else {
-            queue.async { for key in keys { self.dedupeCache.remove(key) } }
+            queue.async { for entry in entries { self.dedupeCache.withdraw(entry) } }
         }
     }
 }
