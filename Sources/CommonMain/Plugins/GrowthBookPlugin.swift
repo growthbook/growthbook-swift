@@ -15,6 +15,12 @@ public protocol GrowthBookPlugin: AnyObject {
     /// Called every time a feature flag is evaluated.
     func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?)
 
+    /// Called for an event the app raised itself through `GrowthBookSDK.logEvent`.
+    ///
+    /// Unlike the two callbacks above, these are never deduplicated: the app chose when to send
+    /// each one, so a repeat is a second occurrence rather than a redundant re-evaluation.
+    func logEvent(eventName: String, properties: JSON?, attributes: JSON?)
+
     /// Sends any buffered data without shutting down, blocking until it has left or the
     /// implementation's own time limit expires — returning is not a guarantee of delivery.
     ///
@@ -25,8 +31,10 @@ public protocol GrowthBookPlugin: AnyObject {
     /// Called when the SDK is shut down. Implementations should flush any buffered
     /// data synchronously before returning.
     ///
-    /// The registry stops dispatching events once this has been called, so an implementation does
-    /// not have to guard against later callbacks itself.
+    /// The registry stops dispatching once this has been called, but it releases its lock before
+    /// calling plugins, so a callback that passed that check concurrently can still arrive
+    /// afterwards. An implementation that must record nothing after shutdown has to make itself
+    /// inert here rather than rely on the registry alone.
     func close()
 }
 
@@ -34,6 +42,7 @@ public extension GrowthBookPlugin {
     func initialize(clientKey: String) {}
     func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {}
     func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {}
+    func logEvent(eventName: String, properties: JSON?, attributes: JSON?) {}
     func flush() {}
     func close() {}
 }
@@ -44,13 +53,45 @@ public extension GrowthBookPlugin {
 public enum IngestEvent: Encodable {
     case experimentViewed(ExperimentViewedEvent)
     case featureEvaluated(FeatureEvaluatedEvent)
+    case custom(CustomEvent)
 
     public func encode(to encoder: Encoder) throws {
         switch self {
         case .experimentViewed(let event): try event.encode(to: encoder)
         case .featureEvaluated(let event): try event.encode(to: encoder)
+        case .custom(let event): try event.encode(to: encoder)
         }
     }
+
+    /// The key a duplicate has to match on, or nil for events that are never deduplicated.
+    var dedupeKey: String? {
+        switch self {
+        case .experimentViewed(let event): return event.dedupeKey
+        case .featureEvaluated(let event): return event.dedupeKey
+        case .custom: return nil
+        }
+    }
+}
+
+/// Builds the string two identical events must agree on.
+///
+/// Only the name and the event's own fields go in — deliberately not the attributes. A feature
+/// evaluation carries no unit identity of its own, so including attributes would make every
+/// attribute change look like a new event; the reference SDK draws the line in the same place.
+/// Keys are sorted because dictionary ordering is not guaranteed between encodes, and two
+/// serializations of the same evaluation that differ only in key order would never match.
+func ingestDedupeKey<Properties: Encodable>(eventName: String, properties: Properties) -> String? {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    guard let data = try? encoder.encode(DedupeKeyInput(eventName: eventName, properties: properties)) else {
+        return nil
+    }
+    return String(data: data, encoding: .utf8)
+}
+
+private struct DedupeKeyInput<Properties: Encodable>: Encodable {
+    let eventName: String
+    let properties: Properties
 }
 
 /// The envelope every ingested event is wrapped in.
@@ -164,6 +205,8 @@ public struct ExperimentViewedEvent: Encodable {
     private let properties: Properties
     public let attributes: JSON
 
+    var dedupeKey: String? { ingestDedupeKey(eventName: Self.eventName, properties: properties) }
+
     public func encode(to encoder: Encoder) throws {
         try IngestEnvelope(eventName: Self.eventName, properties: properties, attributes: attributes)
             .encode(to: encoder)
@@ -199,6 +242,8 @@ public struct FeatureEvaluatedEvent: Encodable {
     private let properties: Properties
     public let attributes: JSON
 
+    var dedupeKey: String? { ingestDedupeKey(eventName: Self.eventName, properties: properties) }
+
     public func encode(to encoder: Encoder) throws {
         try IngestEnvelope(eventName: Self.eventName, properties: properties, attributes: attributes)
             .encode(to: encoder)
@@ -212,6 +257,27 @@ public struct FeatureEvaluatedEvent: Encodable {
             ruleId: result.source == "defaultValue" ? "$default" : (result.ruleId ?? ""),
             variationId: result.experimentResult?.key ?? ""
         )
+        self.attributes = attributes
+    }
+}
+
+/// An event the app raised through `GrowthBookSDK.logEvent`, carried in the same envelope as the
+/// SDK's own events so the ingestor needs no special case for it.
+public struct CustomEvent: Encodable {
+    private let eventName: String
+    private let properties: JSON
+    public let attributes: JSON
+
+    public func encode(to encoder: Encoder) throws {
+        try IngestEnvelope(eventName: eventName, properties: properties, attributes: attributes)
+            .encode(to: encoder)
+    }
+
+    public init(eventName: String, properties: JSON?, attributes: JSON) {
+        self.eventName = eventName
+        // An absent body is an empty object, not null: the ingestor reads `properties_json` as a
+        // record and a null there is a different shape from "this event carried no fields".
+        self.properties = properties ?? JSON([:])
         self.attributes = attributes
     }
 }
