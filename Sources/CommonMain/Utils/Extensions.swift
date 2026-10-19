@@ -12,12 +12,12 @@ extension Sequence where Element: AdditiveArithmetic {
 }
 
 extension JSON {
-    static func convertToArrayFloat(jsonArray: [JSON]) -> [Float] {
-        var floats: [Float] = []
+    static func convertToArrayDouble(jsonArray: [JSON]) -> [Double] {
+        var doubles: [Double] = []
         jsonArray.forEach { json in
-            floats.append(json.floatValue)
+            doubles.append(json.doubleValue)
         }
-        return floats
+        return doubles
     }
 
     static func convertToArrayString(jsonArray: [JSON]) -> [String] {
@@ -28,12 +28,12 @@ extension JSON {
         return array
     }
 
-    static func convertToTwoArrayFloat(jsonArray: [JSON]) -> [[Float]] {
-        var array: [[Float]] = []
+    static func convertToTwoArrayDouble(jsonArray: [JSON]) -> [[Double]] {
+        var array: [[Double]] = []
         jsonArray.forEach { json in
-            var values: [Float] = []
+            var values: [Double] = []
             json.arrayValue.forEach { item in
-                values.append(item.floatValue)
+                values.append(item.doubleValue)
             }
             array.append(values)
         }
