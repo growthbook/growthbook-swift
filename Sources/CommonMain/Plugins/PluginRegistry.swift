@@ -1,7 +1,16 @@
 import Foundation
 
 /// Holds all registered plugins and dispatches lifecycle and evaluation events to each one.
-public final class PluginRegistry {
+///
+/// The `@unchecked Sendable` conformance is what lets the shared `empty` instance exist. It is
+/// earned rather than asserted: the plugin list is fixed at init, and the one piece of mutable
+/// state — `isClosed` — is read and written only under `lock`, never while a plugin is being
+/// called.
+///
+/// It says nothing about the plugins themselves. The SDK calls them from whichever thread applied
+/// an update or ran an experiment, so a plugin that keeps state has to guard it, exactly as
+/// `GrowthBookTrackingPlugin` does with its own queue.
+public final class PluginRegistry: @unchecked Sendable {
 
     public static let empty = PluginRegistry(plugins: [])
 
