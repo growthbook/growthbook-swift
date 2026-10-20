@@ -262,7 +262,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
         // The request's completion is held here instead of being scheduled on a delay: asserting
         // ordering against a deadline means a runner that stalls long enough fails the test rather
         // than the code. Nothing here waits on wall-clock time except the negative check below.
-        let heldCompletion = Atomic<(() -> Void)?>(nil)
+        let heldCompletion = Atomic<((Bool) -> Void)?>(nil)
         let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 30)) { _, completion in
             heldCompletion.value = completion
             started.fulfill()
@@ -302,7 +302,7 @@ final class GrowthBookTrackingPluginTests: XCTestCase {
             return XCTFail("close() returned while a submitted request was still in flight")
         }
 
-        heldCompletion.value?()
+        heldCompletion.value?(true)
         XCTAssertEqual(
             closeReturned.wait(timeout: .now() + 30), .success,
             "close() did not return after the in-flight request finished"
