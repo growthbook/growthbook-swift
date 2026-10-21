@@ -428,6 +428,8 @@ class ConditionEvaluator {
                 if attributeValue == .null {
                         if let cond = conditionValue.double {
                             return 0.0 <= cond
+                        } else if let condStr = conditionValue.string, let cond = Double(condStr) {
+                            return 0.0 <= cond
                         }
                         return false
                     }
@@ -452,6 +454,8 @@ class ConditionEvaluator {
             case "$gt":
                 if attributeValue == .null {
                         if let cond = conditionValue.double {
+                            return 0.0 > cond
+                        } else if let condStr = conditionValue.string, let cond = Double(condStr) {
                             return 0.0 > cond
                         }
                         return false
@@ -478,6 +482,8 @@ class ConditionEvaluator {
                 if attributeValue == .null {
                         if let cond = conditionValue.double {
                             return 0.0 >= cond
+                        } else if let condStr = conditionValue.string, let cond = Double(condStr) {
+                            return 0.0 >= cond
                         }
                         return false
                     }
@@ -485,9 +491,12 @@ class ConditionEvaluator {
                         if let cond = conditionValue.double {
                                     return num >= cond
                                 } else if let condStr = conditionValue.string, let condNum = Double(condStr) {
-                                    return num > condNum
+                                    return num >= condNum
                                 }
                                 return false
+                    }
+                    if let str = attributeValue.string, let cond = conditionValue.double, let num = Double(str) {
+                        return num >= cond
                     }
                     if let str = attributeValue.string, let cond = conditionValue.string {
                         return str >= cond

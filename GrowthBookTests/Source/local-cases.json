@@ -48,6 +48,174 @@
         "userAgent": "Android Mobile Browser"
       },
       false
+    ],
+    [
+      "js-match: $gte - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$gte": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      true
+    ],
+    [
+      "js-match: $gte - number attribute vs larger numeric string",
+      {
+        "n": {
+          "$gte": "11"
+        }
+      },
+      {
+        "n": 10
+      },
+      false
+    ],
+    [
+      "js-match: $gte - number attribute vs smaller numeric string",
+      {
+        "n": {
+          "$gte": "9"
+        }
+      },
+      {
+        "n": 10
+      },
+      true
+    ],
+    [
+      "js-match: $gte - numeric string attribute vs equal number",
+      {
+        "n": {
+          "$gte": 10
+        }
+      },
+      {
+        "n": "10"
+      },
+      true
+    ],
+    [
+      "js-match: $gte - numeric string attribute vs smaller number",
+      {
+        "n": {
+          "$gte": 9
+        }
+      },
+      {
+        "n": "10"
+      },
+      true
+    ],
+    [
+      "js-match: $gte - non-numeric string attribute vs number",
+      {
+        "n": {
+          "$gte": 5
+        }
+      },
+      {
+        "n": "abc"
+      },
+      false
+    ],
+    [
+      "js-match: $gte - missing attribute vs numeric string 0",
+      {
+        "n": {
+          "$gte": "0"
+        }
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: $gte - missing attribute vs numeric string 5",
+      {
+        "n": {
+          "$gte": "5"
+        }
+      },
+      {},
+      false
+    ],
+    [
+      "js-match: $gt - missing attribute vs negative numeric string",
+      {
+        "n": {
+          "$gt": "-1"
+        }
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: $gt - missing attribute vs numeric string 0",
+      {
+        "n": {
+          "$gt": "0"
+        }
+      },
+      {},
+      false
+    ],
+    [
+      "js-match: $lte - missing attribute vs numeric string 5",
+      {
+        "n": {
+          "$lte": "5"
+        }
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: $lte - missing attribute vs negative numeric string",
+      {
+        "n": {
+          "$lte": "-1"
+        }
+      },
+      {},
+      false
+    ],
+    [
+      "js-match: $lt - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$lt": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      false
+    ],
+    [
+      "js-match: $lte - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$lte": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      true
+    ],
+    [
+      "js-match: $gt - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$gt": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      false
     ]
   ]
 }
