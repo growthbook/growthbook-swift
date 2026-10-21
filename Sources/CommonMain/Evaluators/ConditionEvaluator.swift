@@ -154,57 +154,33 @@ class ConditionEvaluator {
 
     /// Evaluates Condition Value against given condition & attributes
     func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false) -> Bool {
-        // Processing null values - handling this case separately
-        
-        if insensitive,
-               let condStr = conditionValue.string,
-               let attrStr = attributeValue?.string {
-                return condStr.lowercased() == attrStr.lowercased()
-            }
-        
-        if conditionValue.type == .null {
-            return attributeValue == nil || attributeValue?.type == .null
-        }
-        
-        // Protection from nil values
+        // Plain values compare the way the JS SDK does: a string condition against the attribute
+        // converted to a string, a number condition against the attribute coerced to a number, a
+        // boolean condition against the attribute's truthiness, and arrays by their JSON encoding.
+        // A missing attribute is null here, as `getPath` returns null for a missing path in JS.
         let unwrappedAttribute = attributeValue ?? .null
-        
-        // String comparison
-        if conditionValue.type == .string && unwrappedAttribute.type == .string {
-            return conditionValue.stringValue == unwrappedAttribute.stringValue
+
+        if let condStr = conditionValue.string {
+            let attrStr = JSCoercion.string(unwrappedAttribute)
+            return insensitive ? attrStr.lowercased() == condStr.lowercased() : attrStr == condStr
         }
-        
-        // Number comparison
-        if conditionValue.type == .number && unwrappedAttribute.type == .number {
-            return conditionValue.doubleValue == unwrappedAttribute.doubleValue
+
+        if conditionValue.type == .number {
+            return JSCoercion.number(unwrappedAttribute) == conditionValue.doubleValue
         }
-        
-        // Boolean comparison
-        if conditionValue.type == .bool && unwrappedAttribute.type == .bool {
-            return conditionValue.boolValue == unwrappedAttribute.boolValue
+
+        if conditionValue.type == .bool {
+            return unwrappedAttribute.type != .null && JSCoercion.isTruthy(unwrappedAttribute) == conditionValue.boolValue
         }
-        
-        // Array comparison - more detailed with deep equality check
-        if let conditionArray = conditionValue.array {
-            if let attributeArray = unwrappedAttribute.array {
-                if conditionArray.count == attributeArray.count {
-                    // Compare each array element to check for deep equality
-                    for i in 0..<conditionArray.count {
-                        if !isEvalConditionValue(conditionValue: conditionArray[i],
-                                               attributeValue: attributeArray[i],
-                                               savedGroups: savedGroups) {
-                            return false
-                        }
-                    }
-                    return true
-                } else {
-                    return false
-                }
-            } else {
-                return false
-            }
+
+        if conditionValue.type == .null {
+            return unwrappedAttribute.type == .null
         }
-        
+
+        if conditionValue.array != nil {
+            return JSCoercion.isJSONEqual(conditionValue, unwrappedAttribute)
+        }
+
         // Processing condition objects
         if let _ = conditionValue.dictionary {
             if isOperatorObject(obj: conditionValue) {
@@ -218,17 +194,11 @@ class ConditionEvaluator {
                     }
                 }
                 return true
-            } else if let _ = unwrappedAttribute.dictionary {
-                // For regular objects, perform deep comparison
-                // (assuming that Common.isEqual() already performs deep comparison)
-                return Common.isEqual(conditionValue, unwrappedAttribute)
-            } else {
-                return false
             }
+            return JSCoercion.isJSONEqual(conditionValue, unwrappedAttribute)
         }
-        
-        // If nothing worked, return to simple comparison
-        return conditionValue == unwrappedAttribute
+
+        return false
     }
 
     /// This checks if attributeValue is an array, and if so at least one of the array items must match the condition
@@ -573,4 +543,141 @@ class ConditionEvaluator {
         return false
     }
     
+}
+
+/// The JavaScript coercions the JS SDK relies on for plain-value conditions, so a condition
+/// matches the same users here as it does there.
+enum JSCoercion {
+    /// `String(value)` in JS: `10`, `1.5`, `1e+21`, `"true"`, `"null"`, `"a,b"`, `"[object Object]"`.
+    static func string(_ value: JSON) -> String {
+        switch value.type {
+        case .string:
+            return value.stringValue
+        case .number:
+            return numberString(value.doubleValue)
+        case .bool:
+            return value.boolValue ? "true" : "false"
+        case .array:
+            return value.arrayValue.map { $0.type == .null ? "" : string($0) }.joined(separator: ",")
+        case .dictionary:
+            return "[object Object]"
+        default:
+            return "null"
+        }
+    }
+
+    /// `Number(value)` in JS: numeric strings parse, `""` is 0, booleans are 1 / 0, null is 0, and
+    /// anything else is NaN (which equals nothing).
+    static func number(_ value: JSON) -> Double {
+        switch value.type {
+        case .number:
+            return value.doubleValue
+        case .bool:
+            return value.boolValue ? 1 : 0
+        case .string:
+            return number(value.stringValue)
+        case .array:
+            return number(string(value))
+        case .dictionary:
+            return .nan
+        default:
+            return 0
+        }
+    }
+
+    /// JS truthiness: `0`, `NaN`, `""`, `false` and null are falsy; everything else, `"false"`,
+    /// `"0"`, `[]` and `{}` included, is truthy.
+    static func isTruthy(_ value: JSON) -> Bool {
+        switch value.type {
+        case .bool:
+            return value.boolValue
+        case .number:
+            let number = value.doubleValue
+            return number != 0 && !number.isNaN
+        case .string:
+            return !value.stringValue.isEmpty
+        case .array, .dictionary:
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// `JSON.stringify(a) === JSON.stringify(b)`: same types and values all the way down, with
+    /// `1` and `1.0` equal. Object key order is not compared, as `JSON` does not keep it.
+    static func isJSONEqual(_ a: JSON, _ b: JSON) -> Bool {
+        switch (a.type, b.type) {
+        case (.null, .null):
+            return true
+        case (.string, .string):
+            return a.stringValue == b.stringValue
+        case (.number, .number):
+            return a.doubleValue == b.doubleValue
+        case (.bool, .bool):
+            return a.boolValue == b.boolValue
+        case (.array, .array):
+            let left = a.arrayValue, right = b.arrayValue
+            return left.count == right.count && zip(left, right).allSatisfy { isJSONEqual($0, $1) }
+        case (.dictionary, .dictionary):
+            let left = a.dictionaryValue, right = b.dictionaryValue
+            return left.count == right.count && left.allSatisfy { key, value in
+                right[key].map { isJSONEqual(value, $0) } ?? false
+            }
+        default:
+            return false
+        }
+    }
+
+    private static func number(_ string: String) -> Double {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty { return 0 }
+        switch trimmed {
+        case "Infinity", "+Infinity": return .infinity
+        case "-Infinity": return -.infinity
+        default: break
+        }
+        let lower = trimmed.lowercased()
+        for (prefix, radix) in [("0x", 16), ("0o", 8), ("0b", 2)] where lower.hasPrefix(prefix) {
+            let digits = lower.dropFirst(2)
+            guard !digits.isEmpty, digits.allSatisfy({ $0.isHexDigit && Int(String($0), radix: 16)! < radix }) else { return .nan }
+            return digits.reduce(0.0) { $0 * Double(radix) + Double(Int(String($1), radix: 16)!) }
+        }
+        let decimal = "^[+-]?([0-9]+\\.?[0-9]*|\\.[0-9]+)([eE][+-]?[0-9]+)?$"
+        guard trimmed.range(of: decimal, options: .regularExpression) != nil else { return .nan }
+        return Double(trimmed) ?? .nan
+    }
+
+    /// `Number.prototype.toString()`: shortest round-trip digits, plain notation for exponents
+    /// from -7 to 20, otherwise `1.5e+21` / `1e-7`.
+    private static func numberString(_ number: Double) -> String {
+        if number.isNaN { return "NaN" }
+        if number.isInfinite { return number < 0 ? "-Infinity" : "Infinity" }
+        if number == 0 { return "0" }
+        let sign = number < 0 ? "-" : ""
+
+        // Swift's description is the shortest round-trip form, e.g. "1.5", "100.0", "1e-07".
+        let parts = "\(abs(number))".lowercased().split(separator: "e")
+        let exponent = parts.count > 1 ? Int(parts[1])! : 0
+        let mantissa = parts[0].split(separator: ".", omittingEmptySubsequences: false)
+        let integerDigits = String(mantissa[0])
+        var digits = integerDigits + (mantissa.count > 1 ? String(mantissa[1]) : "")
+        var point = integerDigits.count + exponent
+        while digits.hasPrefix("0") { digits.removeFirst(); point -= 1 }
+        while digits.hasSuffix("0") { digits.removeLast() }
+
+        let count = digits.count
+        let body: String
+        if count <= point && point <= 21 {
+            body = digits + String(repeating: "0", count: point - count)
+        } else if 0 < point && point <= 21 {
+            body = String(digits.prefix(point)) + "." + String(digits.dropFirst(point))
+        } else if -6 < point && point <= 0 {
+            body = "0." + String(repeating: "0", count: -point) + digits
+        } else {
+            let e = point - 1
+            let fraction = count > 1 ? "." + String(digits.dropFirst()) : ""
+            body = String(digits.prefix(1)) + fraction + "e" + (e < 0 ? "-" : "+") + String(abs(e))
+        }
+        return sign + body
+    }
 }
