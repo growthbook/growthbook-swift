@@ -3,24 +3,6 @@ import XCTest
 
 class ExtensionsTests: XCTestCase {
 
-    // MARK: - Float.roundTo
-
-    func testRoundToTwoDecimalPlaces() {
-        XCTAssertEqual(Float(0.12345).roundTo(numFractionDigits: 2), 0.12, accuracy: 0.0001)
-    }
-
-    func testRoundToFourDecimalPlaces() {
-        XCTAssertEqual(Float(0.123456).roundTo(numFractionDigits: 4), 0.1235, accuracy: 0.00001)
-    }
-
-    func testRoundToZeroDecimalPlaces() {
-        XCTAssertEqual(Float(3.7).roundTo(numFractionDigits: 0), 4.0, accuracy: 0.0001)
-    }
-
-    func testRoundToNegativeNumber() {
-        XCTAssertEqual(Float(-0.556).roundTo(numFractionDigits: 2), -0.56, accuracy: 0.0001)
-    }
-
     // MARK: - Sequence.sum
 
     func testSumInts() {

@@ -1,12 +1,5 @@
 import Foundation
 
-extension Float {
-    func roundTo(numFractionDigits: Int) -> Float {
-        let factor = pow(10.0, Float(numFractionDigits))
-        return roundf(self * factor) / factor
-    }
-}
-
 extension Sequence where Element: AdditiveArithmetic {
     func sum() -> Element { reduce(.zero, +) }
 }
