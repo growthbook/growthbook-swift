@@ -4,13 +4,16 @@ import XCTest
 /// Covers the `$inGroup` / `$notInGroup` operators across every combination of attribute presence
 /// and group resolution.
 ///
-/// The pair must stay a true logical negation: an absent attribute makes the user a non-member, so
-/// `$inGroup` is false and `$notInGroup` is true. Returning false for both — which is what happens
-/// when the operators only return from inside a non-null guard and otherwise drop out of the
-/// switch — silently breaks any rule written as an exclusion.
+/// The pair must stay a true logical negation wherever the group resolves at all: an absent
+/// attribute makes the user a non-member, so `$inGroup` is false and `$notInGroup` is true.
+/// Returning false for both — which is what happens when the operators only return from inside a
+/// non-null guard and otherwise drop out of the switch — silently breaks any rule written as an
+/// exclusion. The one deliberate exception is an entry the operators cannot read, covered at the
+/// end of this file.
 ///
-/// The shared spec fixtures (`Source/json.json`, spec 0.7.0) contain no absent-attribute cases for
-/// these operators, so this behaviour is only covered here.
+/// The shared spec fixtures (`Source/json.json`, spec 0.9.0) carry no absent-attribute cases for
+/// these operators, and its `savedGroupReferencesV2` section exercises typed entries only against a
+/// scalar attribute that is present, so those combinations are covered here instead.
 class SavedGroupOperatorTests: XCTestCase {
 
     private let savedGroups = JSON(["vips": ["u1", "u2"], "empty": [] as [String]])
@@ -118,5 +121,97 @@ class SavedGroupOperatorTests: XCTestCase {
     func testInGroupDoesNotMatchWhenNoArrayElementIsAMember() {
         XCTAssertFalse(inGroup("vips", ["id": ["a", "b"]]))
         XCTAssertTrue(notInGroup("vips", ["id": ["a", "b"]]))
+    }
+
+    // MARK: - Typed `savedGroupReferencesV2` entries
+
+    /// A payload carrying typed entries beside the v1 bare arrays above. `$inGroup` / `$notInGroup`
+    /// predate this format and can only read the list flavour; everything else must fail closed.
+    ///
+    /// The spec's `savedGroupReferencesV2` section asserts these outcomes for a scalar attribute
+    /// that is present. The cases below are the combinations it does not carry — an absent
+    /// attribute, an array attribute, and a list entry whose `values` are missing or empty — which
+    /// matter here precisely because the operators are dispatched above the attribute-shape branch.
+    private let typedGroups = JSON([
+        "list": ["type": "list", "attributeKey": "id", "values": ["u1", "u2"]],
+        "condition": ["type": "condition", "condition": ["plan": "pro"]],
+        "future": ["type": "somethingNew", "values": ["u1"]],
+        "noValues": ["type": "list", "attributeKey": "id"],
+        "emptyValues": ["type": "list", "attributeKey": "id", "values": [] as [String]],
+    ])
+
+    private func evalTyped(_ condition: [String: Any], _ attributes: [String: Any]) -> Bool {
+        ConditionEvaluator().isEvalCondition(
+            attributes: JSON(attributes),
+            conditionObj: JSON(condition),
+            savedGroups: typedGroups
+        )
+    }
+
+    private func inTypedGroup(_ group: String, _ attributes: [String: Any]) -> Bool {
+        evalTyped(["id": ["$inGroup": group]], attributes)
+    }
+
+    private func notInTypedGroup(_ group: String, _ attributes: [String: Any]) -> Bool {
+        evalTyped(["id": ["$notInGroup": group]], attributes)
+    }
+
+    func testTypedListEntryBehavesLikeABareArray() {
+        XCTAssertTrue(inTypedGroup("list", ["id": "u1"]))
+        XCTAssertFalse(notInTypedGroup("list", ["id": "u1"]))
+
+        XCTAssertFalse(inTypedGroup("list", ["id": "other"]))
+        XCTAssertTrue(notInTypedGroup("list", ["id": "other"]))
+    }
+
+    func testTypedListEntryWithAbsentAttribute() {
+        XCTAssertFalse(inTypedGroup("list", ["unrelated": "x"]))
+        XCTAssertTrue(notInTypedGroup("list", ["unrelated": "x"]),
+                      "An absent attribute makes the user a non-member, so $notInGroup must match")
+    }
+
+    func testTypedListEntryWithArrayAttribute() {
+        XCTAssertTrue(inTypedGroup("list", ["id": ["other", "u2"]]))
+        XCTAssertFalse(notInTypedGroup("list", ["id": ["other", "u2"]]))
+    }
+
+    func testEmptyTypedListLeavesTheNegationIntact() {
+        XCTAssertFalse(inTypedGroup("emptyValues", ["id": "u1"]))
+        XCTAssertTrue(notInTypedGroup("emptyValues", ["id": "u1"]),
+                      "An entry that declares no members is readable, so the pair stays a negation")
+    }
+
+    // MARK: - Entries these operators cannot read
+
+    /// An entry `$inGroup` / `$notInGroup` cannot read fails **both** of them, so here the pair is
+    /// deliberately not a negation. Resolving such an entry to an empty list instead would be the
+    /// loud failure: `$notInGroup` would pass everyone through a rule meant to exclude them.
+    ///
+    /// This is the one place the operators' documented symmetry is broken on purpose, so each
+    /// unreadable shape is asserted for both polarities rather than just the interesting one.
+    func testUnreadableEntriesFailClosedForBothPolarities() {
+        for group in ["condition", "future", "noValues"] {
+            XCTAssertFalse(inTypedGroup(group, ["id": "u1"]), "$inGroup should fail closed for \(group)")
+            XCTAssertFalse(notInTypedGroup(group, ["id": "u1"]), "$notInGroup should fail closed for \(group)")
+        }
+    }
+
+    func testUnreadableEntriesFailClosedForAnArrayAttribute() {
+        XCTAssertFalse(inTypedGroup("condition", ["id": ["u1", "u2"]]))
+        XCTAssertFalse(notInTypedGroup("condition", ["id": ["u1", "u2"]]))
+    }
+
+    func testUnreadableEntriesFailClosedForAnAbsentAttribute() {
+        XCTAssertFalse(inTypedGroup("condition", ["unrelated": "x"]))
+        XCTAssertFalse(notInTypedGroup("condition", ["unrelated": "x"]),
+                       "Fail-closed outranks the absent-attribute rule: the entry is unusable either way")
+    }
+
+    /// An id simply missing from the payload keeps the older, documented behaviour — an empty group
+    /// rather than a failure — so an exclusion rule still passes. This is the line that separates
+    /// "absent" from "present but unreadable", and every SDK implements it.
+    func testAbsentIdStillResolvesToAnEmptyGroup() {
+        XCTAssertFalse(inTypedGroup("no-such-group", ["id": "u1"]))
+        XCTAssertTrue(notInTypedGroup("no-such-group", ["id": "u1"]))
     }
 }
