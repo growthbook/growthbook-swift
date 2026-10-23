@@ -293,7 +293,7 @@ class ExperimentResultTest {
     /// The human-readable name of the assigned variation
     var name: String?
     /// The hash value used to assign a variation (float from `0` to `1`)
-    var bucket: Float?
+    var bucket: Double?
     /// Used for holdout groups
     var passthrough: Bool?
     /// If a hash was used to assign a variation
@@ -310,7 +310,7 @@ class ExperimentResultTest {
          hashValue: String? = nil,
          key: String,
          name: String? = nil,
-         bucket: Float? = nil,
+         bucket: Double? = nil,
          passthrough: Bool? = nil,
          hashUsed: Bool? = nil,
          featureId: String? = nil,
@@ -337,7 +337,7 @@ class ExperimentResultTest {
         hashValue = json["hashValue"]?.stringValue
         key = json["key"]?.stringValue
         name = json["name"]?.stringValue
-        bucket = json["bucket"]?.floatValue
+        bucket = json["bucket"]?.doubleValue
         passthrough = json["passthrough"]?.boolValue
         hashUsed = json["hashUsed"]?.boolValue
         featureId = json["featureId"]?.stringValue
