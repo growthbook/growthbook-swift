@@ -261,6 +261,16 @@ class UtilsTests: XCTestCase {
         XCTAssertEqual(Utils.paddedVersionString(input: "20260910.1.0"), "20260910-    1-    0-~")
     }
     
+    func testQueryStringOverride() throws {
+        guard let testCases = TestHelper().getQueryStringOverrideData() else { return }
+
+        for test in testCases {
+            let name = test[0].stringValue
+            let actual = Utils.getQueryStringOverride(id: test[1].stringValue, urlString: test[2].stringValue, numberOfVariations: test[3].intValue)
+            XCTAssertEqual(actual, test[4].int, name)
+        }
+    }
+
     func testDecrypt() throws {
         guard let testCases = TestHelper().getDecryptData() else { return }
         

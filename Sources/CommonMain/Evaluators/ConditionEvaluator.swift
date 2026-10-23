@@ -219,9 +219,7 @@ class ConditionEvaluator {
                 }
                 return true
             } else if let _ = unwrappedAttribute.dictionary {
-                // For regular objects, perform deep comparison
-                // (assuming that Common.isEqual() already performs deep comparison)
-                return Common.isEqual(conditionValue, unwrappedAttribute)
+                return isStrictlyEqual(conditionValue, unwrappedAttribute)
             } else {
                 return false
             }
@@ -310,10 +308,13 @@ class ConditionEvaluator {
         default: break
         }
 
-        // The version operators coerce their operands themselves (numbers become strings, everything
-        // else becomes "0"), so they are handled before the dispatch below, which branches on the
-        // shape of the attribute and would otherwise leave them unreachable for array or absent
-        // attributes and skip them whenever the condition value is not a string.
+        // The version operators are handled before the dispatch below, which branches on the shape of
+        // the attribute and would otherwise leave them unreachable for array or absent attributes.
+        // Both sides must be strings, or both numbers. Anything else is a type mismatch: the operator
+        // fails, except $vne, which is the negation of $veq and so matches.
+        if Self.versionOperators.contains(operatorKey), !isOrderable(attributeValue, conditionValue) {
+            return operatorKey == "$vne"
+        }
         switch operatorKey {
         case "$veq":
             return Utils.paddedVersionString(input: attributeValue) == Utils.paddedVersionString(input: conditionValue)
@@ -327,6 +328,37 @@ class ConditionEvaluator {
             return Utils.paddedVersionString(input: attributeValue) < Utils.paddedVersionString(input: conditionValue)
         case "$vlte":
             return Utils.paddedVersionString(input: attributeValue) <= Utils.paddedVersionString(input: conditionValue)
+        default: break
+        }
+
+        // Equality, ordering and regex operators work for any attribute shape, so they are decided
+        // here rather than in the shape dispatch below. Types are strict: no coercion between
+        // strings, numbers and booleans, so a mismatch fails the positive operator and $ne matches.
+        switch operatorKey {
+        case "$eq":
+            return isStrictlyEqual(attributeValue, conditionValue)
+        case "$ne":
+            return !isStrictlyEqual(attributeValue, conditionValue)
+        case "$lt", "$lte", "$gt", "$gte":
+            return compareOrdered(operatorKey: operatorKey, attributeValue: attributeValue, conditionValue: conditionValue)
+        case "$regex", "$regexi", "$notRegex", "$notRegexi":
+            // Only strings are matched against a pattern. The negated forms match a non-string,
+            // like `$not: { $regex }` does.
+            guard let source = attributeValue.string else {
+                return operatorKey.hasPrefix("$not")
+            }
+            // A pattern that isn't a string is malformed, like one that doesn't compile, so
+            // neither form matches. `stringValue` would turn it into an empty pattern that
+            // matches every string.
+            guard let pattern = conditionValue.string else {
+                return false
+            }
+            return isContains(
+                source: source,
+                target: pattern,
+                insensitive: operatorKey.hasSuffix("i"),
+                negate: operatorKey.hasPrefix("$not")
+            )
         default: break
         }
 
@@ -384,148 +416,71 @@ class ConditionEvaluator {
                 return isEvalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count), savedGroups: savedGroups)
             default: break
             }
-        } else {
-            switch operatorKey {
-            // Evaluate EQ operator - whether condition equals to attribute
-            case "$eq":
-                return  attributeValue == conditionValue
-            // Evaluate NE operator - whether condition doesn't equal to attribute
-            case "$ne":
-                return  attributeValue != conditionValue
-            // Evaluate LT operator - whether attribute less than to condition
-            case "$lt":
-                if attributeValue == .null {
-                    if let cond = conditionValue.double {
-                        return 0.0 < cond
-                    } else if let condStr = conditionValue.string, let cond = Double(condStr) {
-                        return 0.0 < cond
-                    }
-                    return false
-                }
-
-                var attrNum: Double? = attributeValue.double
-                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
-                    attrNum = num
-                }
-
-                var condNum: Double? = conditionValue.double
-                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
-                    condNum = num
-                }
-
-                if let attrNum, let condNum {
-                    return attrNum < condNum
-                }
-
-                if let str = attributeValue.string, let cond = conditionValue.string {
-                    return str < cond
-                }
-
-                return false
-
-            // Evaluate LTE operator - whether attribute less than or equal to condition
-            case "$lte":
-                if attributeValue == .null {
-                        if let cond = conditionValue.double {
-                            return 0.0 <= cond
-                        }
-                        return false
-                    }
-                var attrNum: Double? = attributeValue.double
-                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
-                    attrNum = num
-                }
-
-                var condNum: Double? = conditionValue.double
-                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
-                    condNum = num
-                }
-
-                if let attrNum, let condNum {
-                    return attrNum <= condNum
-                }
-                    if let str = attributeValue.string, let cond = conditionValue.string {
-                        return str <= cond
-                    }
-                    return false
-            // Evaluate GT operator - whether attribute greater than to condition
-            case "$gt":
-                if attributeValue == .null {
-                        if let cond = conditionValue.double {
-                            return 0.0 > cond
-                        }
-                        return false
-                    }
-                var attrNum: Double? = attributeValue.double
-                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
-                    attrNum = num
-                }
-
-                var condNum: Double? = conditionValue.double
-                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
-                    condNum = num
-                }
-
-                if let attrNum, let condNum {
-                    return attrNum > condNum
-                }
-                    if let str = attributeValue.string {
-                        return str > conditionValue.stringValue
-                    }
-                    return false
-            // Evaluate GTE operator - whether attribute greater than or equal to condition
-            case "$gte":
-                if attributeValue == .null {
-                        if let cond = conditionValue.double {
-                            return 0.0 >= cond
-                        }
-                        return false
-                    }
-                    if let num = attributeValue.double {
-                        if let cond = conditionValue.double {
-                                    return num >= cond
-                                } else if let condStr = conditionValue.string, let condNum = Double(condStr) {
-                                    return num > condNum
-                                }
-                                return false
-                    }
-                    if let str = attributeValue.string, let cond = conditionValue.string {
-                        return str >= cond
-                    }
-                    return false
-            // Evaluate REGEX operator - whether attribute contains condition regex
-            case "$regex":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: false,
-                    negate: false
-                )
-            case "$regexi":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: true,
-                    negate: false
-                )
-            case "$notRegex":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: false,
-                    negate: true
-                )
-            case "$notRegexi":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: true,
-                    negate: true
-                )
-            default: break
-            }
         }
         return false
+    }
+
+    private static let versionOperators: Set<String> = ["$veq", "$vne", "$vgt", "$vgte", "$vlt", "$vlte"]
+
+    /// Ordering only applies between two strings or two numbers. Booleans are not ordered, and a
+    /// missing or null attribute has nothing to compare.
+    private func isOrderable(_ attributeValue: JSON, _ conditionValue: JSON) -> Bool {
+        (attributeValue.type == .string || attributeValue.type == .number) && attributeValue.type == conditionValue.type
+    }
+
+    /// Evaluates `$lt`, `$lte`, `$gt` and `$gte`. Two numbers compare numerically and two strings
+    /// compare as text by UTF-16 code unit, like JavaScript, so `"10" < "9"`. Any other pair fails.
+    private func compareOrdered(operatorKey: String, attributeValue: JSON, conditionValue: JSON) -> Bool {
+        guard isOrderable(attributeValue, conditionValue) else { return false }
+
+        let isLess: Bool
+        let isEqual: Bool
+        if attributeValue.type == .number {
+            let attr = attributeValue.doubleValue
+            let cond = conditionValue.doubleValue
+            isLess = attr < cond
+            isEqual = attr == cond
+        } else {
+            let attr = attributeValue.stringValue.utf16
+            let cond = conditionValue.stringValue.utf16
+            isLess = attr.lexicographicallyPrecedes(cond)
+            isEqual = attr.elementsEqual(cond)
+        }
+
+        switch operatorKey {
+        case "$lt": return isLess
+        case "$lte": return isLess || isEqual
+        case "$gt": return !isLess && !isEqual
+        default: return !isLess
+        }
+    }
+
+    /// Deep equality without coercion. `JSON`'s own `==` compares arrays and objects as
+    /// `NSArray`/`NSDictionary`, which bridges booleans to `NSNumber` and treats `true` as `1`.
+    func isStrictlyEqual(_ lhs: JSON, _ rhs: JSON) -> Bool {
+        switch (lhs.type, rhs.type) {
+        case (.number, .number):
+            return lhs.doubleValue == rhs.doubleValue
+        case (.string, .string):
+            return lhs.stringValue == rhs.stringValue
+        case (.bool, .bool):
+            return lhs.boolValue == rhs.boolValue
+        case (.null, .null):
+            return true
+        case (.array, .array):
+            let left = lhs.arrayValue
+            let right = rhs.arrayValue
+            return left.count == right.count && zip(left, right).allSatisfy { isStrictlyEqual($0, $1) }
+        case (.dictionary, .dictionary):
+            let left = lhs.dictionaryValue
+            let right = rhs.dictionaryValue
+            return left.count == right.count && left.allSatisfy { key, value in
+                guard let other = right[key] else { return false }
+                return isStrictlyEqual(value, other)
+            }
+        default:
+            return false
+        }
     }
 
     private func isContains(source: String, target: String, insensitive: Bool, negate: Bool) -> Bool {

@@ -206,10 +206,10 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$ne", attributeValue: JSON(5), conditionValue: JSON(5)))
     }
 
-    // MARK: - $lt / $lte / $gt / $gte with null attribute
+    // MARK: - $lt / $lte / $gt / $gte with null attribute (a null attribute is not ordered, so all fail)
 
     func testLtWithNullAttrPositiveCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON.null, conditionValue: JSON(1)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON.null, conditionValue: JSON(1)))
     }
 
     func testLtWithNullAttrNegativeCond() {
@@ -217,11 +217,11 @@ class ConditionEvaluatorTests: XCTestCase {
     }
 
     func testLteWithNullAttrZeroCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lte", attributeValue: JSON.null, conditionValue: JSON(0)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$lte", attributeValue: JSON.null, conditionValue: JSON(0)))
     }
 
     func testGtWithNullAttrNegativeCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gt", attributeValue: JSON.null, conditionValue: JSON(-1)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$gt", attributeValue: JSON.null, conditionValue: JSON(-1)))
     }
 
     func testGtWithNullAttrPositiveCond() {
@@ -229,7 +229,7 @@ class ConditionEvaluatorTests: XCTestCase {
     }
 
     func testGteWithNullAttrZeroCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON.null, conditionValue: JSON(0)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON.null, conditionValue: JSON(0)))
     }
 
     // MARK: - $lt / $gt with string attributes
@@ -242,8 +242,10 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gt", attributeValue: JSON("banana"), conditionValue: JSON("apple")))
     }
 
+    /// Two strings compare as text, even when they look like numbers
     func testLtWithStringNumbers() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("3"), conditionValue: JSON("10")))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("3"), conditionValue: JSON("10")))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("10"), conditionValue: JSON("9")))
     }
 
     // MARK: - $ini / $nini (case-insensitive in/nin)
@@ -306,6 +308,18 @@ class ConditionEvaluatorTests: XCTestCase {
     func testNotRegexi() {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("^world")))
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("hello")))
+    }
+
+    /// A non-string pattern is malformed, so it must not turn into an empty pattern that matches
+    /// every string. Like a pattern that doesn't compile, neither the operator nor its negation matches.
+    func testNonStringRegexPatternMatchesNothing() {
+        for pattern in [JSON(["^US$"]), JSON(1), JSON(true), JSON(["a": "b"]), JSON(NSNull())] {
+            for op in ["$regex", "$regexi", "$notRegex", "$notRegexi"] {
+                XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON("CA"), conditionValue: pattern),
+                               "\(op) with pattern \(pattern.rawString() ?? "?")")
+            }
+        }
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["country": "CA"]), conditionObj: JSON(["country": ["$regex": ["^US$"]]])))
     }
 
     // MARK: - Version operators
@@ -392,16 +406,19 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vne": "1.2.3-de"]])))
     }
 
-    func testVersionOperatorCoercesNumericAttribute() {
+    /// A number is only compared as a version against another number
+    func testVersionOperatorNumericAttribute() {
         let attrs = JSON(["version": 2])
-        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vgt": "1.0.0"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vgt": "1.0.0"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vne": "1.0.0"]])))
         XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$veq": 2]])))
     }
 
-    /// An absent, boolean or collection attribute is treated as version "0" rather than failing outright
+    /// An absent, boolean or collection attribute is not a version: every operator fails except $vne
     func testVersionOperatorWithNonVersionAttribute() {
-        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vlt": "0.0.1"]])))
-        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["version": true]), conditionObj: JSON(["version": ["$veq": "0"]])))
-        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["version": ["1.0.0"]]), conditionObj: JSON(["version": ["$veq": "0"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vlt": "0.0.1"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["version": true]), conditionObj: JSON(["version": ["$veq": "0"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["version": ["1.0.0"]]), conditionObj: JSON(["version": ["$veq": "0"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vne": "0"]])))
     }
 }
