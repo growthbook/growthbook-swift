@@ -7,11 +7,12 @@
 
 import Foundation
 
-open class Themes {}
+open class Themes: @unchecked Sendable {}
 
-open class Theme: Themes {
-    /// The theme colors.
-    var colors: [Level: String]
+open class Theme: Themes, @unchecked Sendable {
+    /// The theme colors. Immutable after init, which is what makes sharing a theme across threads
+    /// safe without a lock.
+    let colors: [Level: String]
 
     /// The theme textual representation.
     var description: String {
