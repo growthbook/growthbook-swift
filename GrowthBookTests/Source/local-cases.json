@@ -48,6 +48,749 @@
         "userAgent": "Android Mobile Browser"
       },
       false
+    ],
+    [
+      "js-match: $gte - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$gte": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      true
+    ],
+    [
+      "js-match: $gte - number attribute vs larger numeric string",
+      {
+        "n": {
+          "$gte": "11"
+        }
+      },
+      {
+        "n": 10
+      },
+      false
+    ],
+    [
+      "js-match: $gte - number attribute vs smaller numeric string",
+      {
+        "n": {
+          "$gte": "9"
+        }
+      },
+      {
+        "n": 10
+      },
+      true
+    ],
+    [
+      "js-match: $gte - numeric string attribute vs equal number",
+      {
+        "n": {
+          "$gte": 10
+        }
+      },
+      {
+        "n": "10"
+      },
+      true
+    ],
+    [
+      "js-match: $gte - numeric string attribute vs smaller number",
+      {
+        "n": {
+          "$gte": 9
+        }
+      },
+      {
+        "n": "10"
+      },
+      true
+    ],
+    [
+      "js-match: $gte - non-numeric string attribute vs number",
+      {
+        "n": {
+          "$gte": 5
+        }
+      },
+      {
+        "n": "abc"
+      },
+      false
+    ],
+    [
+      "js-match: $gte - missing attribute vs numeric string 0",
+      {
+        "n": {
+          "$gte": "0"
+        }
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: $gte - missing attribute vs numeric string 5",
+      {
+        "n": {
+          "$gte": "5"
+        }
+      },
+      {},
+      false
+    ],
+    [
+      "js-match: $gt - missing attribute vs negative numeric string",
+      {
+        "n": {
+          "$gt": "-1"
+        }
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: $gt - missing attribute vs numeric string 0",
+      {
+        "n": {
+          "$gt": "0"
+        }
+      },
+      {},
+      false
+    ],
+    [
+      "js-match: $lte - missing attribute vs numeric string 5",
+      {
+        "n": {
+          "$lte": "5"
+        }
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: $lte - missing attribute vs negative numeric string",
+      {
+        "n": {
+          "$lte": "-1"
+        }
+      },
+      {},
+      false
+    ],
+    [
+      "js-match: $lt - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$lt": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      false
+    ],
+    [
+      "js-match: $lte - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$lte": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      true
+    ],
+    [
+      "js-match: $gt - number attribute vs equal numeric string",
+      {
+        "n": {
+          "$gt": "10"
+        }
+      },
+      {
+        "n": 10
+      },
+      false
+    ],
+    [
+      "js-match: equality - string condition vs number attribute",
+      {
+        "n": "10"
+      },
+      {
+        "n": 10
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs decimal attribute",
+      {
+        "n": "1.5"
+      },
+      {
+        "n": 1.5
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs large number uses exponent form",
+      {
+        "n": "1e+21"
+      },
+      {
+        "n": 1e+21
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs largest plain integer form",
+      {
+        "n": "100000000000000000000"
+      },
+      {
+        "n": 100000000000000000000
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs small decimal",
+      {
+        "n": "0.000001"
+      },
+      {
+        "n": 1e-06
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs tiny decimal uses exponent form",
+      {
+        "n": "1e-7"
+      },
+      {
+        "n": 1e-07
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs negative decimal",
+      {
+        "n": "-2.25"
+      },
+      {
+        "n": -2.25
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs boolean attribute",
+      {
+        "n": "true"
+      },
+      {
+        "n": true
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs null attribute",
+      {
+        "n": "null"
+      },
+      {
+        "n": null
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs missing attribute",
+      {
+        "n": "null"
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: equality - empty string condition vs null attribute",
+      {
+        "n": ""
+      },
+      {
+        "n": null
+      },
+      false
+    ],
+    [
+      "js-match: equality - string condition vs array attribute",
+      {
+        "n": "a,b"
+      },
+      {
+        "n": [
+          "a",
+          "b"
+        ]
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs object attribute",
+      {
+        "n": "[object Object]"
+      },
+      {
+        "n": {
+          "a": 1
+        }
+      },
+      true
+    ],
+    [
+      "js-match: equality - string condition vs different number",
+      {
+        "n": "10"
+      },
+      {
+        "n": 11
+      },
+      false
+    ],
+    [
+      "js-match: equality - number condition vs numeric string",
+      {
+        "n": 10
+      },
+      {
+        "n": "10"
+      },
+      true
+    ],
+    [
+      "js-match: equality - number condition vs decimal string",
+      {
+        "n": 10
+      },
+      {
+        "n": "10.0"
+      },
+      true
+    ],
+    [
+      "js-match: equality - number condition vs padded numeric string",
+      {
+        "n": 10
+      },
+      {
+        "n": " 10 "
+      },
+      true
+    ],
+    [
+      "js-match: equality - number condition vs hex string",
+      {
+        "n": 16
+      },
+      {
+        "n": "0x10"
+      },
+      true
+    ],
+    [
+      "js-match: equality - number condition vs non-numeric string",
+      {
+        "n": 10
+      },
+      {
+        "n": "10abc"
+      },
+      false
+    ],
+    [
+      "js-match: equality - number 0 condition vs empty string",
+      {
+        "n": 0
+      },
+      {
+        "n": ""
+      },
+      true
+    ],
+    [
+      "js-match: equality - number 1 condition vs true",
+      {
+        "n": 1
+      },
+      {
+        "n": true
+      },
+      true
+    ],
+    [
+      "js-match: equality - number 0 condition vs false",
+      {
+        "n": 0
+      },
+      {
+        "n": false
+      },
+      true
+    ],
+    [
+      "js-match: equality - number 0 condition vs null attribute",
+      {
+        "n": 0
+      },
+      {
+        "n": null
+      },
+      true
+    ],
+    [
+      "js-match: equality - number 0 condition vs missing attribute",
+      {
+        "n": 0
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: equality - number condition 1 vs 1.0",
+      {
+        "n": 1
+      },
+      {
+        "n": 1
+      },
+      true
+    ],
+    [
+      "js-match: equality - number condition vs single-element array",
+      {
+        "n": 5
+      },
+      {
+        "n": [
+          5
+        ]
+      },
+      true
+    ],
+    [
+      "js-match: equality - number condition vs object attribute",
+      {
+        "n": 0
+      },
+      {
+        "n": {
+          "a": 1
+        }
+      },
+      false
+    ],
+    [
+      "js-match: boolean condition - true vs string 'true'",
+      {
+        "b": true
+      },
+      {
+        "b": "true"
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - false vs string 'false'",
+      {
+        "b": false
+      },
+      {
+        "b": "false"
+      },
+      false
+    ],
+    [
+      "js-match: boolean condition - true vs string 'false'",
+      {
+        "b": true
+      },
+      {
+        "b": "false"
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - true vs string '0'",
+      {
+        "b": true
+      },
+      {
+        "b": "0"
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - false vs number 0",
+      {
+        "b": false
+      },
+      {
+        "b": 0
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - true vs number 2",
+      {
+        "b": true
+      },
+      {
+        "b": 2
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - false vs empty string",
+      {
+        "b": false
+      },
+      {
+        "b": ""
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - true vs empty array",
+      {
+        "b": true
+      },
+      {
+        "b": []
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - true vs empty object",
+      {
+        "b": true
+      },
+      {
+        "b": {}
+      },
+      true
+    ],
+    [
+      "js-match: boolean condition - false vs null attribute",
+      {
+        "b": false
+      },
+      {
+        "b": null
+      },
+      false
+    ],
+    [
+      "js-match: boolean condition - false vs missing attribute",
+      {
+        "b": false
+      },
+      {},
+      false
+    ],
+    [
+      "js-match: null condition - missing attribute",
+      {
+        "n": null
+      },
+      {},
+      true
+    ],
+    [
+      "js-match: null condition - null attribute",
+      {
+        "n": null
+      },
+      {
+        "n": null
+      },
+      true
+    ],
+    [
+      "js-match: null condition - number 0 attribute",
+      {
+        "n": null
+      },
+      {
+        "n": 0
+      },
+      false
+    ],
+    [
+      "js-match: null condition - empty string attribute",
+      {
+        "n": null
+      },
+      {
+        "n": ""
+      },
+      false
+    ],
+    [
+      "js-match: array condition - integer vs decimal elements",
+      {
+        "a": [
+          1,
+          2
+        ]
+      },
+      {
+        "a": [
+          1,
+          2
+        ]
+      },
+      true
+    ],
+    [
+      "js-match: array condition - string element vs number element",
+      {
+        "a": [
+          "1"
+        ]
+      },
+      {
+        "a": [
+          1
+        ]
+      },
+      false
+    ],
+    [
+      "js-match: array condition - boolean element vs number element",
+      {
+        "a": [
+          true
+        ]
+      },
+      {
+        "a": [
+          1
+        ]
+      },
+      false
+    ],
+    [
+      "js-match: array condition - nested arrays",
+      {
+        "a": [
+          [
+            1,
+            "x"
+          ],
+          null
+        ]
+      },
+      {
+        "a": [
+          [
+            1,
+            "x"
+          ],
+          null
+        ]
+      },
+      true
+    ],
+    [
+      "js-match: array condition - scalar attribute",
+      {
+        "a": [
+          "x"
+        ]
+      },
+      {
+        "a": "x"
+      },
+      false
+    ],
+    [
+      "js-match: object condition - equal objects",
+      {
+        "o": {
+          "x": 1,
+          "y": "z"
+        }
+      },
+      {
+        "o": {
+          "x": 1,
+          "y": "z"
+        }
+      },
+      true
+    ],
+    [
+      "js-match: object condition - string vs number member",
+      {
+        "o": {
+          "x": "1"
+        }
+      },
+      {
+        "o": {
+          "x": 1
+        }
+      },
+      false
+    ],
+    [
+      "js-match: object condition - extra key on attribute",
+      {
+        "o": {
+          "x": 1
+        }
+      },
+      {
+        "o": {
+          "x": 1,
+          "y": 2
+        }
+      },
+      false
+    ],
+    [
+      "js-match: $all - string condition vs number element",
+      {
+        "a": {
+          "$all": [
+            "1"
+          ]
+        }
+      },
+      {
+        "a": [
+          1
+        ]
+      },
+      true
+    ],
+    [
+      "js-match: $size - string condition",
+      {
+        "a": {
+          "$size": "2"
+        }
+      },
+      {
+        "a": [
+          1,
+          2
+        ]
+      },
+      true
     ]
   ]
 }
