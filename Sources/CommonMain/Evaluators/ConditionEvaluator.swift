@@ -347,9 +347,15 @@ class ConditionEvaluator {
             guard let source = attributeValue.string else {
                 return operatorKey.hasPrefix("$not")
             }
+            // A pattern that isn't a string is malformed, like one that doesn't compile, so
+            // neither form matches. `stringValue` would turn it into an empty pattern that
+            // matches every string.
+            guard let pattern = conditionValue.string else {
+                return false
+            }
             return isContains(
                 source: source,
-                target: conditionValue.stringValue,
+                target: pattern,
                 insensitive: operatorKey.hasSuffix("i"),
                 negate: operatorKey.hasPrefix("$not")
             )

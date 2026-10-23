@@ -99,6 +99,15 @@ class TestHelper {
         testData?.dictionaryValue["decrypt"]?.arrayValue
     }
 
+    func getQueryStringOverrideData() -> [JSON]? {
+        testData?.dictionaryValue["getQueryStringOverride"]?.arrayValue
+    }
+
+    /// The whole corpus, for checks that need every section rather than one of them.
+    func getSpecData() -> JSON? {
+        testData
+    }
+
     /// Loads the vendored conformance fixtures.
     ///
     /// The bundle differs per harness: SwiftPM puts declared resources in `Bundle.module`, while the

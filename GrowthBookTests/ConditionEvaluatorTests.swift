@@ -310,6 +310,18 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("hello")))
     }
 
+    /// A non-string pattern is malformed, so it must not turn into an empty pattern that matches
+    /// every string. Like a pattern that doesn't compile, neither the operator nor its negation matches.
+    func testNonStringRegexPatternMatchesNothing() {
+        for pattern in [JSON(["^US$"]), JSON(1), JSON(true), JSON(["a": "b"]), JSON(NSNull())] {
+            for op in ["$regex", "$regexi", "$notRegex", "$notRegexi"] {
+                XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON("CA"), conditionValue: pattern),
+                               "\(op) with pattern \(pattern.rawString() ?? "?")")
+            }
+        }
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["country": "CA"]), conditionObj: JSON(["country": ["$regex": ["^US$"]]])))
+    }
+
     // MARK: - Version operators
 
     func testVeqOperator() {
