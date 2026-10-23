@@ -56,7 +56,14 @@ import Foundation
   public var url: String? = nil
 
   public var forcedFeatureValues: JSON? = nil
-  
+
+  /// Attribute values that take precedence over `attributes` during evaluation.
+  ///
+  /// Merged on top of `attributes` when an `EvalContext` is built, so overrides apply to targeting
+  /// conditions, experiment hashing and sticky bucket lookups alike. `attributes` itself is left
+  /// untouched, which is what lets overrides be lifted again by setting an empty map.
+  public var attributeOverrides: JSON? = nil
+
   init(
     streamingHost: String?,
     attributes: JSON,
@@ -67,7 +74,9 @@ import Foundation
     savedGroups: JSON? = nil,
     contextualBandits: JSON? = nil,
     url: String? = nil,
-    forcedFeatureValues: JSON? = nil) {
+    forcedFeatureValues: JSON? = nil,
+    attributeOverrides: JSON? = nil) {
+      self.attributeOverrides = attributeOverrides
       self.streamingHost = streamingHost
       self.attributes = attributes
       self.forcedVariations = forcedVariations
