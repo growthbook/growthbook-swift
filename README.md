@@ -17,7 +17,7 @@
   - **Apple watchOS version 5.0 & Above**
   - **Apple visionOS version 1.0 & Above**
 - **Adjust variation weights and targeting without deploying new code**
-- **Latest spec version: 0.11.2 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
+- **Latest spec version: 0.11.3 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
 
 
 
