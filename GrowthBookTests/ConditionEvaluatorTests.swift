@@ -65,7 +65,8 @@ class ConditionEvaluatorTests: XCTestCase {
 
     func testGetPathWhenIntermediateIsArray() {
         let attrs = JSON(["items": [1, 2, 3]])
-        XCTAssertNil(eval.getPath(obj: attrs, key: "items.0"))
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.0")?.intValue, 1)
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.3"))
     }
 
     func testGetPathSimpleKey() {
@@ -461,5 +462,32 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": -0.0]), conditionObj: JSON(["x": ["$gt": 0]])))
         XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": "b"]), conditionObj: JSON(["x": ["$gt": "a"]])))
         XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": "a"]), conditionObj: JSON(["x": ["$gt": "a"]])))
+    }
+
+    /// Paths read an array's own keys, as JS does: its indices and `length`
+    func testGetPathReadsArrayOwnKeys() {
+        let attrs = JSON(["items": [1, [2, 3]]])
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.0")?.intValue, 1)
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.1.1")?.intValue, 3)
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.length")?.intValue, 2)
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.1.length")?.intValue, 2)
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.2"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.-1"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.01"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.+1"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.foo"))
+        // Strings and numbers have no own keys here
+        XCTAssertNil(eval.getPath(obj: JSON(["s": "abc"]), key: "s.length"))
+        XCTAssertNil(eval.getPath(obj: JSON(["s": "abc"]), key: "s.0"))
+        XCTAssertEqual(eval.getPath(obj: JSON([[5]]), key: "0.0")?.intValue, 5)
+    }
+
+    /// A logical `$elemMatch` reads a nested-array item's own keys (as in JS)
+    func testLogicalElemMatchOnNestedArrays() {
+        let attrs = JSON(["x": [[1]]])
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$nor": [["0": 1]]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$or": [["0": 1]]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$and": [["length": 1]]]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$or": [["0": 2]]]]])))
     }
 }

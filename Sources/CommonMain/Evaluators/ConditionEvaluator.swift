@@ -150,30 +150,35 @@ class ConditionEvaluator {
         return getAttributeType(index: value.type.rawValue)
     }
 
-    /// Given attributes and a dot-separated path string, return the value at that path (or null/undefined if the path doesn't exist)
+    /// Given attributes and a dot-separated path string, return the value at that path, or `nil` if
+    /// the path doesn't exist. Like JS, only own keys are read: an object's keys, and an array's
+    /// indices (`"0"`, `"1"`, ...) and `"length"`. Strings and other primitives have none.
     func getPath(obj: JSON, key: String) -> JSON? {
-        var paths: [String]
-
-        if key.contains(".") {
-            paths = key.components(separatedBy: ".")  //split(".") as [String]
-        } else {
-            paths = []
-            paths.append(key)
-        }
-
         var element = obj
 
-        for path in paths {
-            if let _ = element.array {
-                return nil
-            }
-            if let dict = element.dictionary, let value = dict[path] {
+        for path in key.components(separatedBy: ".") {
+            if let array = element.array {
+                guard let value = arrayOwnProperty(array, path) else { return nil }
+                element = value
+            } else if let dict = element.dictionary, let value = dict[path] {
                 element = value
             } else {
                 return nil
             }
         }
         return element
+    }
+
+    /// An array's own property `key`: `length`, or the item at a canonical index such as `"1"`
+    /// (not `"01"` or `"+1"`), as JS reads `array[key]`.
+    private func arrayOwnProperty(_ array: [JSON], _ key: String) -> JSON? {
+        if key == "length" {
+            return JSON(array.count)
+        }
+        guard let index = Int(key), index >= 0, index < array.count, String(index) == key else {
+            return nil
+        }
+        return array[index]
     }
 
     /// Evaluates Condition Value against given condition & attributes
