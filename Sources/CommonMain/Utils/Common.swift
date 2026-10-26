@@ -37,6 +37,20 @@ extension Common {
         return a == b
     }
 
+    /// Compares strings by UTF-16 code units, as JS `===` does. Swift's `==` uses canonical
+    /// equivalence, so "\u{E9}" and "e\u{301}" would otherwise be equal.
+    static func sameCodeUnits(_ a: String, _ b: String) -> Bool {
+        a.utf16.elementsEqual(b.utf16)
+    }
+
+    /// `JSON` equality with strings compared by code units
+    static func jsonEquals(_ a: JSON, _ b: JSON) -> Bool {
+        if let left = a.string, let right = b.string {
+            return sameCodeUnits(left, right)
+        }
+        return a == b
+    }
+
     static func isIn<T: Equatable>(actual: Any, expected: [T], insensitive: Bool = false) -> Bool {
         
         if insensitive, let expectedJSON = expected as? [JSON] {
@@ -48,9 +62,9 @@ extension Common {
             func matches(_ actualItem: JSON, _ expectedItem: JSON) -> Bool {
                 guard let a = actualItem.string?.lowercased(),
                       let e = expectedItem.string?.lowercased() else {
-                    return actualItem == expectedItem
+                    return jsonEquals(actualItem, expectedItem)
                 }
-                return a == e
+                return sameCodeUnits(a, e)
             }
 
             if let actualJSON = actual as? JSON {
@@ -72,6 +86,13 @@ extension Common {
             return false
         }
             
+        if let expectedJSON = expected as? [JSON], let actualJSON = actual as? JSON {
+            if let actualArray = actualJSON.array, !actualArray.isEmpty {
+                return actualArray.contains { item in expectedJSON.contains { jsonEquals(item, $0) } }
+            }
+            return expectedJSON.contains { jsonEquals(actualJSON, $0) }
+        }
+
         // Check if actual is an array
         if let actualArray = actual as? [T] {
             return actualArray.contains { expected.contains($0) }

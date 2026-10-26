@@ -421,4 +421,30 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["version": ["1.0.0"]]), conditionObj: JSON(["version": ["$veq": "0"]])))
         XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vne": "0"]])))
     }
+
+    /// An operator this SDK can't evaluate leaves `$all`/`$alli` undecided, so `$not` can't flip it to a pass (as in JS)
+    func testAllWithUnknownOperatorUnderNotFails() {
+        let attrs = JSON(["tags": ["a"]])
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$not": ["$all": [["$future": "x"]]]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$not": ["$alli": [["$future": "x"]]]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$all": [["$future": "x"]]]])))
+        // A decided miss still decides it
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$all": ["b", ["$future": "x"]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$not": ["$all": ["b", ["$future": "x"]]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$all": ["a"]]])))
+    }
+
+    /// Strings compare by UTF-16 code units, as in JS: "\u{E9}" and "e\u{301}" render the same but differ
+    func testCanonicallyEquivalentStringsAreNotEqual() {
+        let precomposed = "\u{E9}"
+        let decomposed = "e\u{301}"
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": precomposed])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["profile": ["name": decomposed]]), conditionObj: JSON(["profile": ["name": precomposed]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["names": [decomposed]]), conditionObj: JSON(["names": [precomposed]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": ["$in": [precomposed]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": ["$nin": [precomposed]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": ["$eq": precomposed]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["profile": ["name": precomposed]]), conditionObj: JSON(["profile": ["name": precomposed]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["name": precomposed]), conditionObj: JSON(["name": ["$in": [precomposed]]])))
+    }
 }

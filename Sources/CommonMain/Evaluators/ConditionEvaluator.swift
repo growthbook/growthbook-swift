@@ -188,7 +188,7 @@ class ConditionEvaluator {
         if insensitive,
                let condStr = conditionValue.string,
                let attrStr = attributeValue?.string {
-                return condStr.lowercased() == attrStr.lowercased()
+                return Common.sameCodeUnits(condStr.lowercased(), attrStr.lowercased())
             }
         
         if conditionValue.type == .null {
@@ -200,7 +200,7 @@ class ConditionEvaluator {
         
         // String comparison
         if conditionValue.type == .string && unwrappedAttribute.type == .string {
-            return conditionValue.stringValue == unwrappedAttribute.stringValue
+            return Common.sameCodeUnits(conditionValue.stringValue, unwrappedAttribute.stringValue)
         }
         
         // Number comparison
@@ -411,24 +411,8 @@ class ConditionEvaluator {
         /// does not have is false, which matches the other SDKs.
         if let conditionValue = conditionJson.array, attributeValue != .null {
             switch operatorKey {
-            case "$all":
-                return Common.isInAll(
-                        actual: attributeValue,
-                        expected: conditionValue,
-                        savedGroups: savedGroups,
-                        insensitive: true
-                    ) { con, attr, groups in
-                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: false)
-                    }
-            case "$alli":
-                return Common.isInAll(
-                        actual: attributeValue,
-                        expected: conditionValue,
-                        savedGroups: savedGroups,
-                        insensitive: true
-                    ) { con, attr, groups in
-                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: true)
-                    }
+            case "$all", "$alli":
+                return isInAll(actual: attributeValue, expected: conditionValue, savedGroups: savedGroups, insensitive: operatorKey == "$alli")
             default: break
             }
         } else if let attribute = attributeValue.array {
@@ -480,6 +464,27 @@ class ConditionEvaluator {
         }
     }
 
+    /// Tri-state `$all`/`$alli`, as JS `isInAll`: every expected value must match some element.
+    /// An element that can't be decided leaves that value undecided unless another element matches.
+    private func isInAll(actual: JSON, expected: [JSON], savedGroups: JSON?, insensitive: Bool) -> Bool? {
+        guard let actualArray = actual.array else { return false }
+        var result: Bool? = true
+        for expectedItem in expected {
+            var passed: Bool? = false
+            for actualItem in actualArray {
+                let entry = evalConditionValue(conditionValue: expectedItem, attributeValue: actualItem, savedGroups: savedGroups, insensitive: insensitive)
+                if entry == true {
+                    passed = true
+                    break
+                }
+                if entry == nil { passed = nil }
+            }
+            if passed == false { return false }
+            if passed == nil { result = nil }
+        }
+        return result
+    }
+
     /// Deep equality without coercion. `JSON`'s own `==` compares arrays and objects as
     /// `NSArray`/`NSDictionary`, which bridges booleans to `NSNumber` and treats `true` as `1`.
     func isStrictlyEqual(_ lhs: JSON, _ rhs: JSON) -> Bool {
@@ -487,7 +492,7 @@ class ConditionEvaluator {
         case (.number, .number):
             return lhs.doubleValue == rhs.doubleValue
         case (.string, .string):
-            return lhs.stringValue == rhs.stringValue
+            return Common.sameCodeUnits(lhs.stringValue, rhs.stringValue)
         case (.bool, .bool):
             return lhs.boolValue == rhs.boolValue
         case (.null, .null):
