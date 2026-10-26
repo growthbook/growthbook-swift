@@ -447,4 +447,19 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["profile": ["name": precomposed]]), conditionObj: JSON(["profile": ["name": precomposed]])))
         XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["name": precomposed]), conditionObj: JSON(["name": ["$in": [precomposed]]])))
     }
+
+    /// NaN is unordered, so every ordering operator fails with NaN on either side (as in JS)
+    func testOrderingOperatorsFailWithNaN() {
+        for op in ["$lt", "$lte", "$gt", "$gte"] {
+            XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": Double.nan]), conditionObj: JSON(["x": [op: 1]])), op)
+            XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON(1), conditionValue: JSON(Double.nan)), op)
+            XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON(Double.nan), conditionValue: JSON(Double.nan)), op)
+        }
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": 2]), conditionObj: JSON(["x": ["$gt": 1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": 1]), conditionObj: JSON(["x": ["$gte": 1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": -0.0]), conditionObj: JSON(["x": ["$gte": 0]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": -0.0]), conditionObj: JSON(["x": ["$gt": 0]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": "b"]), conditionObj: JSON(["x": ["$gt": "a"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": "a"]), conditionObj: JSON(["x": ["$gt": "a"]])))
+    }
 }

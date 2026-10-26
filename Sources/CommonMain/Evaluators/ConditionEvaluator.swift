@@ -439,28 +439,28 @@ class ConditionEvaluator {
 
     /// Evaluates `$lt`, `$lte`, `$gt` and `$gte`. Two numbers compare numerically and two strings
     /// compare as text by UTF-16 code unit, like JavaScript, so `"10" < "9"`. Any other pair fails.
+    /// Each relation is evaluated directly, so a NaN operand fails all four, as in JavaScript.
     private func compareOrdered(operatorKey: String, attributeValue: JSON, conditionValue: JSON) -> Bool {
         guard isOrderable(attributeValue, conditionValue) else { return false }
 
-        let isLess: Bool
-        let isEqual: Bool
         if attributeValue.type == .number {
             let attr = attributeValue.doubleValue
             let cond = conditionValue.doubleValue
-            isLess = attr < cond
-            isEqual = attr == cond
-        } else {
-            let attr = attributeValue.stringValue.utf16
-            let cond = conditionValue.stringValue.utf16
-            isLess = attr.lexicographicallyPrecedes(cond)
-            isEqual = attr.elementsEqual(cond)
+            switch operatorKey {
+            case "$lt": return attr < cond
+            case "$lte": return attr <= cond
+            case "$gt": return attr > cond
+            default: return attr >= cond
+            }
         }
 
+        let attr = attributeValue.stringValue.utf16
+        let cond = conditionValue.stringValue.utf16
         switch operatorKey {
-        case "$lt": return isLess
-        case "$lte": return isLess || isEqual
-        case "$gt": return !isLess && !isEqual
-        default: return !isLess
+        case "$lt": return attr.lexicographicallyPrecedes(cond)
+        case "$lte": return !cond.lexicographicallyPrecedes(attr)
+        case "$gt": return cond.lexicographicallyPrecedes(attr)
+        default: return !attr.lexicographicallyPrecedes(cond)
         }
     }
 
