@@ -28,6 +28,8 @@ class SpecCoverageTests: XCTestCase {
         "savedGroupReferencesV2.evalCondition": "The $savedGroup operator (saved group references v2) isn't implemented yet.",
         "savedGroupReferencesV2.feature": "The $savedGroup operator (saved group references v2) isn't implemented yet.",
         "savedGroupReferencesV2.run": "The $savedGroup operator (saved group references v2) isn't implemented yet.",
+        "pruneCondition": "Payload reduction methods are not implemented for client SDKs to start with.",
+        "reducePayload": "Payload reduction methods are not implemented for client SDKs to start with.",
     ]
 
     /// Every case section in the corpus. A top-level object holds nested sections, listed as `parent.child`.
