@@ -29,7 +29,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testBucketRange() throws {
@@ -62,7 +62,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func isCompareBucket(expectedResults: [[Float]], calculatedResults: [BucketRange]) -> Bool {
@@ -119,7 +119,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testInNameSpace() throws {
@@ -147,7 +147,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testEqualWeights() throws {
@@ -189,7 +189,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testEdgeCases() throws {
