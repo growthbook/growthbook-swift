@@ -366,9 +366,9 @@ class ConditionEvaluator {
         // strings, numbers and booleans, so a mismatch fails the positive operator and $ne matches.
         switch operatorKey {
         case "$eq":
-            return isStrictlyEqual(attributeValue, conditionValue)
+            return isIdentical(attributeValue, conditionValue)
         case "$ne":
-            return !isStrictlyEqual(attributeValue, conditionValue)
+            return !isIdentical(attributeValue, conditionValue)
         case "$lt", "$lte", "$gt", "$gte":
             return compareOrdered(operatorKey: operatorKey, attributeValue: attributeValue, conditionValue: conditionValue)
         case "$regex", "$regexi", "$notRegex", "$notRegexi":
@@ -488,6 +488,14 @@ class ConditionEvaluator {
             if passed == nil { result = nil }
         }
         return result
+    }
+
+    /// Equality for `$eq` and `$ne`, as JS `===`: scalars compare by value without coercion, and an
+    /// array or object never equals one parsed separately, so it is never equal here.
+    private func isIdentical(_ lhs: JSON, _ rhs: JSON) -> Bool {
+        let isCollection: (JSON) -> Bool = { $0.type == .array || $0.type == .dictionary }
+        if isCollection(lhs) || isCollection(rhs) { return false }
+        return isStrictlyEqual(lhs, rhs)
     }
 
     /// Deep equality without coercion. `JSON`'s own `==` compares arrays and objects as

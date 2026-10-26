@@ -490,4 +490,19 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$and": [["length": 1]]]]])))
         XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$or": [["0": 2]]]]])))
     }
+
+    /// Explicit `$eq`/`$ne` compare by identity, as JS `===`: an array or object operand never
+    /// equals one parsed separately. A literal array or object condition still compares contents.
+    func testEqNeNeverMatchArraysOrObjects() {
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": ["$eq": [1]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": ["$ne": [1]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": ["a": 1]]), conditionObj: JSON(["x": ["$eq": ["a": 1]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": ["a": 1]]), conditionObj: JSON(["x": ["$ne": ["a": 1]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": ["$ne": 1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["x": ["$eq": NSNull()]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": Double.nan]), conditionObj: JSON(["x": ["$eq": Double.nan]])))
+        // Literal conditions keep structural equality
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": [1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": ["a": 1]]), conditionObj: JSON(["x": ["a": 1]])))
+    }
 }
