@@ -68,7 +68,8 @@ public class Utils {
         if let range = range {
             return Utils.inRange(n: hash, range: range)
         } else if let coverage = coverage {
-            return hash <= coverage
+            // Half-open like `inRange`: a coverage of k/10000 includes exactly k hash buckets
+            return hash < coverage
         } else {
             return true
         }
