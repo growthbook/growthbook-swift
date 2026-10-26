@@ -12,7 +12,7 @@ class UtilsTests: XCTestCase {
             let seed = item.arrayValue[0].stringValue
             let testContext = item.arrayValue[1].stringValue//jsonPrimitive.content
             let hashVersion = item.arrayValue[2].floatValue
-            let experiment = item.arrayValue[3].floatValue
+            let experiment = item.arrayValue[3].doubleValue
             
             let result = Utils.hash(seed: seed, value: testContext, version: hashVersion) ?? 0.0
                         
@@ -38,11 +38,11 @@ class UtilsTests: XCTestCase {
         var passedScenarios: [String] = []
         for item in evalConditions {
             let numVariations = item.arrayValue[1].arrayValue[0].int
-            let coverage = item.arrayValue[1].arrayValue[1].float
-            var weights: [Float]? = nil
+            let coverage = item.arrayValue[1].arrayValue[1].double
+            var weights: [Double]? = nil
             if item.arrayValue[1].arrayValue[2] != JSON.null {
                 weights = JSON.convertToArrayString(jsonArray: item.arrayValue[1].arrayValue[2].arrayValue).map({ value in
-                    Float(value) ?? 0.0
+                    Double(value) ?? 0.0
                 })
             }
             
@@ -51,7 +51,7 @@ class UtilsTests: XCTestCase {
             
             let status = "\(item.arrayValue[0].stringValue) \nExpected Result - \(item.arrayValue[2].stringValue) \nActual result - \(JSON(bucketRange).stringValue) \n"
             
-            if isCompareBucket(expectedResults: JSON.convertToTwoArrayFloat(jsonArray: item.arrayValue[2].arrayValue), calculatedResults: bucketRange) {
+            if isCompareBucket(expectedResults: JSON.convertToTwoArrayDouble(jsonArray: item.arrayValue[2].arrayValue), calculatedResults: bucketRange) {
                 passedScenarios.append(status)
             } else {
                 failedScenarios.append(status)
@@ -65,7 +65,7 @@ class UtilsTests: XCTestCase {
         XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
-    func isCompareBucket(expectedResults: [[Float]], calculatedResults: [BucketRange]) -> Bool {
+    func isCompareBucket(expectedResults: [[Double]], calculatedResults: [BucketRange]) -> Bool {
         let pairExpectedResults = getPairedData(items: expectedResults)
         
         if pairExpectedResults.count != expectedResults.count {
@@ -77,7 +77,7 @@ class UtilsTests: XCTestCase {
             let source = pairExpectedResults[i]
             let target = calculatedResults[i]
             
-            if (source.number1 != target.number1 || source.number2 != target.number2) {
+            if (source.number1 != round(target.number1) || source.number2 != round(target.number2)) {
                 result = false
                 break
             }
@@ -86,7 +86,12 @@ class UtilsTests: XCTestCase {
         return result
     }
     
-    func getPairedData(items: [[Float]]) -> [BucketRange] {
+    /// Mirrors the JS spec runner, which floors computed values to 8 decimals before an exact compare.
+    func round(_ n: Double) -> Double {
+        return (n * 1e8).rounded(.down) / 1e8
+    }
+    
+    func getPairedData(items: [[Double]]) -> [BucketRange] {
         var pairExpectedResults: [BucketRange] = []
         
         for item in items {
@@ -101,8 +106,8 @@ class UtilsTests: XCTestCase {
         var failedScenarios: [String] = []
         var passedScenarios: [String] = []
         for item in evalConditions {
-            let hash = item.arrayValue[1].float
-            let rangeData = getPairedData(items: JSON.convertToTwoArrayFloat(jsonArray: item.arrayValue[2].arrayValue))
+            let hash = item.arrayValue[1].double
+            let rangeData = getPairedData(items: JSON.convertToTwoArrayDouble(jsonArray: item.arrayValue[2].arrayValue))
             
             let result = Utils.chooseVariation(n: hash ?? 0, ranges: rangeData)
             
@@ -168,10 +173,10 @@ class UtilsTests: XCTestCase {
                 resultTest = false
             } else {
                 for i in 0..<result.count {
-                    let source = item.arrayValue[1].arrayValue[i].floatValue
+                    let source = item.arrayValue[1].arrayValue[i].doubleValue
                     let target = result[i]
                     
-                    if source != target {
+                    if round(source) != round(target) {
                         resultTest = false
                         break
                     }

@@ -90,13 +90,13 @@ class ContextualBanditSpecTests: XCTestCase {
         if let experiment = expected["experiment"]?.dictionary {
             check("experiment.key", result.experiment?.key, experiment["key"]?.stringValue)
             check("experiment.weights", result.experiment?.weights,
-                  experiment["weights"].map { JSON.convertToArrayFloat(jsonArray: $0.arrayValue) })
+                  experiment["weights"].map { JSON.convertToArrayDouble(jsonArray: $0.arrayValue) })
 
             if let bandit = experiment["contextualBandit"]?.dictionary {
                 let actual = result.experiment?.contextualBandit
                 check("experiment.contextualBandit.leafId", actual?.leafId, bandit["leafId"]?.int)
                 check("experiment.contextualBandit.variationWeights", actual?.variationWeights,
-                      bandit["variationWeights"].map { JSON.convertToArrayFloat(jsonArray: $0.arrayValue) })
+                      bandit["variationWeights"].map { JSON.convertToArrayDouble(jsonArray: $0.arrayValue) })
                 check("experiment.contextualBandit.banditVersion", actual?.banditVersion, bandit["banditVersion"]?.int)
             } else if result.experiment?.contextualBandit != nil {
                 mismatches.append("experiment.contextualBandit: expected none, got a selection")
@@ -114,13 +114,13 @@ class ContextualBanditSpecTests: XCTestCase {
             check("experimentResult.hashValue", actual?.valueHash, expectedResult["hashValue"]?.string)
             check("experimentResult.featureId", actual?.featureId, expectedResult["featureId"]?.string)
             check("experimentResult.stickyBucketUsed", actual?.stickyBucketUsed, expectedResult["stickyBucketUsed"]?.bool)
-            if let bucket = expectedResult["bucket"]?.float {
+            if let bucket = expectedResult["bucket"]?.double {
                 check("experimentResult.bucket", actual?.bucket, bucket)
             }
             // Declared explicitly so an omitted field asserts absence.
             check("experimentResult.leafId", actual?.leafId, expectedResult["leafId"]?.int)
             check("experimentResult.variationWeights", actual?.variationWeights,
-                  expectedResult["variationWeights"].map { JSON.convertToArrayFloat(jsonArray: $0.arrayValue) })
+                  expectedResult["variationWeights"].map { JSON.convertToArrayDouble(jsonArray: $0.arrayValue) })
             check("experimentResult.banditVersion", actual?.banditVersion, expectedResult["banditVersion"]?.int)
         } else if result.experimentResult != nil, expected["experiment"] == nil {
             mismatches.append("experimentResult: expected none, got one")

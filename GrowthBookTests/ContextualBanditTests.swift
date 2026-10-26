@@ -39,7 +39,7 @@ class ContextualBanditTests: XCTestCase {
 
     /// A rule whose variations live under `contextualVariations` and which points at `bandit-1`.
     /// `weights` on the rule act as the aggregate fallback when no leaf matches.
-    private func banditRule(ref: String? = "bandit-1", weights: [Float]? = nil) -> [String: Any] {
+    private func banditRule(ref: String? = "bandit-1", weights: [Double]? = nil) -> [String: Any] {
         var rule: [String: Any] = [
             "id": "rule-1",
             "key": "my-experiment",
@@ -490,7 +490,7 @@ class ContextualBanditTests: XCTestCase {
 
     /// A full API payload whose single feature is a contextual bandit rule. Leaf 1 forces
     /// variation 0 ("control"), leaf 2 forces variation 1 ("treatment").
-    private func payload(banditVersion: Int, usWeights: [Float], caWeights: [Float]) -> String {
+    private func payload(banditVersion: Int, usWeights: [Double], caWeights: [Double]) -> String {
         """
         {
           "features": {

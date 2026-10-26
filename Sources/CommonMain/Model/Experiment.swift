@@ -23,11 +23,11 @@ import Foundation
     /// Any users with a sticky bucket version less than this will be excluded from the experiment
     public let minBucketVersion: Int?
     /// How to weight traffic between variations. Must add to 1.
-    public var weights: [Float]?
+    public var weights: [Double]?
     /// If set to false, always return the control (first variation)
     public var isActive: Bool?
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
-    public var coverage: Float?
+    public var coverage: Double?
     /// Optional targeting condition
     public var condition: JSON?
     /// All users included in the experiment will be forced into the specific variation index
@@ -63,9 +63,9 @@ import Foundation
                 disableStickyBucketing: Bool? = nil,
                 bucketVersion: Int? = nil,
                 minBucketVersion: Int? = nil,
-                weights: [Float]? = nil,
+                weights: [Double]? = nil,
                 isActive: Bool = true,
-                coverage: Float? = nil,
+                coverage: Double? = nil,
                 condition: Any? = nil,
                 force: Int? = nil,
                 ranges: [BucketRange]? = nil,
@@ -119,9 +119,9 @@ import Foundation
          disableStickyBucketing: Bool? = nil,
          bucketVersion: Int? = nil,
          minBucketVersion: Int? = nil,
-         weights: [Float]? = nil,
+         weights: [Double]? = nil,
          isActive: Bool = true,
-         coverage: Float? = nil,
+         coverage: Double? = nil,
          condition: Condition? = nil,
          force: Int? = nil,
          ranges: [BucketRange]? = nil,
@@ -181,10 +181,10 @@ import Foundation
         isActive = json["active"]?.boolValue ?? true
 
         if let weights = json["weights"] {
-            self.weights = JSON.convertToArrayFloat(jsonArray: weights.arrayValue)
+            self.weights = JSON.convertToArrayDouble(jsonArray: weights.arrayValue)
         }
 
-        coverage = json["coverage"]?.floatValue
+        coverage = json["coverage"]?.doubleValue
 
         condition = json["condition"]
 
@@ -231,7 +231,7 @@ import Foundation
     /// The human-readable name of the assigned variation
     public var name: String?
     /// The hash value used to assign a variation (float from `0` to `1`)
-    public var bucket: Float?
+    public var bucket: Double?
     /// Used for holdout groups
     public var passthrough: Bool?
     /// If a hash was used to assign a variation
@@ -244,7 +244,7 @@ import Foundation
     /// no leaf matched. `nil` when the experiment is not a contextual bandit.
     public var leafId: Int?
     /// The variation weights the contextual bandit applied for this user.
-    public var variationWeights: [Float]?
+    public var variationWeights: [Double]?
     /// The version of the backend-computed weights that produced this assignment.
     public var banditVersion: Int?
 
@@ -255,7 +255,7 @@ import Foundation
          hashValue: String? = nil,
          key: String,
          name: String? = nil,
-         bucket: Float? = nil,
+         bucket: Double? = nil,
          passthrough: Bool? = nil,
          hashUsed: Bool? = nil,
          featureId: String? = nil,
@@ -282,7 +282,7 @@ import Foundation
         valueHash = json["valueHash"]?.stringValue
         key = json["key"]?.stringValue ?? ""
         name = json["name"]?.stringValue
-        bucket = json["bucket"]?.floatValue
+        bucket = json["bucket"]?.doubleValue
         passthrough = json["passthrough"]?.boolValue
         hashUsed = json["hashUsed"]?.boolValue
         featureId = json["featureId"]?.stringValue
@@ -290,7 +290,7 @@ import Foundation
         leafId = json["leafId"]?.int
         banditVersion = json["banditVersion"]?.int
         if let variationWeights = json["variationWeights"]?.array {
-            self.variationWeights = JSON.convertToArrayFloat(jsonArray: variationWeights)
+            self.variationWeights = JSON.convertToArrayDouble(jsonArray: variationWeights)
         }
     }
 }
