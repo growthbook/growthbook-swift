@@ -49,7 +49,9 @@ import Foundation
   /// Feature definitions - To be pulled from API / Cache
   var features: Features
   /// Target the same group of users across multiple features and experiments with Saved Groups
-  public var savedGroups: JSON?
+  public var savedGroups: JSON? {
+    didSet { hasRemoteSavedGroups = Self.containsRemoteGroup(savedGroups) }
+  }
   /// Contextual bandit definitions from the feature payload, keyed by bandit ref
   public var contextualBandits: JSON?
 
@@ -80,6 +82,8 @@ import Foundation
       self.stickyBucketIdentifierAttributes = stickyBucketIdentifierAttributes
       self.features = features
       self.savedGroups = savedGroups
+      // `didSet` doesn't run during init
+      self.hasRemoteSavedGroups = Self.containsRemoteGroup(savedGroups)
       self.contextualBandits = contextualBandits
       self.url = url
       self.forcedFeatureValues = forcedFeatureValues
@@ -96,8 +100,11 @@ import Foundation
     return JSON(merged)
   }
 
-  /// Whether `savedGroups` has a remote entry.
-  var hasRemoteSavedGroups: Bool {
+  /// Whether `savedGroups` has a remote entry. Computed when `savedGroups` changes rather than on
+  /// each read, since every feature and experiment read checks it.
+  private(set) var hasRemoteSavedGroups = false
+
+  private static func containsRemoteGroup(_ savedGroups: JSON?) -> Bool {
     savedGroups?.dictionaryValue.values.contains { $0["type"].string == "remote" } ?? false
   }
 }

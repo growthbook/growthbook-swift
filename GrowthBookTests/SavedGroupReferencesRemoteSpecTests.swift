@@ -126,6 +126,22 @@ class SavedGroupReferencesRemoteSpecTests: XCTestCase {
         wait(for: [posted], timeout: 5)
     }
 
+    /// The flag is cached on `savedGroups` changes, so every read doesn't rescan the payload
+    func testHasRemoteSavedGroupsFollowsSavedGroupsChanges() {
+        let data = EvaluationData(streamingHost: nil, attributes: JSON([:]), forcedVariations: nil,
+                                  savedGroups: Self.savedGroups)
+        XCTAssertTrue(data.hasRemoteSavedGroups, "set from init")
+
+        data.savedGroups = JSON(["admins": ["type": "list", "attributeKey": "id", "values": ["u_1"]]])
+        XCTAssertFalse(data.hasRemoteSavedGroups)
+
+        data.savedGroups = Self.savedGroups
+        XCTAssertTrue(data.hasRemoteSavedGroups)
+
+        data.savedGroups = nil
+        XCTAssertFalse(data.hasRemoteSavedGroups)
+    }
+
     func testInGroupOnARemoteEntryIsUndecided() {
         let savedGroups = JSON(["grp_vip": ["type": "remote", "attributeKey": "account_id"]])
         let attributes = JSON(["account_id": "a1", "__gb_remoteGroupIds": ["grp_vip"]])

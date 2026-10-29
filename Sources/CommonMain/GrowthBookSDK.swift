@@ -840,9 +840,10 @@ protocol GrowthBookProtocol: AnyObject {
     private func warnIfRemoteGroupIdsMissing() {
         guard !warnedMissingRemoteGroupIds else { return }
         let data = contextManager.getEvaluationData()
-        guard data.remoteGroupIds == nil,
-              data.attributes[Constants.remoteGroupIdsAttribute].array == nil,
-              data.hasRemoteSavedGroups else { return }
+        // The cached flag first: a payload without remote groups is the common case
+        guard data.hasRemoteSavedGroups,
+              data.remoteGroupIds == nil,
+              data.attributes[Constants.remoteGroupIdsAttribute].array == nil else { return }
         warnedMissingRemoteGroupIds = true
         logger.warning("The payload has remote saved groups, but the user has no remote group ids. " +
                        "Rules using them won't match. See setRemoteGroupIds.")
