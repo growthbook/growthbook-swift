@@ -299,14 +299,11 @@ class ConditionEvaluator {
             return negate(evalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups, visited: visited))
         }
 
-        // Evaluate EXISTS operator - whether condition contains attribute
+        // Evaluate EXISTS operator - whether condition contains attribute. The value is read as a JS
+        // boolean, so `$exists: 1` asks for a present attribute and `0` or "" for an absent one.
         if operatorKey == "$exists" {
-            let targetPrimitiveValue = conditionJson.stringValue
-            if targetPrimitiveValue == "false" && attributeValue == .null {
-                return true
-            } else if targetPrimitiveValue == "true" && attributeValue != .null {
-                return true
-            }
+            let present = attributeValue.type != .null
+            return isJsTruthy(conditionValue) ? present : !present
         }
 
         switch operatorKey {
@@ -315,13 +312,6 @@ class ConditionEvaluator {
         case "$not":
             if let conditionValue = conditionValue.dictionaryValue.values.first {
                 return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups)
-            }
-        case "$exists":
-            let targetPrimitiveValue = conditionJson.stringValue
-            if targetPrimitiveValue == "false" && attributeValue == .null {
-                return true
-            } else if targetPrimitiveValue == "true" && attributeValue != .null {
-                return true
             }
         default: break
         }
@@ -635,6 +625,17 @@ class ConditionEvaluator {
         guard entry.type == .dictionary else { return false }
         let type = entry["type"].string
         return type != "list" && type != "condition"
+    }
+
+    /// JS truthiness: `false`, `0`, `NaN`, `""` and null are falsy; arrays and objects are truthy.
+    private func isJsTruthy(_ value: JSON) -> Bool {
+        switch value.type {
+        case .bool: return value.boolValue
+        case .number: return value.doubleValue != 0 && !value.doubleValue.isNaN
+        case .string: return !value.stringValue.isEmpty
+        case .array, .dictionary: return true
+        default: return false
+        }
     }
 
     private func isPrimitive(value: JSON) -> Bool {
