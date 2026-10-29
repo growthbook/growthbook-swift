@@ -264,6 +264,16 @@ class UtilsTests: XCTestCase {
         XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+\n"), Utils.paddedVersionString(input: "1.2.3"))
     }
 
+    /// A combining mark after `+` or `v` merges with it into one `Character`; JS (and the old regex)
+    /// still see the `+` and `v` code units, so they must be found by unicode scalar
+    func testPaddedVersionStringFindsPlusAndVBeforeACombiningMark() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+\u{0301}build"), Utils.paddedVersionString(input: "1.2.3"))
+        XCTAssertEqual(Utils.paddedVersionString(input: "v\u{0301}1.2.3"), "\u{0301}1-    2-    3-~")
+
+        let condition = JSON(["v": ["$veq": "1.2.3"]])
+        XCTAssertTrue(ConditionEvaluator().isEvalCondition(attributes: JSON(["v": "1.2.3+\u{0301}build"]), conditionObj: condition))
+    }
+
     /// Quadratic for the regex: every `+` started a `.*` that failed at "\nx" (5 000 took seconds)
     func testPaddedVersionStringRunsInLinearTimeOnManyPlusCharacters() throws {
         let input = String(repeating: "+", count: 5_000) + "\nx"
