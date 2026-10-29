@@ -207,28 +207,39 @@ public class Utils {
         return nil
     }
     
+    /// Hashes UTF-16 code units, like JS `charCodeAt`, so non-ASCII values match the other SDKs.
     static private func digest(_ string: String) -> UInt32 {
-        return Common.fnv1a(Array(string.utf8), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
+        return Common.fnv1a(Array(string.utf16), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
+    }
+    
+    /// Returns the value as a hash input, or nil when it can't identify a user.
+    ///
+    /// Only non-empty strings and finite, non-zero numbers qualify. Everything else (`0`, `""`,
+    /// booleans, null, arrays, objects) counts as missing, as in the JS SDK. Numbers are formatted
+    /// like JS `String()`, so `1.0` hashes as `"1"`.
+    static func hashableValue(_ value: JSON) -> String? {
+        switch value.type {
+        case .string:
+            let string = value.stringValue
+            return string.isEmpty ? nil : string
+        case .number:
+            let number = value.doubleValue
+            guard number != 0, number.isFinite else { return nil }
+            return value.stringValue
+        default:
+            return nil
+        }
     }
     
     ///Returns tuple out of 2 elements: the attribute itself an its hash value
     static func getHashAttribute(attr: String?, fallback: String? = nil, attributes: JSON) -> (hashAttribute: String, hashValue: String) {
         var hashAttribute = attr ?? "id"
-        var hashValue = ""
-        
-        if attributes[hashAttribute] != .null {
-            hashValue = attributes[hashAttribute].stringValue
-        }
+        var hashValue = hashableValue(attributes[hashAttribute]) ?? ""
         
         // if no match, try fallback
-        if hashValue.isEmpty, let fallback = fallback {
-            if attributes[fallback] != .null {
-                hashValue = attributes[fallback].stringValue
-            }
-            
-            if !hashValue.isEmpty {
-                hashAttribute = fallback
-            }
+        if hashValue.isEmpty, let fallback = fallback, let fallbackValue = hashableValue(attributes[fallback]) {
+            hashValue = fallbackValue
+            hashAttribute = fallback
         }
         
         return (hashAttribute, hashValue)

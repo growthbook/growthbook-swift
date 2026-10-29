@@ -77,7 +77,7 @@ class UtilsTests: XCTestCase {
             let source = pairExpectedResults[i]
             let target = calculatedResults[i]
             
-            if (source.number1 != round(target.number1) || source.number2 != round(target.number2)) {
+            if (round(source.number1) != round(target.number1) || round(source.number2) != round(target.number2)) {
                 result = false
                 break
             }
@@ -86,7 +86,7 @@ class UtilsTests: XCTestCase {
         return result
     }
     
-    /// Mirrors the JS spec runner, which floors computed values to 8 decimals before an exact compare.
+    /// Mirrors the JS spec runner, which floors both computed and expected values to 8 decimals before an exact compare.
     func round(_ n: Double) -> Double {
         return (n * 1e8).rounded(.down) / 1e8
     }

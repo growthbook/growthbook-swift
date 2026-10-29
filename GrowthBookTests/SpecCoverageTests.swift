@@ -28,6 +28,8 @@ class SpecCoverageTests: XCTestCase {
         "savedGroupReferencesV2.evalCondition": "The $savedGroup operator (saved group references v2) isn't implemented yet.",
         "savedGroupReferencesV2.feature": "The $savedGroup operator (saved group references v2) isn't implemented yet.",
         "savedGroupReferencesV2.run": "The $savedGroup operator (saved group references v2) isn't implemented yet.",
+        "savedGroupReferencesRemote.evalCondition": "Remote saved groups ($savedGroup with type \"remote\") aren't implemented yet.",
+        "savedGroupReferencesRemote.feature": "Remote saved groups ($savedGroup with type \"remote\") aren't implemented yet.",
         "pruneCondition": "Payload reduction methods are not implemented for client SDKs to start with.",
         "reducePayload": "Payload reduction methods are not implemented for client SDKs to start with.",
     ]

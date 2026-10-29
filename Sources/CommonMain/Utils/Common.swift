@@ -33,6 +33,18 @@ extension Common {
         return hash
     }
     
+    /// FNV-1a over UTF-16 code units, XOR-ing each whole 16-bit unit as JS `charCodeAt` does.
+    static func fnv1a<T: FixedWidthInteger>(_ array: [UInt16], offsetBasis: T, prime: T) -> T {
+        var hash: T = offsetBasis
+
+        for elm in array {
+            hash = hash ^ T(elm)
+            hash = hash &* prime
+        }
+
+        return hash
+    }
+
     static func isEqual<T>(_ a: T, _ b: T) -> Bool where T : Equatable {
         return a == b
     }
@@ -44,7 +56,13 @@ extension Common {
     }
 
     /// `JSON` equality with strings compared by code units
+    ///
+    /// Arrays and objects never match: JS compares them by reference, so an array or object item
+    /// in an `$in` list never equals the attribute value, even with the same contents.
     static func jsonEquals(_ a: JSON, _ b: JSON) -> Bool {
+        if [a.type, b.type].contains(where: { $0 == .array || $0 == .dictionary }) {
+            return false
+        }
         if let left = a.string, let right = b.string {
             return sameCodeUnits(left, right)
         }
