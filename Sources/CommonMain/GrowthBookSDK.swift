@@ -263,6 +263,15 @@ protocol GrowthBookProtocol: AnyObject {
         return self
     }
 
+    /// Sets the remote saved groups the user is in, resolved by the app. See
+    /// `GrowthBookSDK.setRemoteGroupIds(_:)`; leave unset while they are unresolved.
+    /// - Parameter remoteGroupIds: [String]
+    /// - Returns: GrowthBookBuilder
+    @objc public func setRemoteGroupIds(_ remoteGroupIds: [String]) -> GrowthBookBuilder {
+        growthBookBuilderModel.remoteGroupIds = remoteGroupIds
+        return self
+    }
+
     /// Registers a plugin that will receive experiment and feature evaluation events.
     /// - Parameter plugin: Any object conforming to `GrowthBookPlugin`.
     /// - Returns: GrowthBookBuilder
@@ -368,7 +377,8 @@ protocol GrowthBookProtocol: AnyObject {
             savedGroups: nil,
             contextualBandits: initialContextualBandits,
             url: nil,
-            forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues
+            forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues,
+            remoteGroupIds: growthBookBuilderModel.remoteGroupIds
         )
 
         let contextManager = ContextManager(globalConfig: globalConfig, evalData: evaluationData)
@@ -822,6 +832,22 @@ protocol GrowthBookProtocol: AnyObject {
         contextManager.getEvalContext()
     }
 
+    // Set once the missing-ids warning has been logged, so it isn't repeated on every evaluation
+    private var warnedMissingRemoteGroupIds = false
+
+    /// Logs once when the payload has remote saved groups but the user has no remote group ids,
+    /// since every rule using them will then fail. Logs no attribute values. Called under the lock.
+    private func warnIfRemoteGroupIdsMissing() {
+        guard !warnedMissingRemoteGroupIds else { return }
+        let data = contextManager.getEvaluationData()
+        guard data.remoteGroupIds == nil,
+              data.attributes[Constants.remoteGroupIdsAttribute].array == nil,
+              data.hasRemoteSavedGroups else { return }
+        warnedMissingRemoteGroupIds = true
+        logger.warning("The payload has remote saved groups, but the user has no remote group ids. " +
+                       "Rules using them won't match. See setRemoteGroupIds.")
+    }
+
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
 
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
@@ -888,7 +914,7 @@ protocol GrowthBookProtocol: AnyObject {
             let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
             let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
-            let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
+            let payload = RemoteEvalParams(attributes: evalData.evaluationAttributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
             featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
         }
     }
@@ -901,6 +927,7 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     private func _evalFeature(id: String) -> FeatureResult {
+        warnIfRemoteGroupIdsMissing()
         let context = contextManager.getEvalContext()
         let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
         contextManager.syncFromEvaluation(context)
@@ -948,6 +975,7 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     private func _runExperiment(experiment: Experiment) -> ExperimentResult {
+        warnIfRemoteGroupIdsMissing()
         let context = contextManager.getEvalContext()
         let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
         contextManager.syncFromEvaluation(context)
@@ -964,6 +992,29 @@ protocol GrowthBookProtocol: AnyObject {
             }
             self.refreshForRemoteEval()
         }
+    }
+
+    /// Sets the remote saved groups the user is in. A remote saved group keeps its members outside
+    /// the payload, so the app resolves the user's groups (for example from its back end) and passes
+    /// their ids here. Conditions read them as the `__gb_remoteGroupIds` attribute, over any value
+    /// the attributes set for it. In remote-eval mode this triggers a fresh remote evaluation.
+    ///
+    /// Pass nil while the groups are unresolved: rules that use remote groups then fail, including
+    /// "not in group". Don't pass an empty array for that — it means "in no group", so "not in
+    /// group" rules match.
+    /// - Parameter remoteGroupIds: [String]?
+    @objc public func setRemoteGroupIds(_ remoteGroupIds: [String]?) {
+        withLock {
+            self.contextManager.updateEvalData { data in
+                data.remoteGroupIds = remoteGroupIds
+            }
+            self.refreshForRemoteEval()
+        }
+    }
+
+    /// The ids of the remote saved groups the user is in, or nil while unresolved.
+    @objc public func getRemoteGroupIds() -> [String]? {
+        withLock { contextManager.getEvaluationData().remoteGroupIds }
     }
 
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations

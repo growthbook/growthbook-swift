@@ -56,6 +56,10 @@ import Foundation
   public var url: String? = nil
 
   public var forcedFeatureValues: JSON? = nil
+
+  /// The ids of the remote saved groups the user is in, resolved by the app. `nil` means unresolved,
+  /// which is not the same as no groups: see `GrowthBookSDK.setRemoteGroupIds(_:)`.
+  public var remoteGroupIds: [String]? = nil
   
   init(
     streamingHost: String?,
@@ -67,7 +71,8 @@ import Foundation
     savedGroups: JSON? = nil,
     contextualBandits: JSON? = nil,
     url: String? = nil,
-    forcedFeatureValues: JSON? = nil) {
+    forcedFeatureValues: JSON? = nil,
+    remoteGroupIds: [String]? = nil) {
       self.streamingHost = streamingHost
       self.attributes = attributes
       self.forcedVariations = forcedVariations
@@ -78,5 +83,21 @@ import Foundation
       self.contextualBandits = contextualBandits
       self.url = url
       self.forcedFeatureValues = forcedFeatureValues
+      self.remoteGroupIds = remoteGroupIds
     }
+
+  /// The attributes conditions see: `attributes`, with the resolved remote saved group ids (when set)
+  /// as `Constants.remoteGroupIdsAttribute`, over any value the attributes set for it. Remote
+  /// evaluation sends these too, so the server sees the same groups.
+  var evaluationAttributes: JSON {
+    guard let remoteGroupIds else { return attributes }
+    var merged = attributes.dictionaryValue
+    merged[Constants.remoteGroupIdsAttribute] = JSON(remoteGroupIds)
+    return JSON(merged)
+  }
+
+  /// Whether `savedGroups` has a remote entry.
+  var hasRemoteSavedGroups: Bool {
+    savedGroups?.dictionaryValue.values.contains { $0["type"].string == "remote" } ?? false
+  }
 }

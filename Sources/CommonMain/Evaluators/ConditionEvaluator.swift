@@ -544,8 +544,8 @@ class ConditionEvaluator {
     /// Resolves a `$savedGroup` reference: is the user a member of the group it names?
     ///
     /// Unlike `$inGroup`, this is a top-level operator with no attribute of its own, so the entry
-    /// decides what membership means — a list entry names the attribute to test, and a condition
-    /// entry is evaluated in full.
+    /// decides what membership means — a list entry names the attribute to test, a condition
+    /// entry is evaluated in full, and a remote entry checks the user's resolved remote group ids.
     ///
     /// Anything this SDK cannot make sense of matches nobody rather than throwing, and a group type
     /// added after this SDK was built is undecided (`nil`), so it fails under `$not` too.
@@ -586,6 +586,16 @@ class ConditionEvaluator {
             let condition = entry["condition"]
             guard condition.type == .dictionary else { return false }
             return evalCondition(attributes: attributes, conditionObj: condition, savedGroups: savedGroups, visited: visited.union([id]))
+
+        // The ids live outside the payload: the user's groups arrive resolved, in
+        // `Constants.remoteGroupIdsAttribute`
+        case "remote":
+            // Another attribute needs a derived group, which isn't supported yet
+            if let overrideKey, overrideKey != entry["attributeKey"].string { return false }
+            guard let groupIds = getPath(obj: attributes, key: Constants.remoteGroupIdsAttribute)?.array else {
+                return false
+            }
+            return groupIds.contains { $0.string == id }
 
         // A group type added after this SDK was built
         default:
