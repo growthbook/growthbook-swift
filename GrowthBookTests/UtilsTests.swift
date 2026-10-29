@@ -248,6 +248,30 @@ class UtilsTests: XCTestCase {
         XCTAssertEqual(Utils.paddedVersionString(input: JSON([1, 2])), "    0")
     }
 
+    /// growthbook/growthbook#7401: one leading `v` and everything from the first `+` are stripped
+    func testPaddedVersionStringStripsOneLeadingVAndBuildMetadata() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "v1.2.3"), Utils.paddedVersionString(input: "1.2.3"))
+        XCTAssertEqual(Utils.paddedVersionString(input: "vv1.2.3"), "v1-    2-    3-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+build"), Utils.paddedVersionString(input: "1.2.3"))
+        XCTAssertEqual(Utils.paddedVersionString(input: "v1.2.3+build+more.1-2"), Utils.paddedVersionString(input: "1.2.3"))
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+"), Utils.paddedVersionString(input: "1.2.3"))
+        XCTAssertEqual(Utils.paddedVersionString(input: "+build"), "")
+    }
+
+    /// The regex kept "+build\nmore": `.` doesn't match a newline
+    func testPaddedVersionStringCutsAtTheFirstPlusEvenWhenANewlineFollows() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+build\nmore"), Utils.paddedVersionString(input: "1.2.3"))
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+\n"), Utils.paddedVersionString(input: "1.2.3"))
+    }
+
+    /// Quadratic for the regex: every `+` started a `.*` that failed at "\nx" (5 000 took seconds)
+    func testPaddedVersionStringRunsInLinearTimeOnManyPlusCharacters() throws {
+        let input = String(repeating: "+", count: 5_000) + "\nx"
+        let start = Date()
+        _ = Utils.paddedVersionString(input: input)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 0.5)
+    }
+
     /// `JSON` is ExpressibleByStringLiteral, so a bare string literal binds to the `String`
     /// overload rather than the JSON one. The two must agree, or a caller gets a different answer
     /// depending on a type inference they never see.
