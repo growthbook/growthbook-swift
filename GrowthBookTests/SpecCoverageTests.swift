@@ -23,13 +23,13 @@ class SpecCoverageTests: XCTestCase {
         "savedGroupReferencesV2.evalCondition": "SavedGroupReferencesV2SpecTests",
         "savedGroupReferencesV2.feature": "SavedGroupReferencesV2SpecTests",
         "savedGroupReferencesV2.run": "SavedGroupReferencesV2SpecTests",
+        "savedGroupReferencesRemote.evalCondition": "SavedGroupReferencesRemoteSpecTests",
+        "savedGroupReferencesRemote.feature": "SavedGroupReferencesRemoteSpecTests",
     ]
 
     /// Sections deliberately not run, with the reason. Remove an entry once the SDK supports it.
     static let excludedSections: [String: String] = [
         "urlRedirect": "URL redirects are a browser feature; this SDK doesn't implement them.",
-        "savedGroupReferencesRemote.evalCondition": "Remote saved groups ($savedGroup with type \"remote\") aren't implemented yet.",
-        "savedGroupReferencesRemote.feature": "Remote saved groups ($savedGroup with type \"remote\") aren't implemented yet.",
         "pruneCondition": "Payload reduction methods are not implemented for client SDKs to start with.",
         "reducePayload": "Payload reduction methods are not implemented for client SDKs to start with.",
     ]
