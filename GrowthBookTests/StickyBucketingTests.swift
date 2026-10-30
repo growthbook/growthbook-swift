@@ -68,6 +68,6 @@ class StickyBucketingFeatureTests: XCTestCase {
         print("Passed TESTS - \(passedScenarios.count)")
         print("Failed TESTS - \(failedScenarios.count)")
 
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
 }

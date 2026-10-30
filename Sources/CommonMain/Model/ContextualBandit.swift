@@ -14,9 +14,9 @@ public struct ContextualBanditContext: Codable {
     public let condition: JSON?
     /// Variation weights to apply when this leaf matches. Must align with the experiment's
     /// variation count and, like any weights, sum to 1.
-    public let weights: [Float]?
+    public let weights: [Double]?
 
-    init(leafId: Int? = nil, condition: JSON? = nil, weights: [Float]? = nil) {
+    init(leafId: Int? = nil, condition: JSON? = nil, weights: [Double]? = nil) {
         self.leafId = leafId
         self.condition = condition
         self.weights = weights
@@ -26,7 +26,7 @@ public struct ContextualBanditContext: Codable {
         leafId = json["leafId"]?.int
         condition = json["condition"]
         if let weights = json["weights"]?.array {
-            self.weights = JSON.convertToArrayFloat(jsonArray: weights)
+            self.weights = JSON.convertToArrayDouble(jsonArray: weights)
         } else {
             self.weights = nil
         }
@@ -74,11 +74,11 @@ public struct ContextualBandit: Codable {
     /// The matched leaf's id, or `-1` when no leaf matched and fallback weights were used.
     public let leafId: Int?
     /// The weights actually applied to the experiment for this user.
-    public let variationWeights: [Float]?
+    public let variationWeights: [Double]?
     /// The bandit version of the definition that produced these weights.
     public let banditVersion: Int?
 
-    init(leafId: Int?, variationWeights: [Float]?, banditVersion: Int?) {
+    init(leafId: Int?, variationWeights: [Double]?, banditVersion: Int?) {
         self.leafId = leafId
         self.variationWeights = variationWeights
         self.banditVersion = banditVersion

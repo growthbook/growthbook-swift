@@ -13,7 +13,7 @@ import Foundation
 public class Utils {
     
     /// Hashes a string to a float between 0 and 1
-    static func hash(seed: String, value: String, version: Float) -> Float? {
+    static func hash(seed: String, value: String, version: Float) -> Double? {
         
         switch version {
         case 2:
@@ -21,12 +21,12 @@ public class Utils {
             let combinedValue = seed + value
             let hashedCombinedValue = digest(combinedValue).description + ""
             let hashedValue = digest(hashedCombinedValue) % 10000
-            return Float(hashedValue) / 10000
+            return Double(hashedValue) / 10000
         case 1:
             // Original biased hashing algorithm (keep for backwards compatibility)
             let combinedValue = value + seed
             let hashedValue = digest(combinedValue)
-            return Float(hashedValue % 1000) / 1000
+            return Double(hashedValue % 1000) / 1000
         default:
             // Unknown hash version
             return nil
@@ -49,7 +49,7 @@ public class Utils {
     }
     
     ///Determines if the user is part of a gradual feature rollout.
-    static func isIncludedInRollout(attributes: JSON, seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?) -> Bool {
+    static func isIncludedInRollout(attributes: JSON, seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Double?, hashVersion: Float?) -> Bool {
         if range == nil, coverage == nil {
             return true
         }
@@ -68,7 +68,8 @@ public class Utils {
         if let range = range {
             return Utils.inRange(n: hash, range: range)
         } else if let coverage = coverage {
-            return hash <= coverage
+            // Half-open like `inRange`: a coverage of k/10000 includes exactly k hash buckets
+            return hash < coverage
         } else {
             return true
         }
@@ -81,13 +82,13 @@ public class Utils {
     }
     
     /// Returns an array of floats with numVariations items that are all equal and sum to 1. For example, getEqualWeights(2) would return [0.5, 0.5].
-    static func getEqualWeights(numVariations: Int) -> [Float] {
+    static func getEqualWeights(numVariations: Int) -> [Double] {
         if numVariations <= 0 { return [] }
-        return Array(repeating: 1.0 / Float(numVariations), count: numVariations)
+        return Array(repeating: 1.0 / Double(numVariations), count: numVariations)
     }
     
     /// This converts and experiment's coverage and variation weights into an array of bucket ranges.
-    static func getBucketRanges(numVariations: Int, coverage: Float, weights: [Float]?) -> [BucketRange] {
+    static func getBucketRanges(numVariations: Int, coverage: Double, weights: [Double]?) -> [BucketRange] {
         var bucketRange: [BucketRange]
         
         var targetCoverage = coverage
@@ -110,24 +111,24 @@ public class Utils {
         }
         
         // Convert weights to ranges and return
-        var cumulative: Float = 0
+        var cumulative: Double = 0
         
         bucketRange = targetWeights.map { weight in
             let start = cumulative
             cumulative += weight
             
-            return BucketRange(number1: start.roundTo(numFractionDigits: 4), number2: (start + (targetCoverage * weight)).roundTo(numFractionDigits: 4))
+            return BucketRange(number1: start, number2: start + (targetCoverage * weight))
         }
         
         return bucketRange
     }
     
-    static func inRange(n: Float, range: BucketRange) -> Bool {
+    static func inRange(n: Double, range: BucketRange) -> Bool {
         return n >= range.number1 && n < range.number2
     }
     
     /// Choose Variation from List of ranges which matches particular number
-    static func chooseVariation(n: Float, ranges: [BucketRange]) -> Int {
+    static func chooseVariation(n: Double, ranges: [BucketRange]) -> Int {
         for (index, range) in ranges.enumerated() {
             if inRange(n: n, range: range) {
                 return index
@@ -141,8 +142,8 @@ public class Utils {
         if namespace.count >= 3 {
             
             let title = namespace[0].string
-            let start = namespace[1].float
-            let end = namespace[2].float
+            let start = namespace[1].double
+            let end = namespace[2].double
             
             if let title = title, let start = start, let end = end {
                 return NameSpace(title, start, end)
@@ -206,28 +207,39 @@ public class Utils {
         return nil
     }
     
+    /// Hashes UTF-16 code units, like JS `charCodeAt`, so non-ASCII values match the other SDKs.
     static private func digest(_ string: String) -> UInt32 {
-        return Common.fnv1a(Array(string.utf8), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
+        return Common.fnv1a(Array(string.utf16), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
+    }
+    
+    /// Returns the value as a hash input, or nil when it can't identify a user.
+    ///
+    /// Only non-empty strings and finite, non-zero numbers qualify. Everything else (`0`, `""`,
+    /// booleans, null, arrays, objects) counts as missing, as in the JS SDK. Numbers are formatted
+    /// like JS `String()`, so `1.0` hashes as `"1"`.
+    static func hashableValue(_ value: JSON) -> String? {
+        switch value.type {
+        case .string:
+            let string = value.stringValue
+            return string.isEmpty ? nil : string
+        case .number:
+            let number = value.doubleValue
+            guard number != 0, number.isFinite else { return nil }
+            return value.stringValue
+        default:
+            return nil
+        }
     }
     
     ///Returns tuple out of 2 elements: the attribute itself an its hash value
     static func getHashAttribute(attr: String?, fallback: String? = nil, attributes: JSON) -> (hashAttribute: String, hashValue: String) {
         var hashAttribute = attr ?? "id"
-        var hashValue = ""
-        
-        if attributes[hashAttribute] != .null {
-            hashValue = attributes[hashAttribute].stringValue
-        }
+        var hashValue = hashableValue(attributes[hashAttribute]) ?? ""
         
         // if no match, try fallback
-        if hashValue.isEmpty, let fallback = fallback {
-            if attributes[fallback] != .null {
-                hashValue = attributes[fallback].stringValue
-            }
-            
-            if !hashValue.isEmpty {
-                hashAttribute = fallback
-            }
+        if hashValue.isEmpty, let fallback = fallback, let fallbackValue = hashableValue(attributes[fallback]) {
+            hashValue = fallbackValue
+            hashAttribute = fallback
         }
         
         return (hashAttribute, hashValue)

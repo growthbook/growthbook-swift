@@ -17,7 +17,7 @@
   - **Apple watchOS version 5.0 & Above**
   - **Apple visionOS version 1.0 & Above**
 - **Adjust variation weights and targeting without deploying new code**
-- **Latest spec version: 0.7.0 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
+- **Latest spec version: 0.11.3 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
 
 
 
@@ -218,7 +218,7 @@ struct FeatureRule {
     /// Optional targeting condition
     let condition: JSON?
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
-    let coverage: Float?
+    let coverage: Double?
     /// Immediately force a specific value (ignore every other option besides condition and coverage)
     let force: JSON?
     /// Run an experiment (A/B test) and randomly choose between these variations
@@ -226,7 +226,7 @@ struct FeatureRule {
     /// The globally unique tracking key for the experiment (default to the feature key)
     let key: String?
     /// How to weight traffic between variations. Must add to 1.
-    let weights: [Float]?
+    let weights: [Double]?
     /// A tuple that contains the namespace identifier, plus a range of coverage for the experiment.
     let namespace: [JSON]?
     /// What user attribute should be used to assign variations (defaults to id)
@@ -294,11 +294,11 @@ class Experiment {
     /// All users included in the experiment will be forced into the specific variation index
     let hashAttribute: String?
     /// How to weight traffic between variations. Must add to 1.
-    var weights: [Float]?
+    var weights: [Double]?
     /// If set to false, always return the control (first variation)
     var isActive: Bool
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
-    var coverage: Float?
+    var coverage: Double?
     /// Optional targeting condition
     var condition: JSON?
     /// All users included in the experiment will be forced into the specific variation index
@@ -333,10 +333,12 @@ class ExperimentResult {
     let key: String
     /// The human-readable name of the assigned variation
     let name: String?
-    /// The hash value used to assign a variation (float from `0` to `1`)
-    let bucket: Float?
+    /// The hash value used to assign a variation (from `0` to `1`)
+    let bucket: Double?
     /// Used for holdout groups
     let passthrough: Bool?
+    /// Variation weights a contextual bandit applied
+    let variationWeights: [Double]?
 }
 
 /// Meta info about the variations

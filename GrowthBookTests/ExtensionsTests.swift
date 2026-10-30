@@ -3,24 +3,6 @@ import XCTest
 
 class ExtensionsTests: XCTestCase {
 
-    // MARK: - Float.roundTo
-
-    func testRoundToTwoDecimalPlaces() {
-        XCTAssertEqual(Float(0.12345).roundTo(numFractionDigits: 2), 0.12, accuracy: 0.0001)
-    }
-
-    func testRoundToFourDecimalPlaces() {
-        XCTAssertEqual(Float(0.123456).roundTo(numFractionDigits: 4), 0.1235, accuracy: 0.00001)
-    }
-
-    func testRoundToZeroDecimalPlaces() {
-        XCTAssertEqual(Float(3.7).roundTo(numFractionDigits: 0), 4.0, accuracy: 0.0001)
-    }
-
-    func testRoundToNegativeNumber() {
-        XCTAssertEqual(Float(-0.556).roundTo(numFractionDigits: 2), -0.56, accuracy: 0.0001)
-    }
-
     // MARK: - Sequence.sum
 
     func testSumInts() {
@@ -35,11 +17,11 @@ class ExtensionsTests: XCTestCase {
         XCTAssertEqual([Float]().sum(), 0.0)
     }
 
-    // MARK: - JSON.convertToArrayFloat
+    // MARK: - JSON.convertToArrayDouble
 
     func testConvertToArrayFloat() {
         let jsonArray: [JSON] = [JSON(1.5), JSON(2.5), JSON(3.0)]
-        let result = JSON.convertToArrayFloat(jsonArray: jsonArray)
+        let result = JSON.convertToArrayDouble(jsonArray: jsonArray)
         XCTAssertEqual(result.count, 3)
         XCTAssertEqual(result[0], 1.5, accuracy: 0.001)
         XCTAssertEqual(result[1], 2.5, accuracy: 0.001)
@@ -47,7 +29,7 @@ class ExtensionsTests: XCTestCase {
     }
 
     func testConvertToArrayFloatEmpty() {
-        XCTAssertTrue(JSON.convertToArrayFloat(jsonArray: []).isEmpty)
+        XCTAssertTrue(JSON.convertToArrayDouble(jsonArray: []).isEmpty)
     }
 
     // MARK: - JSON.convertToArrayString
@@ -62,11 +44,11 @@ class ExtensionsTests: XCTestCase {
         XCTAssertTrue(JSON.convertToArrayString(jsonArray: []).isEmpty)
     }
 
-    // MARK: - JSON.convertToTwoArrayFloat
+    // MARK: - JSON.convertToTwoArrayDouble
 
     func testConvertToTwoArrayFloat() {
         let jsonArray: [JSON] = [JSON([0.0, 0.5]), JSON([0.5, 1.0])]
-        let result = JSON.convertToTwoArrayFloat(jsonArray: jsonArray)
+        let result = JSON.convertToTwoArrayDouble(jsonArray: jsonArray)
         XCTAssertEqual(result.count, 2)
         XCTAssertEqual(result[0][0], 0.0, accuracy: 0.001)
         XCTAssertEqual(result[0][1], 0.5, accuracy: 0.001)
@@ -75,7 +57,7 @@ class ExtensionsTests: XCTestCase {
     }
 
     func testConvertToTwoArrayFloatEmpty() {
-        XCTAssertTrue(JSON.convertToTwoArrayFloat(jsonArray: []).isEmpty)
+        XCTAssertTrue(JSON.convertToTwoArrayDouble(jsonArray: []).isEmpty)
     }
 
     // MARK: - String.toData / Data.string
