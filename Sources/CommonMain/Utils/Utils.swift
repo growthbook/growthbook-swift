@@ -177,8 +177,13 @@ public class Utils {
         // Remove build info and leading `v` if any
         // Split version into parts (both core version numbers and pre-release tags)
         // "v1.2.3-rc.1+build123" -> ["1","2","3","rc","1"]
-        let stripped = source.replacingOccurrences(of: "(^v|\\+.*$)", with: "", options: .regularExpression)
-        var partArray = stripped.components(separatedBy: CharacterSet(charactersIn: ".-"))
+        // (build metadata starts at the first `+`; avoid a regex here, `\+.*$` is quadratic)
+        // Searched by unicode scalar, as JS does by code unit: a `Character` would merge `+` with a
+        // following combining mark ("+\u{0301}") and miss it
+        var stripped = source.unicodeScalars[...]
+        if stripped.first == "v" { stripped = stripped.dropFirst() }
+        if let plus = stripped.firstIndex(of: "+") { stripped = stripped[..<plus] }
+        var partArray = String(stripped).components(separatedBy: CharacterSet(charactersIn: ".-"))
 
         // If it's SemVer without a pre-release, add `~` to the end
         // ["1","0","0"] -> ["1","0","0","~"]
