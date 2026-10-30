@@ -505,4 +505,40 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": [1]])))
         XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": ["a": 1]]), conditionObj: JSON(["x": ["a": 1]])))
     }
+
+    // MARK: - $exists reads its value with JavaScript truthiness
+
+    private func exists(_ value: JSON, present: Bool) -> Bool {
+        eval.isEvalCondition(attributes: present ? JSON(["v": 1]) : JSON([:]), conditionObj: JSON(["v": ["$exists": value]]))
+    }
+
+    func testExistsBooleanValuesAreUnchanged() {
+        XCTAssertTrue(exists(true, present: true))
+        XCTAssertFalse(exists(true, present: false))
+        XCTAssertTrue(exists(false, present: false))
+        XCTAssertFalse(exists(false, present: true))
+    }
+
+    /// A falsy value — `0`, `""`, `null` — asks for an absent attribute, like `false`.
+    func testExistsFalsyValuesAskForAnAbsentAttribute() {
+        for value in [JSON(0), JSON(""), JSON.null] {
+            XCTAssertTrue(exists(value, present: false), "$exists: \(value) on an absent attribute")
+            XCTAssertFalse(exists(value, present: true), "$exists: \(value) on a present attribute")
+        }
+    }
+
+    /// Any other value asks for a present attribute. That includes the string "false", which is a
+    /// non-empty string and therefore truthy in JavaScript.
+    func testExistsTruthyValuesAskForAPresentAttribute() {
+        for value in [JSON(1), JSON(-1), JSON("yes"), JSON("false"), JSON([Any]()), JSON([String: Any]())] {
+            XCTAssertTrue(exists(value, present: true), "$exists: \(value) on a present attribute")
+            XCTAssertFalse(exists(value, present: false), "$exists: \(value) on an absent attribute")
+        }
+    }
+
+    func testExistsTreatsAStoredNullAsAbsent() {
+        let attributes = JSON(parseJSON: #"{"v": null}"#)
+        XCTAssertFalse(eval.isEvalCondition(attributes: attributes, conditionObj: JSON(["v": ["$exists": true]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attributes, conditionObj: JSON(["v": ["$exists": false]])))
+    }
 }
