@@ -4,7 +4,7 @@ set -e
 
 xcodebuild test -project GrowthBook-IOS.xcodeproj \
    -scheme GrowthBook \
-   -destination 'platform=iOS Simulator,name=iPhone 15'
+   -destination 'platform=iOS Simulator,name=iPhone 16'
 
 xcodebuild test -project GrowthBook-IOS.xcodeproj \
    -scheme GrowthBook \
@@ -12,7 +12,7 @@ xcodebuild test -project GrowthBook-IOS.xcodeproj \
 
 xcodebuild test -project GrowthBook-IOS.xcodeproj \
    -scheme GrowthBook \
-   -destination 'platform=watchOS Simulator,name=Apple Watch Series 9 (45mm)'
+   -destination 'platform=watchOS Simulator,name=Apple Watch Series 10 (46mm)'
 
 xcodebuild test -project GrowthBook-IOS.xcodeproj \
    -scheme GrowthBook \
