@@ -7,20 +7,14 @@ set -e
 simulator_id() {
    local platform=$1
    local device_type=$2
-   xcrun simctl list -j devices available runtimes | python3 -c '
-import json, sys
-platform, device_type = sys.argv[1], sys.argv[2]
-data = json.load(sys.stdin)
-runtimes = [r for r in data["runtimes"] if r.get("isAvailable") and r["identifier"].split(".")[-1].startswith(platform + "-")]
-runtimes.sort(key=lambda r: [int(p) for p in r["version"].split(".")], reverse=True)
-for r in runtimes:
-    devices = data["devices"].get(r["identifier"], [])
-    preferred = [d for d in devices if d["name"] == device_type] or devices
-    if preferred:
-        print(preferred[0]["udid"])
-        sys.exit(0)
-print("create " + runtimes[0]["identifier"] if runtimes else "")
-' "$platform" "$device_type" | {
+   xcrun simctl list -j devices available runtimes | jq -r --arg platform "$platform" --arg name "$device_type" '
+      .devices as $devices
+      | [.runtimes[]
+         | select(.isAvailable and (.identifier | split(".") | last | startswith($platform + "-")))]
+      | sort_by(.version | split(".") | map(tonumber)) | reverse
+      | (map(($devices[.identifier] // []) as $d | ([$d[] | select(.name == $name)] + $d)[0].udid // empty) | first)
+        // (if length > 0 then "create " + .[0].identifier else "" end)
+   ' | {
       read -r result runtime
       if [ "$result" = "create" ]; then
          xcrun simctl create "$device_type" "$device_type" "$runtime"
