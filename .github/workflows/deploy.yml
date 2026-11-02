@@ -8,11 +8,13 @@ on:
 
 jobs:
   release:
-    runs-on: macos-14
+    # Only publish what CI main actually released; a failed or cancelled run has no release to point at
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: macos-15
     steps:
     - uses: maxim-lobanov/setup-xcode@v1
       with:
-        xcode-version: '15.2'
+        xcode-version: '16.4'
     - uses: actions/checkout@v3
       with:
         clean: 'true'
