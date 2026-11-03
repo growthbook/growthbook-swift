@@ -4,7 +4,7 @@
 
 ![](https://camo.githubusercontent.com/1fec6f0d044c5e1d73656bfceed9a78fd4121b17e82a2705d2a47f6fd1f0e3e5/687474703a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d696f732d4344434443442e7376673f7374796c653d666c6174) ![](https://camo.githubusercontent.com/4ac08d7fb1bcb8ef26388cd2bf53b49626e1ab7cbda581162a946dd43e6a2726/687474703a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d74766f732d3830383038302e7376673f7374796c653d666c6174) ![](https://camo.githubusercontent.com/135dbadae40f9cabe7a3a040f9380fb485cff36c90909f3c1ae36b81c304426b/687474703a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d77617463686f732d4330433043302e7376673f7374796c653d666c6174)
 
-![](https://img.shields.io/badge/Swift_Package_Manager-compatible-orange?style=flat-square)![](https://img.shields.io/cocoapods/v/GrowthBook.svg)
+![](https://img.shields.io/badge/Swift_Package_Manager-compatible-orange?style=flat-square)
 
 
 
@@ -23,42 +23,33 @@
 
 ## Installation
 
-##### CocoaPods 
+GrowthBook is distributed with the [Swift Package Manager](https://swift.org/package-manager/).
 
-[CocoaPods](https://cocoapods.org/) is a dependency manager for Cocoa projects. For usage and installation instructions, visit their website. To integrate GrowthBook into your Xcode project using CocoaPods, specify it in your `Podfile`:
+In Xcode, choose **File → Add Package Dependencies…**, enter `https://github.com/growthbook/growthbook-swift`, choose "Up to Next Major Version" from `2.0.0`, and add the `GrowthBook-IOS` library to your target.
 
-- If you're using version 1.0.46 or above, it could be necessary to set "User Script Sandboxing" to "No" in your build settings.
-
-- Add below line in your podfile, if not there
-
-```
-source 'https://github.com/CocoaPods/Specs.git'
-```
-
-- Add below in podfile - in respective target block
-
-```swift
-pod 'GrowthBook-IOS'
-```
-
-- Execute below command in terminal
-
-```swift
-pod install
-```
-
-##### Swift Package Manager - SPM
-
-The [Swift Package Manager](https://swift.org/package-manager/) is a tool for automating the distribution of Swift code and is integrated into the `swift`compiler.
-
-Once you have your Swift package set up, adding GrowthBook as a dependency is as easy as adding it to the `dependencies` value of your `Package.swift`.
+In a `Package.swift`, add the package and the product:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/growthbook/growthbook-swift.git")
+    .package(url: "https://github.com/growthbook/growthbook-swift.git", from: "2.0.0")
+],
+targets: [
+    .target(
+        name: "YourTarget",
+        dependencies: [.product(name: "GrowthBook-IOS", package: "growthbook-swift")]
+    )
 ]
 ```
 
+Then `import GrowthBook`.
+
+### Migrating from CocoaPods
+
+CocoaPods Trunk becomes read-only on December 2, 2026, and `GrowthBook-IOS` 1.3.4 is the last version published there. To move to the Swift Package Manager:
+
+1. Remove `pod 'GrowthBook-IOS'` from your `Podfile` and run `pod install` (or `pod deintegrate` if it was your only pod).
+2. Add the package as described above.
+3. Build. The module is still named `GrowthBook`, so your `import GrowthBook` statements don't change.
 
 ## Integration
 
