@@ -156,6 +156,61 @@ import Foundation
         return "\(targetFolderPath)/\(file).txt"
     }
 
+    /// Removes a single cached file, if it exists. Missing files are not an error.
+    ///
+    /// Unlike `clearCache()` this leaves the rest of the cache directory untouched, so callers
+    /// can drop one entry (e.g. a single sticky bucket document) without discarding features.
+    @objc public func removeContent(fileName: String) {
+        lock.withLock {
+            let filePath = getTargetFile(fileName: fileName)
+            let fileManager = FileManager.default
+
+            guard fileManager.fileExists(atPath: filePath) else { return }
+
+            do {
+                try fileManager.removeItem(atPath: filePath)
+            } catch {
+                logger.error(
+                    "Failed to remove cached file: \(error.localizedDescription)"
+                )
+            }
+        }
+    }
+
+    /// Removes every cached file whose name starts with `prefix`, leaving all other entries in place.
+    @objc public func removeContents(withPrefix prefix: String) {
+        lock.withLock {
+            guard
+                let directoryPath = self.customCachePath ?? cacheDirectory.path
+            else {
+                logger.error("Failed to retrieve directory path.")
+                return
+            }
+
+            let targetFolderPath =
+                directoryPath + "/GrowthBook-Cache-\(cacheKey)"
+            let fileManager = FileManager.default
+
+            guard
+                let fileNames = try? fileManager.contentsOfDirectory(
+                    atPath: targetFolderPath
+                )
+            else { return }
+
+            for fileName in fileNames where fileName.hasPrefix(prefix) {
+                do {
+                    try fileManager.removeItem(
+                        atPath: targetFolderPath + "/" + fileName
+                    )
+                } catch {
+                    logger.error(
+                        "Failed to remove cached file: \(error.localizedDescription)"
+                    )
+                }
+            }
+        }
+    }
+
     /// This function removes all files and subdirectories within the designated cache directory, which is a specific subdirectory within the app's cache directory.
     @objc public func clearCache() {
         lock.withLock {
