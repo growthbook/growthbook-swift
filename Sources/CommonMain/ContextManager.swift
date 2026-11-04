@@ -203,9 +203,12 @@ import Foundation
       contextualBandits: evalData.contextualBandits
     )
     
-    // UserContext is created from evalData
+    // UserContext is created from evalData. Attribute overrides are merged on top of the base
+    // attributes here, in the one place every evaluation reads from, so they apply to targeting
+    // conditions, experiment hashing and sticky bucket lookups without each call site knowing
+    // about them.
     let userContext = UserContext(
-      attributes: evalData.attributes,
+      attributes: effectiveAttributes(),
       stickyBucketAssignmentDocs: evalData.stickyBucketAssignmentDocs,
       forcedVariations: evalData.forcedVariations,
       forcedFeatureValues: evalData.forcedFeatureValues
@@ -218,7 +221,24 @@ import Foundation
       stackContext: stackContext,
       options: options
     )
-    
+
     return evalContext
+  }
+
+  /// The attributes evaluation should see: `attributes` with `attributeOverrides` layered on top.
+  ///
+  /// The merge is one level deep — an override replaces a key outright rather than merging into it,
+  /// so an override is always a complete value and can be reasoned about on its own.
+  private func effectiveAttributes() -> JSON {
+    guard let overrides = evalData.attributeOverrides,
+          !overrides.dictionaryValue.isEmpty else {
+      return evalData.attributes
+    }
+
+    var merged = evalData.attributes.dictionaryValue
+    for (key, value) in overrides.dictionaryValue {
+      merged[key] = value
+    }
+    return JSON(merged)
   }
 }

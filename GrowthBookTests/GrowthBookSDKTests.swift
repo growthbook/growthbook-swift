@@ -371,4 +371,58 @@ class GrowthBookSDKTests: XCTestCase {
 
         XCTAssertTrue(sdk.isOn(feature: "onboarding"))
     }
+
+    // MARK: - setAttributeOverrides
+
+    /// Payload whose rule only applies to users in DE, while the SDK's base attributes say US.
+    private var countryGatedPayload: Data {
+        """
+        {"features":{"promo":{"defaultValue":"off","rules":[{"condition":{"country":"DE"},"force":"on"}]}}}
+        """.data(using: .utf8)!
+    }
+
+    func testAttributeOverridesAffectFeatureEvaluation() {
+        let sdk = makeSDK(features: countryGatedPayload)
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "off",
+                       "precondition: the base attributes do not match the rule")
+
+        sdk.setAttributeOverrides(overrides: ["country": "DE"])
+
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "on",
+                       "An override must be visible to targeting conditions")
+    }
+
+    func testAttributeOverridesCanBeLifted() {
+        let sdk = makeSDK(features: countryGatedPayload)
+
+        sdk.setAttributeOverrides(overrides: ["country": "DE"])
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "on")
+
+        sdk.setAttributeOverrides(overrides: [:])
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "off",
+                       "An empty override map restores the base attributes")
+    }
+
+    /// Overrides are also the hash input, not just a targeting filter — otherwise a QA override
+    /// would target the experiment but bucket the original user.
+    func testAttributeOverridesAffectExperimentHashing() {
+        let sdk = makeSDK()
+        let experiment = Experiment(key: "exp", variations: [JSON("a"), JSON("b")], hashAttribute: "id", coverage: 1.0)
+
+        XCTAssertEqual(sdk.run(experiment: experiment).valueHash, "user-1")
+
+        sdk.setAttributeOverrides(overrides: ["id": "qa-user"])
+
+        XCTAssertEqual(sdk.run(experiment: experiment).valueHash, "qa-user")
+    }
+
+    /// The overrides are an evaluation-time layer, so what the app set remains readable.
+    func testAttributeOverridesDoNotChangeReportedAttributes() {
+        let sdk = makeSDK(features: countryGatedPayload)
+
+        sdk.setAttributeOverrides(overrides: ["country": "DE"])
+
+        XCTAssertEqual(sdk.getGBAttributes()["country"].stringValue, "US")
+        XCTAssertEqual(sdk.getGBContext().attributes["country"].stringValue, "US")
+    }
 }
