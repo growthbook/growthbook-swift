@@ -230,7 +230,15 @@ SwiftPM needs nothing further — it consumes the git tag directly. The SDK is n
 longer published to CocoaPods (Trunk becomes read-only on December 2, 2026).
 
 Don't edit the version files or `CHANGELOG.md` by hand; release-please owns
-them. If a release PR has the wrong version, fix the PR titles that fed it.
+them. Editing a merged PR's title doesn't change its commit on `main`. To fix a
+wrong version or changelog entry, add an override to the merged PR's
+description; release-please rereads it on its next run:
+
+```
+BEGIN_COMMIT_OVERRIDE
+feat: correct conventional commit message
+END_COMMIT_OVERRIDE
+```
 
 ## Getting help
 
