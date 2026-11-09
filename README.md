@@ -4,7 +4,7 @@
 
 ![](https://camo.githubusercontent.com/1fec6f0d044c5e1d73656bfceed9a78fd4121b17e82a2705d2a47f6fd1f0e3e5/687474703a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d696f732d4344434443442e7376673f7374796c653d666c6174) ![](https://camo.githubusercontent.com/4ac08d7fb1bcb8ef26388cd2bf53b49626e1ab7cbda581162a946dd43e6a2726/687474703a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d74766f732d3830383038302e7376673f7374796c653d666c6174) ![](https://camo.githubusercontent.com/135dbadae40f9cabe7a3a040f9380fb485cff36c90909f3c1ae36b81c304426b/687474703a2f2f696d672e736869656c64732e696f2f62616467652f706c6174666f726d2d77617463686f732d4330433043302e7376673f7374796c653d666c6174)
 
-![](https://img.shields.io/badge/Swift_Package_Manager-compatible-orange?style=flat-square)![](https://img.shields.io/cocoapods/v/GrowthBook.svg)
+![](https://img.shields.io/badge/Swift_Package_Manager-compatible-orange?style=flat-square)
 
 
 
@@ -17,48 +17,39 @@
   - **Apple watchOS version 5.0 & Above**
   - **Apple visionOS version 1.0 & Above**
 - **Adjust variation weights and targeting without deploying new code**
-- **Latest spec version: 0.7.0 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
+- **Latest spec version: 0.11.3 [View Changelog](https://docs.growthbook.io/lib/build-your-own#changelog)**
 
 
 
 ## Installation
 
-##### CocoaPods 
+GrowthBook is distributed with the [Swift Package Manager](https://swift.org/package-manager/).
 
-[CocoaPods](https://cocoapods.org/) is a dependency manager for Cocoa projects. For usage and installation instructions, visit their website. To integrate GrowthBook into your Xcode project using CocoaPods, specify it in your `Podfile`:
+In Xcode, choose **File → Add Package Dependencies…**, enter `https://github.com/growthbook/growthbook-swift`, choose "Up to Next Major Version" from `2.0.0`, and add the `GrowthBook-IOS` library to your target.
 
-- If you're using version 1.0.46 or above, it could be necessary to set "User Script Sandboxing" to "No" in your build settings.
-
-- Add below line in your podfile, if not there
-
-```
-source 'https://github.com/CocoaPods/Specs.git'
-```
-
-- Add below in podfile - in respective target block
-
-```swift
-pod 'GrowthBook-IOS'
-```
-
-- Execute below command in terminal
-
-```swift
-pod install
-```
-
-##### Swift Package Manager - SPM
-
-The [Swift Package Manager](https://swift.org/package-manager/) is a tool for automating the distribution of Swift code and is integrated into the `swift`compiler.
-
-Once you have your Swift package set up, adding GrowthBook as a dependency is as easy as adding it to the `dependencies` value of your `Package.swift`.
+In a `Package.swift`, add the package and the product:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/growthbook/growthbook-swift.git")
+    .package(url: "https://github.com/growthbook/growthbook-swift.git", from: "2.0.0")
+],
+targets: [
+    .target(
+        name: "YourTarget",
+        dependencies: [.product(name: "GrowthBook-IOS", package: "growthbook-swift")]
+    )
 ]
 ```
 
+Then `import GrowthBook`.
+
+### Migrating from CocoaPods
+
+CocoaPods Trunk becomes read-only on December 2, 2026, and `GrowthBook-IOS` 1.3.4 is the last version published there. To move to the Swift Package Manager:
+
+1. Remove `pod 'GrowthBook-IOS'` from your `Podfile` and run `pod install` (or `pod deintegrate` if it was your only pod).
+2. Add the package as described above.
+3. Build. The module is still named `GrowthBook`, so your `import GrowthBook` statements don't change.
 
 ## Integration
 
@@ -218,7 +209,7 @@ struct FeatureRule {
     /// Optional targeting condition
     let condition: JSON?
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
-    let coverage: Float?
+    let coverage: Double?
     /// Immediately force a specific value (ignore every other option besides condition and coverage)
     let force: JSON?
     /// Run an experiment (A/B test) and randomly choose between these variations
@@ -226,7 +217,7 @@ struct FeatureRule {
     /// The globally unique tracking key for the experiment (default to the feature key)
     let key: String?
     /// How to weight traffic between variations. Must add to 1.
-    let weights: [Float]?
+    let weights: [Double]?
     /// A tuple that contains the namespace identifier, plus a range of coverage for the experiment.
     let namespace: [JSON]?
     /// What user attribute should be used to assign variations (defaults to id)
@@ -294,11 +285,11 @@ class Experiment {
     /// All users included in the experiment will be forced into the specific variation index
     let hashAttribute: String?
     /// How to weight traffic between variations. Must add to 1.
-    var weights: [Float]?
+    var weights: [Double]?
     /// If set to false, always return the control (first variation)
     var isActive: Bool
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
-    var coverage: Float?
+    var coverage: Double?
     /// Optional targeting condition
     var condition: JSON?
     /// All users included in the experiment will be forced into the specific variation index
@@ -333,10 +324,12 @@ class ExperimentResult {
     let key: String
     /// The human-readable name of the assigned variation
     let name: String?
-    /// The hash value used to assign a variation (float from `0` to `1`)
-    let bucket: Float?
+    /// The hash value used to assign a variation (from `0` to `1`)
+    let bucket: Double?
     /// Used for holdout groups
     let passthrough: Bool?
+    /// Variation weights a contextual bandit applied
+    let variationWeights: [Double]?
 }
 
 /// Meta info about the variations
@@ -511,6 +504,92 @@ Aggregate (non-contextual) bandits need nothing from this: they are delivered as
 ## Sticky Bucketing
 
 Sticky bucketing ensures that users see the same experiment variant, even when user session, user login status, or experiment parameters change. See the [Sticky Bucketing docs](/app/sticky-bucketing) for more information. If your organization and experiment supports sticky bucketing, you must implement an instance of the `StickyBucketService` to use Sticky Bucketing. For simple bucket persistence using the browser's LocalStorage (can be polyfilled for other environments).
+
+
+## Plugins
+
+A plugin receives the SDK's lifecycle and evaluation events. Register as many as you like on the builder; each is called after your own `trackingCallback` has run.
+
+```swift
+let sdk = GrowthBookBuilder(url: url, attributes: attrs, trackingCallback: { _, _ in })
+    .addPlugin(GrowthBookTrackingPlugin())
+    .initializer()
+```
+
+Implement `GrowthBookPlugin` for your own. Every method has a default no-op, so override only what you need:
+
+| Method | Called when |
+| --- | --- |
+| `initialize(clientKey:)` | Once, at SDK init |
+| `onExperimentViewed(experiment:result:attributes:)` | A user is exposed to a variation |
+| `onFeatureEvaluated(featureKey:result:attributes:)` | A feature is evaluated |
+| `logEvent(eventName:properties:attributes:)` | The app called `sdk.logEvent(...)` |
+| `flush()` | Deliver buffered data, keep running |
+| `close()` | Shut down for good |
+
+### GrowthBookTrackingPlugin
+
+Batches experiment exposures and feature evaluations and POSTs them to the GrowthBook ingest endpoint.
+
+```swift
+let plugin = GrowthBookTrackingPlugin(config: .init(
+    ingestorHost: "https://us1.gb-ingest.com",
+    batchSize: 100,
+    batchTimeout: 10,
+    dedupeCacheSize: 1000,
+    enableFeatureUsageEvents: true
+))
+```
+
+| Option | Default | Meaning |
+| --- | --- | --- |
+| `ingestorHost` | `https://us1.gb-ingest.com` | Ingest endpoint |
+| `batchSize` | `100` | Send once this many events are buffered |
+| `batchTimeout` | `10` | Seconds between timed sends; also caps how long `flush`/`close` block |
+| `dedupeCacheSize` | `1000` | Recent events remembered when suppressing duplicates; `0` disables deduping |
+| `enableFeatureUsageEvents` | `true` | When false, stop reporting feature evaluations |
+
+**Deduplication.** A flag read on every screen produces the same event over and over, so identical exposures and evaluations are suppressed. The key is the event name plus the event's own fields — deliberately not the attributes, since a feature evaluation carries no unit identity and keying on attributes would defeat deduping for any app that updates them. Events from `logEvent` are never deduplicated: the app chose to send each one.
+
+> **Switching users.** Because attributes are outside the key, calling `setAttributes` to switch user does not reset deduplication: an evaluation already seen for the previous user is suppressed for the next one, for as long as it stays in the cache. This matches the JS SDK. If your app signs users in and out and you need every user's first evaluation recorded, set `dedupeCacheSize: 0` to send everything.
+
+**Turning off usage events.** `enableFeatureUsageEvents: false` drops feature evaluations only. Experiment exposures and custom events still send, so you keep your experiment data while shedding the much larger volume of usage events.
+
+### Custom events
+
+```swift
+sdk.logEvent("checkout_completed", properties: ["total": 42])
+```
+
+The event is buffered and batched like any other, and carries whatever attributes are set at the time it is logged.
+
+### Flushing
+
+Events are buffered for up to `batchTimeout` seconds. `deinit` does not run when the system kills a suspended app — which is how most iOS apps end — so **call `flush()` when your app goes to the background**, or those events are lost:
+
+```swift
+func applicationDidEnterBackground(_ application: UIApplication) {
+    sdk.flush()
+}
+```
+
+`flush()` delivers the buffer and waits for it to leave the device, then leaves the plugins running so recording resumes when the app returns.
+
+**Returning is not proof of delivery.** The wait is capped at `batchTimeout`, so a request slower than that is still in flight when `flush()` returns and is lost if the app is killed straight afterwards.
+
+`close()` also delivers the buffer, but ends the plugins: nothing is recorded afterwards and later evaluations are dropped rather than buffered. Calling it more than once is harmless, and the SDK calls it on deallocation anyway — call it yourself when you want the timing to be yours.
+
+### Objective-C
+
+`GrowthBookPlugin` carries `JSON` and the SDK's Swift model types, so the protocol itself cannot cross the bridge. The built-in plugin has its own entry point; a custom plugin still has to be written in Swift.
+
+```objc
+GrowthBookTrackingPlugin *plugin = [[GrowthBookTrackingPlugin alloc] init];
+GrowthBookSDK *sdk = [[builder addTrackingPlugin:plugin] initializer];
+
+[sdk logEvent:@"checkout_completed" properties:@{@"total": @42}];
+[sdk flush];
+```
 
 
 ## License

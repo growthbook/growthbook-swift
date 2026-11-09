@@ -47,6 +47,6 @@ class ExperimentRunTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
 
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
 }

@@ -30,7 +30,7 @@ public struct FeatureRule: Codable, Sendable {
     /// Each item defines a prerequisite where a `condition` must evaluate against a parent feature's value (identified by `id`). If `gate` is true, then this is a blocking feature-level prerequisite; otherwise it applies to the current rule only.
     public let parentConditions: [ParentConditionInterface]?
     /// What percent of users should be included in the experiment (between 0 and 1, inclusive)
-    public let coverage: Float?
+    public let coverage: Double?
     /// Immediately force a specific value (ignore every other option besides condition and coverage)
     public let force: JSON?
     /// Run an experiment (A/B test) and randomly choose between these variations
@@ -38,7 +38,7 @@ public struct FeatureRule: Codable, Sendable {
     /// The globally unique tracking key for the experiment (default to the feature key)
     public let key: String?
     /// How to weight traffic between variations. Must add to 1.
-    public let weights: [Float]?
+    public let weights: [Double]?
     /// A tuple that contains the namespace identifier, plus a range of coverage for the experiment.
     public let namespace: [JSON]?
     /// What user attribute should be used to assign variations (defaults to id)
@@ -77,12 +77,12 @@ public struct FeatureRule: Codable, Sendable {
     public let contextualVariations: [JSON]?
 
     init(id: String? = "", condition: Condition? = nil,
-         coverage: Float? = nil,
+         coverage: Double? = nil,
          parentConditions: [ParentConditionInterface]? = nil,
          force: JSON? = nil,
          variations: [JSON]? = nil,
          key: String? = nil,
-         weights: [Float]? = nil,
+         weights: [Double]? = nil,
          namespace: [JSON]? = nil,
          hashAttribute: String? = nil,
          fallBackAttribute: String? = nil,
@@ -136,7 +136,7 @@ public struct FeatureRule: Codable, Sendable {
             ParentConditionInterface(json: value.dictionaryValue)
         })
         
-        coverage = json["coverage"]?.floatValue
+        coverage = json["coverage"]?.doubleValue
         
         force = json["force"]
         
@@ -145,7 +145,7 @@ public struct FeatureRule: Codable, Sendable {
         key = json["key"]?.stringValue
  
         if let weights = json["weights"]?.arrayValue {
-            self.weights = JSON.convertToArrayFloat(jsonArray: weights)
+            self.weights = JSON.convertToArrayDouble(jsonArray: weights)
         } else {
             self.weights = nil
         }

@@ -50,74 +50,98 @@ class ConditionEvaluator {
     /// - attributes : User Attributes
     /// - condition : to be evaluated
     func isEvalCondition(attributes: JSON, conditionObj: JSON, savedGroups: JSON? = nil) -> Bool {
+        // Only a definite pass counts. An undecided (unknown) result fails.
+        evalCondition(attributes: attributes, conditionObj: conditionObj, savedGroups: savedGroups) == true
+    }
+
+    /// Evaluates a condition to `true`, `false`, or `nil` when the result depends on an operator
+    /// this SDK doesn't support. `nil` stays `nil` under `$not` and `$nor`, so negating an
+    /// unsupported condition can't make it pass for everyone.
+    func evalCondition(attributes: JSON, conditionObj: JSON, savedGroups: JSON? = nil) -> Bool? {
         if !conditionObj.arrayValue.isEmpty {
             return false
         }
+        var result: Bool? = true
         // Condition is an object, keys are either specific operators or object paths values are either arguments for operators or conditions for paths
         for (key, value) in conditionObj.dictionaryValue {
+            let entry: Bool?
             switch key {
             case "$or":
-                guard isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
+                entry = evalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups)
             case "$nor":
-                guard !isEvalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
+                entry = negate(evalOr(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups))
             case "$and":
-                guard isEvalAnd(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups) else { return false }
+                entry = evalAnd(attributes: attributes, conditionObjs: value.arrayValue, savedGroups: savedGroups)
             case "$not":
-                guard !isEvalCondition(attributes: attributes, conditionObj: value, savedGroups: savedGroups) else { return false }
+                entry = negate(evalCondition(attributes: attributes, conditionObj: value, savedGroups: savedGroups))
             default:
                 let element = getPath(obj: attributes, key: key)
-                guard isEvalConditionValue(conditionValue: value, attributeValue: element, savedGroups: savedGroups) else { return false }
+                entry = evalConditionValue(conditionValue: value, attributeValue: element, savedGroups: savedGroups)
             }
+            // One failing entry decides it, wherever an unsupported one is
+            if entry == false { return false }
+            if entry == nil { result = nil }
         }
-        // If none of the entries failed their checks, `evalCondition` returns true
-        return true
+        return result
     }
 
     /// Evaluate OR conditions against given attributes
     func isEvalOr(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool {
+        evalOr(attributes: attributes, conditionObjs: conditionObjs, savedGroups: savedGroups) == true
+    }
+
+    private func evalOr(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool? {
         // If conditionObjs is empty, return true
         guard conditionObjs.isEmpty == false else {
             return true
         }
-        // Loop through the conditionObjects
+        var result: Bool? = false
         for item in conditionObjs {
-            // If evalCondition(attributes, conditionObjs[i]) is true, break out of the loop and return true
-            if isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups) {
-                return true
-            }
+            let entry = evalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups)
+            if entry == true { return true }
+            if entry == nil { result = nil }
         }
-
-        // Return false
-        return false
+        return result
     }
 
     /// Evaluate AND conditions against given attributes
     func isEvalAnd(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool {
-        // Loop through the conditionObjects
-        for item in conditionObjs {
-            // If evalCondition(attributes, conditionObjs[i]) is false, break out of the loop and return false
-            if !isEvalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups) {
-                return false
-            }
-        }
-        // Return true
-        return true
+        evalAnd(attributes: attributes, conditionObjs: conditionObjs, savedGroups: savedGroups) == true
     }
 
-    /// This accepts a parsed JSON object as input and returns true if every key in the object starts with $
-    func isOperatorObject(obj: JSON) -> Bool {
-        var isOperator = true
-        if let value = obj.dictionary, !value.keys.isEmpty {
-            for key in value.keys {
-                if key.first != "$" {
-                    isOperator = false
-                    break
-                }
-            }
-        } else {
-            isOperator = false
+    private func evalAnd(attributes: JSON, conditionObjs: [JSON], savedGroups: JSON?) -> Bool? {
+        var result: Bool? = true
+        for item in conditionObjs {
+            let entry = evalCondition(attributes: attributes, conditionObj: item, savedGroups: savedGroups)
+            if entry == false { return false }
+            if entry == nil { result = nil }
         }
-        return isOperator
+        return result
+    }
+
+    /// Negation that keeps an undecided result undecided.
+    private func negate(_ value: Bool?) -> Bool? {
+        value.map { !$0 }
+    }
+
+    /// Keys that belong on a condition rather than on a value. Used as operators on a value they
+    /// never match, and `$elemMatch` treats a value using them as a condition on each item's fields.
+    private static let conditionOperators: Set<String> = ["$or", "$nor", "$and", "$savedGroup"]
+
+    /// Operators this SDK evaluates on a value. Any other `$` key is unsupported.
+    private static let valueOperators: Set<String> = [
+        "$type", "$not", "$exists", "$inGroup", "$notInGroup",
+        "$veq", "$vne", "$vgt", "$vgte", "$vlt", "$vlte",
+        "$eq", "$ne", "$lt", "$lte", "$gt", "$gte",
+        "$regex", "$regexi", "$notRegex", "$notRegexi",
+        "$in", "$ini", "$nin", "$nini", "$all", "$alli", "$elemMatch", "$size",
+    ]
+
+    /// True if the value is an object whose keys all start with `$`. An empty object has no
+    /// operators, so as a condition value it always passes.
+    func isOperatorObject(obj: JSON) -> Bool {
+        guard let value = obj.dictionary else { return false }
+        return value.keys.allSatisfy { $0.first == "$" }
     }
 
     /// This returns the data type of the passed in argument.
@@ -126,24 +150,17 @@ class ConditionEvaluator {
         return getAttributeType(index: value.type.rawValue)
     }
 
-    /// Given attributes and a dot-separated path string, return the value at that path (or null/undefined if the path doesn't exist)
+    /// Given attributes and a dot-separated path string, return the value at that path, or `nil` if
+    /// the path doesn't exist. Like JS, only own keys are read: an object's keys, and an array's
+    /// indices (`"0"`, `"1"`, ...) and `"length"`. Strings and other primitives have none.
     func getPath(obj: JSON, key: String) -> JSON? {
-        var paths: [String]
-
-        if key.contains(".") {
-            paths = key.components(separatedBy: ".")  //split(".") as [String]
-        } else {
-            paths = []
-            paths.append(key)
-        }
-
         var element = obj
 
-        for path in paths {
-            if let _ = element.array {
-                return nil
-            }
-            if let dict = element.dictionary, let value = dict[path] {
+        for path in key.components(separatedBy: ".") {
+            if let array = element.array {
+                guard let value = arrayOwnProperty(array, path) else { return nil }
+                element = value
+            } else if let dict = element.dictionary, let value = dict[path] {
                 element = value
             } else {
                 return nil
@@ -152,14 +169,31 @@ class ConditionEvaluator {
         return element
     }
 
+    /// An array's own property `key`: `length`, or the item at a canonical index such as `"1"`
+    /// (not `"01"` or `"+1"`), as JS reads `array[key]`.
+    private func arrayOwnProperty(_ array: [JSON], _ key: String) -> JSON? {
+        if key == "length" {
+            return JSON(array.count)
+        }
+        guard let index = Int(key), index >= 0, index < array.count, String(index) == key else {
+            return nil
+        }
+        return array[index]
+    }
+
     /// Evaluates Condition Value against given condition & attributes
     func isEvalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false) -> Bool {
+        evalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups, insensitive: insensitive) == true
+    }
+
+    /// Tri-state form of `isEvalConditionValue`: `nil` when an unsupported operator decides it.
+    func evalConditionValue(conditionValue: JSON, attributeValue: JSON?, savedGroups: JSON? = nil, insensitive: Bool = false) -> Bool? {
         // Processing null values - handling this case separately
         
         if insensitive,
                let condStr = conditionValue.string,
                let attrStr = attributeValue?.string {
-                return condStr.lowercased() == attrStr.lowercased()
+                return Common.sameCodeUnits(condStr.lowercased(), attrStr.lowercased())
             }
         
         if conditionValue.type == .null {
@@ -171,7 +205,7 @@ class ConditionEvaluator {
         
         // String comparison
         if conditionValue.type == .string && unwrappedAttribute.type == .string {
-            return conditionValue.stringValue == unwrappedAttribute.stringValue
+            return Common.sameCodeUnits(conditionValue.stringValue, unwrappedAttribute.stringValue)
         }
         
         // Number comparison
@@ -184,44 +218,27 @@ class ConditionEvaluator {
             return conditionValue.boolValue == unwrappedAttribute.boolValue
         }
         
-        // Array comparison - more detailed with deep equality check
-        if let conditionArray = conditionValue.array {
-            if let attributeArray = unwrappedAttribute.array {
-                if conditionArray.count == attributeArray.count {
-                    // Compare each array element to check for deep equality
-                    for i in 0..<conditionArray.count {
-                        if !isEvalConditionValue(conditionValue: conditionArray[i],
-                                               attributeValue: attributeArray[i],
-                                               savedGroups: savedGroups) {
-                            return false
-                        }
-                    }
-                    return true
-                } else {
-                    return false
-                }
-            } else {
-                return false
-            }
+        // An array condition is a literal value: deep equality, like JS's JSON comparison. Its
+        // items are values, not conditions, so an object inside it isn't read as operators.
+        if conditionValue.array != nil {
+            return isStrictlyEqual(conditionValue, unwrappedAttribute)
         }
         
         // Processing condition objects
         if let _ = conditionValue.dictionary {
             if isOperatorObject(obj: conditionValue) {
-                for key in conditionValue.dictionaryValue.keys {
-                    if let value = conditionValue.dictionaryValue[key],
-                       !isEvalOperatorCondition(operatorKey: key,
-                                               attributeValue: unwrappedAttribute,
-                                               conditionValue: value,
-                                               savedGroups: savedGroups) {
-                        return false
-                    }
+                var result: Bool? = true
+                for (key, value) in conditionValue.dictionaryValue {
+                    let entry = evalOperatorCondition(operatorKey: key,
+                                                      attributeValue: unwrappedAttribute,
+                                                      conditionValue: value,
+                                                      savedGroups: savedGroups)
+                    if entry == false { return false }
+                    if entry == nil { result = nil }
                 }
-                return true
+                return result
             } else if let _ = unwrappedAttribute.dictionary {
-                // For regular objects, perform deep comparison
-                // (assuming that Common.isEqual() already performs deep comparison)
-                return Common.isEqual(conditionValue, unwrappedAttribute)
+                return isStrictlyEqual(conditionValue, unwrappedAttribute)
             } else {
                 return false
             }
@@ -233,30 +250,41 @@ class ConditionEvaluator {
 
     /// This checks if attributeValue is an array, and if so at least one of the array items must match the condition
     func isElemMatch(attributeValue: [JSON], condition: JSON, savedGroups: JSON?) -> Bool {
+        elemMatch(attributeValue: attributeValue, condition: condition, savedGroups: savedGroups) == true
+    }
 
-        // Loop through items in attributeValue
+    private func elemMatch(attributeValue: [JSON], condition: JSON, savedGroups: JSON?) -> Bool? {
+        // Operators test each item itself. A condition, including one that only uses
+        // $or, $and, $nor or $savedGroup, tests each item's fields.
+        let testsItself = isOperatorObject(obj: condition)
+            && !condition.dictionaryValue.keys.contains { Self.conditionOperators.contains($0) }
+        var result: Bool? = false
         for item in attributeValue {
-            // If isOperatorObject(condition)
-            if isOperatorObject(obj: condition) {
-                // If evalConditionValue(condition, item), break out of loop and return true
-                if isEvalConditionValue(conditionValue: condition, attributeValue: item, savedGroups: savedGroups) {
-                    return true
-                }
-            }
-            // Else if evalCondition(item, condition), break out of loop and return true
-            else if isEvalCondition(attributes: item, conditionObj: condition, savedGroups: savedGroups) {
-                return true
-            }
+            // Only null items are skipped; 0, "" and false are still tested
+            if item.type == .null { continue }
+            let entry = testsItself
+                ? evalConditionValue(conditionValue: condition, attributeValue: item, savedGroups: savedGroups)
+                : evalCondition(attributes: item, conditionObj: condition, savedGroups: savedGroups)
+            if entry == true { return true }
+            if entry == nil { result = nil }
         }
-
-        // If attributeValue is not an array, return false
-        return false
+        return result
     }
 
     /// This function is just a case statement that handles all the possible operators
     ///
     /// There are basic comparison operators in the form attributeValue {op} conditionValue
     func isEvalOperatorCondition(operatorKey: String, attributeValue: JSON, conditionValue: JSON, savedGroups: JSON? = nil) -> Bool {
+        evalOperatorCondition(operatorKey: operatorKey, attributeValue: attributeValue, conditionValue: conditionValue, savedGroups: savedGroups) == true
+    }
+
+    /// Tri-state form of `isEvalOperatorCondition`: `nil` for an operator this SDK doesn't support.
+    func evalOperatorCondition(operatorKey: String, attributeValue: JSON, conditionValue: JSON, savedGroups: JSON? = nil) -> Bool? {
+        // Keys that belong on a condition never match as an operator on a value. Any other
+        // unknown operator is undecided.
+        guard Self.valueOperators.contains(operatorKey) else {
+            return Self.conditionOperators.contains(operatorKey) ? false : nil
+        }
         let conditionJson = JSON(conditionValue)
         // Evaluate TYPE operator - whether both are of same type
         if operatorKey == "$type" {
@@ -265,7 +293,7 @@ class ConditionEvaluator {
 
         // Evaluate NOT operator - whether condition doesn't contain attribute
         if operatorKey == "$not" {
-            return !isEvalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups)
+            return negate(evalConditionValue(conditionValue: conditionValue, attributeValue: attributeValue, savedGroups: savedGroups))
         }
 
         // Evaluate EXISTS operator - whether condition contains attribute
@@ -310,10 +338,13 @@ class ConditionEvaluator {
         default: break
         }
 
-        // The version operators coerce their operands themselves (numbers become strings, everything
-        // else becomes "0"), so they are handled before the dispatch below, which branches on the
-        // shape of the attribute and would otherwise leave them unreachable for array or absent
-        // attributes and skip them whenever the condition value is not a string.
+        // The version operators are handled before the dispatch below, which branches on the shape of
+        // the attribute and would otherwise leave them unreachable for array or absent attributes.
+        // Both sides must be strings, or both numbers. Anything else is a type mismatch: the operator
+        // fails, except $vne, which is the negation of $veq and so matches.
+        if Self.versionOperators.contains(operatorKey), !isOrderable(attributeValue, conditionValue) {
+            return operatorKey == "$vne"
+        }
         switch operatorKey {
         case "$veq":
             return Utils.paddedVersionString(input: attributeValue) == Utils.paddedVersionString(input: conditionValue)
@@ -327,6 +358,37 @@ class ConditionEvaluator {
             return Utils.paddedVersionString(input: attributeValue) < Utils.paddedVersionString(input: conditionValue)
         case "$vlte":
             return Utils.paddedVersionString(input: attributeValue) <= Utils.paddedVersionString(input: conditionValue)
+        default: break
+        }
+
+        // Equality, ordering and regex operators work for any attribute shape, so they are decided
+        // here rather than in the shape dispatch below. Types are strict: no coercion between
+        // strings, numbers and booleans, so a mismatch fails the positive operator and $ne matches.
+        switch operatorKey {
+        case "$eq":
+            return isIdentical(attributeValue, conditionValue)
+        case "$ne":
+            return !isIdentical(attributeValue, conditionValue)
+        case "$lt", "$lte", "$gt", "$gte":
+            return compareOrdered(operatorKey: operatorKey, attributeValue: attributeValue, conditionValue: conditionValue)
+        case "$regex", "$regexi", "$notRegex", "$notRegexi":
+            // Only strings are matched against a pattern. The negated forms match a non-string,
+            // like `$not: { $regex }` does.
+            guard let source = attributeValue.string else {
+                return operatorKey.hasPrefix("$not")
+            }
+            // A pattern that isn't a string is malformed, like one that doesn't compile, so
+            // neither form matches. `stringValue` would turn it into an empty pattern that
+            // matches every string.
+            guard let pattern = conditionValue.string else {
+                return false
+            }
+            return isContains(
+                source: source,
+                target: pattern,
+                insensitive: operatorKey.hasSuffix("i"),
+                negate: operatorKey.hasPrefix("$not")
+            )
         default: break
         }
 
@@ -354,178 +416,114 @@ class ConditionEvaluator {
         /// does not have is false, which matches the other SDKs.
         if let conditionValue = conditionJson.array, attributeValue != .null {
             switch operatorKey {
-            case "$all":
-                return Common.isInAll(
-                        actual: attributeValue,
-                        expected: conditionValue,
-                        savedGroups: savedGroups,
-                        insensitive: true
-                    ) { con, attr, groups in
-                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: false)
-                    }
-            case "$alli":
-                return Common.isInAll(
-                        actual: attributeValue,
-                        expected: conditionValue,
-                        savedGroups: savedGroups,
-                        insensitive: true
-                    ) { con, attr, groups in
-                        isEvalConditionValue(conditionValue: con, attributeValue: attr, savedGroups: groups, insensitive: true)
-                    }
+            case "$all", "$alli":
+                return isInAll(actual: attributeValue, expected: conditionValue, savedGroups: savedGroups, insensitive: operatorKey == "$alli")
             default: break
             }
         } else if let attribute = attributeValue.array {
             switch operatorKey {
             // Evaluate ELEMMATCH operator - whether condition matches attribute
             case "$elemMatch":
-                return  isElemMatch(attributeValue: attribute, condition: conditionValue, savedGroups: savedGroups)
+                return elemMatch(attributeValue: attribute, condition: conditionValue, savedGroups: savedGroups)
             // Evaluate SIE operator - whether condition size is same as that of attribute
             case "$size":
-                return isEvalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count), savedGroups: savedGroups)
-            default: break
-            }
-        } else {
-            switch operatorKey {
-            // Evaluate EQ operator - whether condition equals to attribute
-            case "$eq":
-                return  attributeValue == conditionValue
-            // Evaluate NE operator - whether condition doesn't equal to attribute
-            case "$ne":
-                return  attributeValue != conditionValue
-            // Evaluate LT operator - whether attribute less than to condition
-            case "$lt":
-                if attributeValue == .null {
-                    if let cond = conditionValue.double {
-                        return 0.0 < cond
-                    } else if let condStr = conditionValue.string, let cond = Double(condStr) {
-                        return 0.0 < cond
-                    }
-                    return false
-                }
-
-                var attrNum: Double? = attributeValue.double
-                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
-                    attrNum = num
-                }
-
-                var condNum: Double? = conditionValue.double
-                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
-                    condNum = num
-                }
-
-                if let attrNum, let condNum {
-                    return attrNum < condNum
-                }
-
-                if let str = attributeValue.string, let cond = conditionValue.string {
-                    return str < cond
-                }
-
-                return false
-
-            // Evaluate LTE operator - whether attribute less than or equal to condition
-            case "$lte":
-                if attributeValue == .null {
-                        if let cond = conditionValue.double {
-                            return 0.0 <= cond
-                        }
-                        return false
-                    }
-                var attrNum: Double? = attributeValue.double
-                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
-                    attrNum = num
-                }
-
-                var condNum: Double? = conditionValue.double
-                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
-                    condNum = num
-                }
-
-                if let attrNum, let condNum {
-                    return attrNum <= condNum
-                }
-                    if let str = attributeValue.string, let cond = conditionValue.string {
-                        return str <= cond
-                    }
-                    return false
-            // Evaluate GT operator - whether attribute greater than to condition
-            case "$gt":
-                if attributeValue == .null {
-                        if let cond = conditionValue.double {
-                            return 0.0 > cond
-                        }
-                        return false
-                    }
-                var attrNum: Double? = attributeValue.double
-                if attrNum == nil, let str = attributeValue.string, let num = Double(str) {
-                    attrNum = num
-                }
-
-                var condNum: Double? = conditionValue.double
-                if condNum == nil, let condStr = conditionValue.string, let num = Double(condStr) {
-                    condNum = num
-                }
-
-                if let attrNum, let condNum {
-                    return attrNum > condNum
-                }
-                    if let str = attributeValue.string {
-                        return str > conditionValue.stringValue
-                    }
-                    return false
-            // Evaluate GTE operator - whether attribute greater than or equal to condition
-            case "$gte":
-                if attributeValue == .null {
-                        if let cond = conditionValue.double {
-                            return 0.0 >= cond
-                        }
-                        return false
-                    }
-                    if let num = attributeValue.double {
-                        if let cond = conditionValue.double {
-                                    return num >= cond
-                                } else if let condStr = conditionValue.string, let condNum = Double(condStr) {
-                                    return num > condNum
-                                }
-                                return false
-                    }
-                    if let str = attributeValue.string, let cond = conditionValue.string {
-                        return str >= cond
-                    }
-                    return false
-            // Evaluate REGEX operator - whether attribute contains condition regex
-            case "$regex":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: false,
-                    negate: false
-                )
-            case "$regexi":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: true,
-                    negate: false
-                )
-            case "$notRegex":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: false,
-                    negate: true
-                )
-            case "$notRegexi":
-                return isContains(
-                    source: attributeValue.stringValue,
-                    target: conditionValue.stringValue,
-                    insensitive: true,
-                    negate: true
-                )
+                return evalConditionValue(conditionValue: conditionValue, attributeValue: JSON(attribute.count), savedGroups: savedGroups)
             default: break
             }
         }
         return false
+    }
+
+    private static let versionOperators: Set<String> = ["$veq", "$vne", "$vgt", "$vgte", "$vlt", "$vlte"]
+
+    /// Ordering only applies between two strings or two numbers. Booleans are not ordered, and a
+    /// missing or null attribute has nothing to compare.
+    private func isOrderable(_ attributeValue: JSON, _ conditionValue: JSON) -> Bool {
+        (attributeValue.type == .string || attributeValue.type == .number) && attributeValue.type == conditionValue.type
+    }
+
+    /// Evaluates `$lt`, `$lte`, `$gt` and `$gte`. Two numbers compare numerically and two strings
+    /// compare as text by UTF-16 code unit, like JavaScript, so `"10" < "9"`. Any other pair fails.
+    /// Each relation is evaluated directly, so a NaN operand fails all four, as in JavaScript.
+    private func compareOrdered(operatorKey: String, attributeValue: JSON, conditionValue: JSON) -> Bool {
+        guard isOrderable(attributeValue, conditionValue) else { return false }
+
+        if attributeValue.type == .number {
+            let attr = attributeValue.doubleValue
+            let cond = conditionValue.doubleValue
+            switch operatorKey {
+            case "$lt": return attr < cond
+            case "$lte": return attr <= cond
+            case "$gt": return attr > cond
+            default: return attr >= cond
+            }
+        }
+
+        let attr = attributeValue.stringValue.utf16
+        let cond = conditionValue.stringValue.utf16
+        switch operatorKey {
+        case "$lt": return attr.lexicographicallyPrecedes(cond)
+        case "$lte": return !cond.lexicographicallyPrecedes(attr)
+        case "$gt": return cond.lexicographicallyPrecedes(attr)
+        default: return !attr.lexicographicallyPrecedes(cond)
+        }
+    }
+
+    /// Tri-state `$all`/`$alli`, as JS `isInAll`: every expected value must match some element.
+    /// An element that can't be decided leaves that value undecided unless another element matches.
+    private func isInAll(actual: JSON, expected: [JSON], savedGroups: JSON?, insensitive: Bool) -> Bool? {
+        guard let actualArray = actual.array else { return false }
+        var result: Bool? = true
+        for expectedItem in expected {
+            var passed: Bool? = false
+            for actualItem in actualArray {
+                let entry = evalConditionValue(conditionValue: expectedItem, attributeValue: actualItem, savedGroups: savedGroups, insensitive: insensitive)
+                if entry == true {
+                    passed = true
+                    break
+                }
+                if entry == nil { passed = nil }
+            }
+            if passed == false { return false }
+            if passed == nil { result = nil }
+        }
+        return result
+    }
+
+    /// Equality for `$eq` and `$ne`, as JS `===`: scalars compare by value without coercion, and an
+    /// array or object never equals one parsed separately, so it is never equal here.
+    private func isIdentical(_ lhs: JSON, _ rhs: JSON) -> Bool {
+        let isCollection: (JSON) -> Bool = { $0.type == .array || $0.type == .dictionary }
+        if isCollection(lhs) || isCollection(rhs) { return false }
+        return isStrictlyEqual(lhs, rhs)
+    }
+
+    /// Deep equality without coercion. `JSON`'s own `==` compares arrays and objects as
+    /// `NSArray`/`NSDictionary`, which bridges booleans to `NSNumber` and treats `true` as `1`.
+    func isStrictlyEqual(_ lhs: JSON, _ rhs: JSON) -> Bool {
+        switch (lhs.type, rhs.type) {
+        case (.number, .number):
+            return lhs.doubleValue == rhs.doubleValue
+        case (.string, .string):
+            return Common.sameCodeUnits(lhs.stringValue, rhs.stringValue)
+        case (.bool, .bool):
+            return lhs.boolValue == rhs.boolValue
+        case (.null, .null):
+            return true
+        case (.array, .array):
+            let left = lhs.arrayValue
+            let right = rhs.arrayValue
+            return left.count == right.count && zip(left, right).allSatisfy { isStrictlyEqual($0, $1) }
+        case (.dictionary, .dictionary):
+            let left = lhs.dictionaryValue
+            let right = rhs.dictionaryValue
+            return left.count == right.count && left.allSatisfy { key, value in
+                guard let other = right[key] else { return false }
+                return isStrictlyEqual(value, other)
+            }
+        default:
+            return false
+        }
     }
 
     private func isContains(source: String, target: String, insensitive: Bool, negate: Bool) -> Bool {

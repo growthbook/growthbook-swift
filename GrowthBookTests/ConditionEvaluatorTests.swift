@@ -65,7 +65,8 @@ class ConditionEvaluatorTests: XCTestCase {
 
     func testGetPathWhenIntermediateIsArray() {
         let attrs = JSON(["items": [1, 2, 3]])
-        XCTAssertNil(eval.getPath(obj: attrs, key: "items.0"))
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.0")?.intValue, 1)
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.3"))
     }
 
     func testGetPathSimpleKey() {
@@ -206,10 +207,10 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$ne", attributeValue: JSON(5), conditionValue: JSON(5)))
     }
 
-    // MARK: - $lt / $lte / $gt / $gte with null attribute
+    // MARK: - $lt / $lte / $gt / $gte with null attribute (a null attribute is not ordered, so all fail)
 
     func testLtWithNullAttrPositiveCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON.null, conditionValue: JSON(1)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON.null, conditionValue: JSON(1)))
     }
 
     func testLtWithNullAttrNegativeCond() {
@@ -217,11 +218,11 @@ class ConditionEvaluatorTests: XCTestCase {
     }
 
     func testLteWithNullAttrZeroCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lte", attributeValue: JSON.null, conditionValue: JSON(0)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$lte", attributeValue: JSON.null, conditionValue: JSON(0)))
     }
 
     func testGtWithNullAttrNegativeCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gt", attributeValue: JSON.null, conditionValue: JSON(-1)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$gt", attributeValue: JSON.null, conditionValue: JSON(-1)))
     }
 
     func testGtWithNullAttrPositiveCond() {
@@ -229,7 +230,7 @@ class ConditionEvaluatorTests: XCTestCase {
     }
 
     func testGteWithNullAttrZeroCond() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON.null, conditionValue: JSON(0)))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$gte", attributeValue: JSON.null, conditionValue: JSON(0)))
     }
 
     // MARK: - $lt / $gt with string attributes
@@ -242,8 +243,10 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$gt", attributeValue: JSON("banana"), conditionValue: JSON("apple")))
     }
 
+    /// Two strings compare as text, even when they look like numbers
     func testLtWithStringNumbers() {
-        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("3"), conditionValue: JSON("10")))
+        XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("3"), conditionValue: JSON("10")))
+        XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$lt", attributeValue: JSON("10"), conditionValue: JSON("9")))
     }
 
     // MARK: - $ini / $nini (case-insensitive in/nin)
@@ -306,6 +309,18 @@ class ConditionEvaluatorTests: XCTestCase {
     func testNotRegexi() {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("^world")))
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("hello")))
+    }
+
+    /// A non-string pattern is malformed, so it must not turn into an empty pattern that matches
+    /// every string. Like a pattern that doesn't compile, neither the operator nor its negation matches.
+    func testNonStringRegexPatternMatchesNothing() {
+        for pattern in [JSON(["^US$"]), JSON(1), JSON(true), JSON(["a": "b"]), JSON(NSNull())] {
+            for op in ["$regex", "$regexi", "$notRegex", "$notRegexi"] {
+                XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON("CA"), conditionValue: pattern),
+                               "\(op) with pattern \(pattern.rawString() ?? "?")")
+            }
+        }
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["country": "CA"]), conditionObj: JSON(["country": ["$regex": ["^US$"]]])))
     }
 
     // MARK: - Version operators
@@ -392,16 +407,102 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vne": "1.2.3-de"]])))
     }
 
-    func testVersionOperatorCoercesNumericAttribute() {
+    /// A number is only compared as a version against another number
+    func testVersionOperatorNumericAttribute() {
         let attrs = JSON(["version": 2])
-        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vgt": "1.0.0"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vgt": "1.0.0"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$vne": "1.0.0"]])))
         XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["version": ["$veq": 2]])))
     }
 
-    /// An absent, boolean or collection attribute is treated as version "0" rather than failing outright
+    /// An absent, boolean or collection attribute is not a version: every operator fails except $vne
     func testVersionOperatorWithNonVersionAttribute() {
-        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vlt": "0.0.1"]])))
-        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["version": true]), conditionObj: JSON(["version": ["$veq": "0"]])))
-        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["version": ["1.0.0"]]), conditionObj: JSON(["version": ["$veq": "0"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vlt": "0.0.1"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["version": true]), conditionObj: JSON(["version": ["$veq": "0"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["version": ["1.0.0"]]), conditionObj: JSON(["version": ["$veq": "0"]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["version": ["$vne": "0"]])))
+    }
+
+    /// An operator this SDK can't evaluate leaves `$all`/`$alli` undecided, so `$not` can't flip it to a pass (as in JS)
+    func testAllWithUnknownOperatorUnderNotFails() {
+        let attrs = JSON(["tags": ["a"]])
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$not": ["$all": [["$future": "x"]]]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$not": ["$alli": [["$future": "x"]]]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$all": [["$future": "x"]]]])))
+        // A decided miss still decides it
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$all": ["b", ["$future": "x"]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$not": ["$all": ["b", ["$future": "x"]]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["tags": ["$all": ["a"]]])))
+    }
+
+    /// Strings compare by UTF-16 code units, as in JS: "\u{E9}" and "e\u{301}" render the same but differ
+    func testCanonicallyEquivalentStringsAreNotEqual() {
+        let precomposed = "\u{E9}"
+        let decomposed = "e\u{301}"
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": precomposed])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["profile": ["name": decomposed]]), conditionObj: JSON(["profile": ["name": precomposed]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["names": [decomposed]]), conditionObj: JSON(["names": [precomposed]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": ["$in": [precomposed]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": ["$nin": [precomposed]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["name": decomposed]), conditionObj: JSON(["name": ["$eq": precomposed]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["profile": ["name": precomposed]]), conditionObj: JSON(["profile": ["name": precomposed]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["name": precomposed]), conditionObj: JSON(["name": ["$in": [precomposed]]])))
+    }
+
+    /// NaN is unordered, so every ordering operator fails with NaN on either side (as in JS)
+    func testOrderingOperatorsFailWithNaN() {
+        for op in ["$lt", "$lte", "$gt", "$gte"] {
+            XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": Double.nan]), conditionObj: JSON(["x": [op: 1]])), op)
+            XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON(1), conditionValue: JSON(Double.nan)), op)
+            XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON(Double.nan), conditionValue: JSON(Double.nan)), op)
+        }
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": 2]), conditionObj: JSON(["x": ["$gt": 1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": 1]), conditionObj: JSON(["x": ["$gte": 1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": -0.0]), conditionObj: JSON(["x": ["$gte": 0]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": -0.0]), conditionObj: JSON(["x": ["$gt": 0]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": "b"]), conditionObj: JSON(["x": ["$gt": "a"]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": "a"]), conditionObj: JSON(["x": ["$gt": "a"]])))
+    }
+
+    /// Paths read an array's own keys, as JS does: its indices and `length`
+    func testGetPathReadsArrayOwnKeys() {
+        let attrs = JSON(["items": [1, [2, 3]]])
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.0")?.intValue, 1)
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.1.1")?.intValue, 3)
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.length")?.intValue, 2)
+        XCTAssertEqual(eval.getPath(obj: attrs, key: "items.1.length")?.intValue, 2)
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.2"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.-1"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.01"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.+1"))
+        XCTAssertNil(eval.getPath(obj: attrs, key: "items.foo"))
+        // Strings and numbers have no own keys here
+        XCTAssertNil(eval.getPath(obj: JSON(["s": "abc"]), key: "s.length"))
+        XCTAssertNil(eval.getPath(obj: JSON(["s": "abc"]), key: "s.0"))
+        XCTAssertEqual(eval.getPath(obj: JSON([[5]]), key: "0.0")?.intValue, 5)
+    }
+
+    /// A logical `$elemMatch` reads a nested-array item's own keys (as in JS)
+    func testLogicalElemMatchOnNestedArrays() {
+        let attrs = JSON(["x": [[1]]])
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$nor": [["0": 1]]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$or": [["0": 1]]]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$and": [["length": 1]]]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: attrs, conditionObj: JSON(["x": ["$elemMatch": ["$or": [["0": 2]]]]])))
+    }
+
+    /// Explicit `$eq`/`$ne` compare by identity, as JS `===`: an array or object operand never
+    /// equals one parsed separately. A literal array or object condition still compares contents.
+    func testEqNeNeverMatchArraysOrObjects() {
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": ["$eq": [1]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": ["$ne": [1]]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": ["a": 1]]), conditionObj: JSON(["x": ["$eq": ["a": 1]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": ["a": 1]]), conditionObj: JSON(["x": ["$ne": ["a": 1]]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": ["$ne": 1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON([:]), conditionObj: JSON(["x": ["$eq": NSNull()]])))
+        XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["x": Double.nan]), conditionObj: JSON(["x": ["$eq": Double.nan]])))
+        // Literal conditions keep structural equality
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": [1]]), conditionObj: JSON(["x": [1]])))
+        XCTAssertTrue(eval.isEvalCondition(attributes: JSON(["x": ["a": 1]]), conditionObj: JSON(["x": ["a": 1]])))
     }
 }

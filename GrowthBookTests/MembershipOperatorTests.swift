@@ -184,4 +184,20 @@ class MembershipOperatorTests: XCTestCase {
     func testIniStillMatchesAnArrayAttributeIgnoringCase() {
         XCTAssertTrue(eval(["tags": ["$ini": ["A"]]], ["tags": ["a", "b"]]))
     }
+
+    // MARK: - Array and object items
+
+    /// JS compares array and object items by reference, so they never match, even with equal contents.
+    func testArrayAndObjectItemsNeverMatch() {
+        XCTAssertFalse(eval(["x": ["$in": [[1]]]], ["x": [[1]]]))
+        XCTAssertFalse(eval(["x": ["$in": [["a": 1]]]], ["x": ["a": 1]]))
+        XCTAssertFalse(eval(["x": ["$ini": [["a": 1]]]], ["x": ["a": 1]]))
+        XCTAssertTrue(eval(["x": ["$nin": [[1]]]], ["x": [[1]]]))
+        XCTAssertTrue(eval(["x": ["$nini": [["a": 1]]]], ["x": ["a": 1]]))
+    }
+
+    func testScalarItemsStillMatchNextToArrayItems() {
+        XCTAssertTrue(eval(["x": ["$in": [[1], 1]]], ["x": 1]))
+        XCTAssertTrue(eval(["x": ["$in": [1]]], ["x": 1.0]))
+    }
 }
