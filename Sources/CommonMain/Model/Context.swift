@@ -35,7 +35,9 @@ import Foundation
     var features: Features
     /// Target the same group of users across multiple features and experiments with Saved Groups
     public var savedGroups: JSON?
-    
+    /// Contextual bandit definitions from the feature payload, keyed by bandit ref
+    public var contextualBandits: JSON?
+
     public var url: String? = nil
     
     public var forcedFeatureValues: JSON? = nil
@@ -56,6 +58,7 @@ import Foundation
          backgroundSync: Bool = false,
          remoteEval: Bool = false,
          savedGroups: JSON? = nil,
+         contextualBandits: JSON? = nil,
          url: String? = nil,
          forcedFeatureValues: JSON? = nil) {
         self.apiHost = apiHost
@@ -74,6 +77,7 @@ import Foundation
         self.backgroundSync = backgroundSync
         self.remoteEval = remoteEval
         self.savedGroups = savedGroups
+        self.contextualBandits = contextualBandits
         self.url = url
         self.forcedFeatureValues = forcedFeatureValues
     }

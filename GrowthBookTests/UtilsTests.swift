@@ -12,7 +12,7 @@ class UtilsTests: XCTestCase {
             let seed = item.arrayValue[0].stringValue
             let testContext = item.arrayValue[1].stringValue//jsonPrimitive.content
             let hashVersion = item.arrayValue[2].floatValue
-            let experiment = item.arrayValue[3].floatValue
+            let experiment = item.arrayValue[3].doubleValue
             
             let result = Utils.hash(seed: seed, value: testContext, version: hashVersion) ?? 0.0
                         
@@ -29,7 +29,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testBucketRange() throws {
@@ -38,11 +38,11 @@ class UtilsTests: XCTestCase {
         var passedScenarios: [String] = []
         for item in evalConditions {
             let numVariations = item.arrayValue[1].arrayValue[0].int
-            let coverage = item.arrayValue[1].arrayValue[1].float
-            var weights: [Float]? = nil
+            let coverage = item.arrayValue[1].arrayValue[1].double
+            var weights: [Double]? = nil
             if item.arrayValue[1].arrayValue[2] != JSON.null {
                 weights = JSON.convertToArrayString(jsonArray: item.arrayValue[1].arrayValue[2].arrayValue).map({ value in
-                    Float(value) ?? 0.0
+                    Double(value) ?? 0.0
                 })
             }
             
@@ -51,7 +51,7 @@ class UtilsTests: XCTestCase {
             
             let status = "\(item.arrayValue[0].stringValue) \nExpected Result - \(item.arrayValue[2].stringValue) \nActual result - \(JSON(bucketRange).stringValue) \n"
             
-            if isCompareBucket(expectedResults: JSON.convertToTwoArrayFloat(jsonArray: item.arrayValue[2].arrayValue), calculatedResults: bucketRange) {
+            if isCompareBucket(expectedResults: JSON.convertToTwoArrayDouble(jsonArray: item.arrayValue[2].arrayValue), calculatedResults: bucketRange) {
                 passedScenarios.append(status)
             } else {
                 failedScenarios.append(status)
@@ -62,10 +62,10 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
-    func isCompareBucket(expectedResults: [[Float]], calculatedResults: [BucketRange]) -> Bool {
+    func isCompareBucket(expectedResults: [[Double]], calculatedResults: [BucketRange]) -> Bool {
         let pairExpectedResults = getPairedData(items: expectedResults)
         
         if pairExpectedResults.count != expectedResults.count {
@@ -77,7 +77,7 @@ class UtilsTests: XCTestCase {
             let source = pairExpectedResults[i]
             let target = calculatedResults[i]
             
-            if (source.number1 != target.number1 || source.number2 != target.number2) {
+            if (round(source.number1) != round(target.number1) || round(source.number2) != round(target.number2)) {
                 result = false
                 break
             }
@@ -86,7 +86,12 @@ class UtilsTests: XCTestCase {
         return result
     }
     
-    func getPairedData(items: [[Float]]) -> [BucketRange] {
+    /// Mirrors the JS spec runner, which floors both computed and expected values to 8 decimals before an exact compare.
+    func round(_ n: Double) -> Double {
+        return (n * 1e8).rounded(.down) / 1e8
+    }
+    
+    func getPairedData(items: [[Double]]) -> [BucketRange] {
         var pairExpectedResults: [BucketRange] = []
         
         for item in items {
@@ -101,8 +106,8 @@ class UtilsTests: XCTestCase {
         var failedScenarios: [String] = []
         var passedScenarios: [String] = []
         for item in evalConditions {
-            let hash = item.arrayValue[1].float
-            let rangeData = getPairedData(items: JSON.convertToTwoArrayFloat(jsonArray: item.arrayValue[2].arrayValue))
+            let hash = item.arrayValue[1].double
+            let rangeData = getPairedData(items: JSON.convertToTwoArrayDouble(jsonArray: item.arrayValue[2].arrayValue))
             
             let result = Utils.chooseVariation(n: hash ?? 0, ranges: rangeData)
             
@@ -119,7 +124,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testInNameSpace() throws {
@@ -147,7 +152,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testEqualWeights() throws {
@@ -168,10 +173,10 @@ class UtilsTests: XCTestCase {
                 resultTest = false
             } else {
                 for i in 0..<result.count {
-                    let source = item.arrayValue[1].arrayValue[i].floatValue
+                    let source = item.arrayValue[1].arrayValue[i].doubleValue
                     let target = result[i]
                     
-                    if source != target {
+                    if round(source) != round(target) {
                         resultTest = false
                         break
                     }
@@ -189,7 +194,7 @@ class UtilsTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
         
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
     
     func testEdgeCases() throws {
@@ -205,10 +210,72 @@ class UtilsTests: XCTestCase {
         let startValue = "v1.2.3-rc.1+build123"
         let expectedValue = "    1-    2-    3-rc-    1"
         let endValue = Utils.paddedVersionString(input: startValue)
-        
+
         XCTAssertEqual(endValue, expectedValue)
     }
+
+    /// Numeric parts wider than the padding target used to trap in `String(repeating:count:)`
+    func testPaddedVersionStringWithOversizedNumericParts() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "123456789"), "123456789")
+        XCTAssertEqual(Utils.paddedVersionString(input: "10222.1.1"), "10222-    1-    1-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: "20260910.1.0-rc.123456"), "20260910-    1-    0-rc-123456")
+    }
+
+    /// Only a leading `v` is stripped - a `v` inside a pre-release tag must survive
+    func testPaddedVersionStringKeepsInnerLetterV() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3-dev"), "    1-    2-    3-dev")
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.0.0-alpha.v1"), "    1-    0-    0-alpha-v1")
+    }
+
+    /// Empty parts are kept, so the part count (and the `~` suffix) matches the other SDKs
+    func testPaddedVersionStringKeepsEmptyParts() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1..2"), "    1--    2-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: "-1.2.3"), "-    1-    2-    3")
+    }
+
+    /// Non-ASCII digits are pre-release tags, not numbers
+    func testPaddedVersionStringDoesNotPadNonAsciiDigits() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3-٣"), "    1-    2-    3-٣")
+    }
+
+    func testPaddedVersionStringCoercesNonStringValues() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON(2)), "    2")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON(1.5)), "    1-    5")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON("1.2.3")), "    1-    2-    3-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON("")), "    0")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON(true)), "    0")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON.null), "    0")
+        XCTAssertEqual(Utils.paddedVersionString(input: JSON([1, 2])), "    0")
+    }
+
+    /// `JSON` is ExpressibleByStringLiteral, so a bare string literal binds to the `String`
+    /// overload rather than the JSON one. The two must agree, or a caller gets a different answer
+    /// depending on a type inference they never see.
+    func testPaddedVersionStringOverloadsAgreeOnTheEmptyString() throws {
+        let fromString = Utils.paddedVersionString(input: "")
+        XCTAssertEqual(fromString, "    0", "An empty version string is \"0\", as in the JS reference")
+        XCTAssertEqual(fromString, Utils.paddedVersionString(input: JSON("")))
+    }
+
+    /// A numeric part at or beyond the target width is returned unchanged rather than trapping on
+    /// a negative repeat count. Kept next to the padding itself so the guard cannot drift away
+    /// from the subtraction it protects, which is how the original crash arose.
+    func testPaddedVersionStringDoesNotTrapOnOversizedSegments() throws {
+        XCTAssertEqual(Utils.paddedVersionString(input: "12345"), "12345")
+        XCTAssertEqual(Utils.paddedVersionString(input: "123456"), "123456")
+        XCTAssertEqual(Utils.paddedVersionString(input: "20260910.1.0"), "20260910-    1-    0-~")
+    }
     
+    func testQueryStringOverride() throws {
+        guard let testCases = TestHelper().getQueryStringOverrideData() else { return }
+
+        for test in testCases {
+            let name = test[0].stringValue
+            let actual = Utils.getQueryStringOverride(id: test[1].stringValue, urlString: test[2].stringValue, numberOfVariations: test[3].intValue)
+            XCTAssertEqual(actual, test[4].int, name)
+        }
+    }
+
     func testDecrypt() throws {
         guard let testCases = TestHelper().getDecryptData() else { return }
         

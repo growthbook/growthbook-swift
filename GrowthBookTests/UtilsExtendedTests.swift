@@ -38,6 +38,14 @@ class UtilsExtendedTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 
+    func testMalformedSingleValueRangeMatchesNobody() {
+        let range = BucketRange(json: JSON([0.5]))
+
+        XCTAssertEqual(range.number1, 0)
+        XCTAssertEqual(range.number2, 0)
+        XCTAssertFalse(Utils.inRange(n: 0.5, range: range))
+    }
+
     // MARK: - isFilteredOut
 
     func testIsFilteredOutReturnsFalseWhenHashInRange() {
@@ -67,6 +75,30 @@ class UtilsExtendedTests: XCTestCase {
     func testIsFilteredOutReturnsFalseForEmptyFilters() {
         let attributes = JSON(["id": "anything"])
         XCTAssertFalse(Utils.isFilteredOut(filters: [], attributes: attributes))
+    }
+
+    func testIsFilteredOutUsesEachFiltersHashAttribute() {
+        let attributes = JSON(["userId": "user-1"])
+        let filter = Filter(
+            attribute: "userId",
+            seed: "my-seed",
+            hashVersion: 2,
+            ranges: [BucketRange(number1: 0.0, number2: 1.0)],
+            fallbackAttribute: nil
+        )
+        XCTAssertFalse(Utils.isFilteredOut(filters: [filter], attributes: attributes))
+    }
+
+    func testIsFilteredOutReturnsTrueWhenHashAttributeIsMissing() {
+        let attributes = JSON(["id": "user-1"])
+        let filter = Filter(
+            attribute: "userId",
+            seed: "my-seed",
+            hashVersion: 2,
+            ranges: [BucketRange(number1: 0.0, number2: 1.0)],
+            fallbackAttribute: nil
+        )
+        XCTAssertTrue(Utils.isFilteredOut(filters: [filter], attributes: attributes))
     }
 
     // MARK: - isIncludedInRollout
@@ -148,6 +180,18 @@ class UtilsExtendedTests: XCTestCase {
         XCTAssertTrue(withFallback)
     }
 
+    func testIsIncludedInRolloutReturnsFalseWhenHashAttributeIsMissing() {
+        XCTAssertFalse(Utils.isIncludedInRollout(
+            attributes: JSON(["email": "user@example.com"]),
+            seed: "seed",
+            hashAttribute: "id",
+            fallbackAttribute: nil,
+            range: BucketRange(number1: 0.0, number2: 1.0),
+            coverage: nil,
+            hashVersion: 2
+        ))
+    }
+
     // MARK: - getHashAttribute
 
     func testGetHashAttributePrimaryHit() {
@@ -175,6 +219,41 @@ class UtilsExtendedTests: XCTestCase {
         let attrs = JSON(["email": "user@example.com"])
         let result = Utils.getHashAttribute(attr: "id", fallback: "deviceId", attributes: attrs)
         XCTAssertEqual(result.hashValue, "")
+    }
+
+    /// Only non-empty strings and non-zero numbers identify a user (spec 0.12.0); any other value
+    /// counts as missing, so the fallback attribute is used instead.
+    func testGetHashAttributeTreatsNonHashableValuesAsMissing() {
+        let missing: [Any] = [true, false, 0, 0.0, "", NSNull(), [String](), ["1"], [String: Any](), ["a": "1"]]
+        for value in missing {
+            let attrs = JSON(["id": value, "deviceId": "device-77"])
+            let result = Utils.getHashAttribute(attr: "id", fallback: "deviceId", attributes: attrs)
+            XCTAssertEqual(result.hashAttribute, "deviceId", "id = \(value)")
+            XCTAssertEqual(result.hashValue, "device-77", "id = \(value)")
+
+            let noFallback = Utils.getHashAttribute(attr: "id", attributes: JSON(["id": value]))
+            XCTAssertEqual(noFallback.hashValue, "", "id = \(value)")
+        }
+    }
+
+    func testGetHashAttributeSkipsANonHashableFallback() {
+        let attrs = JSON(["id": true, "deviceId": ["x"]])
+        let result = Utils.getHashAttribute(attr: "id", fallback: "deviceId", attributes: attrs)
+        XCTAssertEqual(result.hashAttribute, "id")
+        XCTAssertEqual(result.hashValue, "")
+    }
+
+    /// Numbers are formatted like JS `String()`: integral values have no decimal part.
+    func testGetHashAttributeFormatsNumbersLikeJs() {
+        XCTAssertEqual(Utils.getHashAttribute(attr: "id", attributes: JSON(parseJSON: #"{"id": 1.0}"#)).hashValue, "1")
+        XCTAssertEqual(Utils.getHashAttribute(attr: "id", attributes: JSON(parseJSON: #"{"id": 1.5}"#)).hashValue, "1.5")
+        XCTAssertEqual(Utils.getHashAttribute(attr: "id", attributes: JSON(parseJSON: #"{"id": -3}"#)).hashValue, "-3")
+    }
+
+    /// FNV-1a runs over UTF-16 code units, so an astral character counts as two units.
+    func testHashUsesUtf16CodeUnits() {
+        XCTAssertEqual(Utils.hash(seed: "", value: "\u{1F600}", version: 2), 0.4971)
+        XCTAssertEqual(Utils.hash(seed: "", value: "jos\u{E9}", version: 1), 0.586)
     }
 
     // MARK: - parseQueryString

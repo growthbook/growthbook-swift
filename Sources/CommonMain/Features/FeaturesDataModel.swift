@@ -9,8 +9,10 @@ import Foundation
     var encryptedSavedGroups: String?
     var experiments: [Experiment]?
     var encryptedExperiments: String?
-    
-    init(features: Features? = nil, encryptedFeatures: String? = nil, dateUpdated: String? = nil, savedGroups: JSON? = nil, encryptedSavedGroups: String? = nil, experiments: [Experiment]? = nil, encryptedExperiments: String? = nil) {
+    var contextualBandits: JSON?
+    var encryptedContextualBandits: String?
+
+    init(features: Features? = nil, encryptedFeatures: String? = nil, dateUpdated: String? = nil, savedGroups: JSON? = nil, encryptedSavedGroups: String? = nil, experiments: [Experiment]? = nil, encryptedExperiments: String? = nil, contextualBandits: JSON? = nil, encryptedContextualBandits: String? = nil) {
         self.features = features
         self.encryptedFeatures = encryptedFeatures
         self.dateUpdated = dateUpdated
@@ -18,5 +20,7 @@ import Foundation
         self.encryptedSavedGroups = encryptedSavedGroups
         self.experiments = experiments
         self.encryptedExperiments = encryptedExperiments
+        self.contextualBandits = contextualBandits
+        self.encryptedContextualBandits = encryptedContextualBandits
     }
 }

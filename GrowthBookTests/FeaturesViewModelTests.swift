@@ -397,7 +397,17 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         isSuccess = true
         isError = false
     }
-    
+
+    func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) {
+        isSuccess = false
+        isError = true
+    }
+
+    func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {
+        isSuccess = true
+        isError = false
+    }
+
     func featuresAPIModelSuccessfully(model: FeaturesDataModel) {
 
     }
@@ -427,6 +437,8 @@ private class SavedGroupsCapture: FeaturesFlowDelegate {
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         onSavedGroups(savedGroups)
     }
+    func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) {}
+    func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {}
 
     // featuresUpdateIsComplete
 
@@ -451,6 +463,8 @@ private class RemoteCallCapture: FeaturesFlowDelegate {
     func featuresFetchFailed(error: SDKError, isRemote: Bool) { onFailure(isRemote) }
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {}
+    func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) {}
+    func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {}
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {}
 }
 
@@ -462,5 +476,7 @@ private class ErrorCapture: FeaturesFlowDelegate {
     func featuresFetchFailed(error: SDKError, isRemote: Bool) { onError(error) }
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {}
+    func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) {}
+    func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {}
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool) {}
 }

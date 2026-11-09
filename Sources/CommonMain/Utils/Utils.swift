@@ -13,7 +13,7 @@ import Foundation
 public class Utils {
     
     /// Hashes a string to a float between 0 and 1
-    static func hash(seed: String, value: String, version: Float) -> Float? {
+    static func hash(seed: String, value: String, version: Float) -> Double? {
         
         switch version {
         case 2:
@@ -21,12 +21,12 @@ public class Utils {
             let combinedValue = seed + value
             let hashedCombinedValue = digest(combinedValue).description + ""
             let hashedValue = digest(hashedCombinedValue) % 10000
-            return Float(hashedValue) / 10000
+            return Double(hashedValue) / 10000
         case 1:
             // Original biased hashing algorithm (keep for backwards compatibility)
             let combinedValue = value + seed
             let hashedValue = digest(combinedValue)
-            return Float(hashedValue % 1000) / 1000
+            return Double(hashedValue % 1000) / 1000
         default:
             // Unknown hash version
             return nil
@@ -36,8 +36,8 @@ public class Utils {
     ///This is a helper method to evaluate `filters` for both feature flags and experiments.
     static func isFilteredOut(filters: [Filter], attributes: JSON) -> Bool {
         return filters.contains { filter in
-            let hashAttribute = Utils.getHashAttribute(attr: filter.attribute, attributes: attributes)
-            let hashValue = hashAttribute.hashValue
+            let hashValue = Utils.getHashAttribute(attr: filter.attribute, attributes: attributes).hashValue
+            guard !hashValue.isEmpty else { return true }
             
             let hash = hash(seed: filter.seed, value: hashValue, version: filter.hashVersion)
             guard let hashValue = hash else { return true }
@@ -49,7 +49,7 @@ public class Utils {
     }
     
     ///Determines if the user is part of a gradual feature rollout.
-    static func isIncludedInRollout(attributes: JSON, seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Float?, hashVersion: Float?) -> Bool {
+    static func isIncludedInRollout(attributes: JSON, seed: String, hashAttribute: String?, fallbackAttribute: String?, range: BucketRange?, coverage: Double?, hashVersion: Float?) -> Bool {
         if range == nil, coverage == nil {
             return true
         }
@@ -59,6 +59,7 @@ public class Utils {
         }
         
         let hashValue = Utils.getHashAttribute(attr: hashAttribute, fallback: fallbackAttribute, attributes: attributes).hashValue
+        guard !hashValue.isEmpty else { return false }
         
         let hash = Utils.hash(seed: seed, value: hashValue, version: hashVersion ?? 1)
         
@@ -67,7 +68,8 @@ public class Utils {
         if let range = range {
             return Utils.inRange(n: hash, range: range)
         } else if let coverage = coverage {
-            return hash <= coverage
+            // Half-open like `inRange`: a coverage of k/10000 includes exactly k hash buckets
+            return hash < coverage
         } else {
             return true
         }
@@ -80,13 +82,13 @@ public class Utils {
     }
     
     /// Returns an array of floats with numVariations items that are all equal and sum to 1. For example, getEqualWeights(2) would return [0.5, 0.5].
-    static func getEqualWeights(numVariations: Int) -> [Float] {
+    static func getEqualWeights(numVariations: Int) -> [Double] {
         if numVariations <= 0 { return [] }
-        return Array(repeating: 1.0 / Float(numVariations), count: numVariations)
+        return Array(repeating: 1.0 / Double(numVariations), count: numVariations)
     }
     
     /// This converts and experiment's coverage and variation weights into an array of bucket ranges.
-    static func getBucketRanges(numVariations: Int, coverage: Float, weights: [Float]?) -> [BucketRange] {
+    static func getBucketRanges(numVariations: Int, coverage: Double, weights: [Double]?) -> [BucketRange] {
         var bucketRange: [BucketRange]
         
         var targetCoverage = coverage
@@ -109,24 +111,24 @@ public class Utils {
         }
         
         // Convert weights to ranges and return
-        var cumulative: Float = 0
+        var cumulative: Double = 0
         
         bucketRange = targetWeights.map { weight in
             let start = cumulative
             cumulative += weight
             
-            return BucketRange(number1: start.roundTo(numFractionDigits: 4), number2: (start + (targetCoverage * weight)).roundTo(numFractionDigits: 4))
+            return BucketRange(number1: start, number2: start + (targetCoverage * weight))
         }
         
         return bucketRange
     }
     
-    static func inRange(n: Float, range: BucketRange) -> Bool {
+    static func inRange(n: Double, range: BucketRange) -> Bool {
         return n >= range.number1 && n < range.number2
     }
     
     /// Choose Variation from List of ranges which matches particular number
-    static func chooseVariation(n: Float, ranges: [BucketRange]) -> Int {
+    static func chooseVariation(n: Double, ranges: [BucketRange]) -> Int {
         for (index, range) in ranges.enumerated() {
             if inRange(n: n, range: range) {
                 return index
@@ -140,8 +142,8 @@ public class Utils {
         if namespace.count >= 3 {
             
             let title = namespace[0].string
-            let start = namespace[1].float
-            let end = namespace[2].float
+            let start = namespace[1].double
+            let end = namespace[2].double
             
             if let title = title, let start = start, let end = end {
                 return NameSpace(title, start, end)
@@ -151,28 +153,48 @@ public class Utils {
         return nil
     }
     
+    /// Width each numeric version part is padded to, so string comparison orders them numerically.
+    private static let versionPartWidth = 5
+
+    /// Coerces a JSON value the same way the other SDKs do before padding it: numbers are stringified
+    /// and anything that is not a string falls back to "0", so an absent, boolean or collection
+    /// attribute compares as version "0" instead of failing the condition outright.
+    static func paddedVersionString(input: JSON) -> String {
+        switch input.type {
+        case .number, .string:
+            return paddedVersionString(input: input.stringValue)
+        default:
+            return paddedVersionString(input: "0")
+        }
+    }
+
     static func paddedVersionString(input: String) -> String {
-        var parts = input.replacingOccurrences(of: "[v]", with: "", options: .regularExpression)
-        
-        if let range = parts.range(of: "+")?.lowerBound {
-            parts = String(parts.prefix(upTo: range))
-        }
-        
-        let stringArray = parts.components(separatedBy: [".", "-"])
-        
-        var partArray: [String] = []
-        
-        for part in stringArray {
-            if part != "" {
-                partArray.append(part)
-            }
-        }
-        
+        // An empty version string is "0", matching the `!input` guard in the JS reference. This lives
+        // here rather than in the JSON overload because `JSON` is ExpressibleByStringLiteral: a bare
+        // string literal binds to this overload, so the two entry points would otherwise disagree.
+        let source = input.isEmpty ? "0" : input
+
+        // Remove build info and leading `v` if any
+        // Split version into parts (both core version numbers and pre-release tags)
+        // "v1.2.3-rc.1+build123" -> ["1","2","3","rc","1"]
+        let stripped = source.replacingOccurrences(of: "(^v|\\+.*$)", with: "", options: .regularExpression)
+        var partArray = stripped.components(separatedBy: CharacterSet(charactersIn: ".-"))
+
+        // If it's SemVer without a pre-release, add `~` to the end
+        // ["1","0","0"] -> ["1","0","0","~"]
+        // "~" is the largest ASCII character, so this will make "1.0.0" greater than "1.0.0-beta" for example
         if partArray.count == 3 {
             partArray.append("~")
         }
-        
-        return partArray.map({ $0.rangeOfCharacter(from: CharacterSet.decimalDigits.inverted) == nil ? String(repeating: " ", count: 5 - $0.count) + $0 : $0}).joined(separator: "-")
+
+        // Left pad each numeric part with spaces so string comparisons will work ("9">"10", but " 9"<"10")
+        // Parts already at least as long as the target width are left untouched, matching `padStart` elsewhere.
+        // `isASCII` is deliberate: `isNumber` alone admits ½ and XII, which are not version numbers.
+        return partArray.map({ part in
+            let isNumeric = !part.isEmpty && part.allSatisfy { $0.isASCII && $0.isNumber }
+            guard isNumeric else { return part }
+            return String(repeating: " ", count: max(0, versionPartWidth - part.count)) + part
+        }).joined(separator: "-")
     }
     
     static func convertJsonToDouble(from value: JSON?) -> Double? {
@@ -185,28 +207,39 @@ public class Utils {
         return nil
     }
     
+    /// Hashes UTF-16 code units, like JS `charCodeAt`, so non-ASCII values match the other SDKs.
     static private func digest(_ string: String) -> UInt32 {
-        return Common.fnv1a(Array(string.utf8), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
+        return Common.fnv1a(Array(string.utf16), offsetBasis: Common.offsetBasis32, prime: Common.prime32)
+    }
+    
+    /// Returns the value as a hash input, or nil when it can't identify a user.
+    ///
+    /// Only non-empty strings and finite, non-zero numbers qualify. Everything else (`0`, `""`,
+    /// booleans, null, arrays, objects) counts as missing, as in the JS SDK. Numbers are formatted
+    /// like JS `String()`, so `1.0` hashes as `"1"`.
+    static func hashableValue(_ value: JSON) -> String? {
+        switch value.type {
+        case .string:
+            let string = value.stringValue
+            return string.isEmpty ? nil : string
+        case .number:
+            let number = value.doubleValue
+            guard number != 0, number.isFinite else { return nil }
+            return value.stringValue
+        default:
+            return nil
+        }
     }
     
     ///Returns tuple out of 2 elements: the attribute itself an its hash value
     static func getHashAttribute(attr: String?, fallback: String? = nil, attributes: JSON) -> (hashAttribute: String, hashValue: String) {
         var hashAttribute = attr ?? "id"
-        var hashValue = ""
-        
-        if attributes[hashAttribute] != .null {
-            hashValue = attributes[hashAttribute].stringValue
-        }
+        var hashValue = hashableValue(attributes[hashAttribute]) ?? ""
         
         // if no match, try fallback
-        if hashValue.isEmpty, let fallback = fallback {
-            if attributes[fallback] != .null {
-                hashValue = attributes[fallback].stringValue
-            }
-            
-            if !hashValue.isEmpty {
-                hashAttribute = fallback
-            }
+        if hashValue.isEmpty, let fallback = fallback, let fallbackValue = hashableValue(attributes[fallback]) {
+            hashValue = fallbackValue
+            hashAttribute = fallback
         }
         
         return (hashAttribute, hashValue)
@@ -292,7 +325,11 @@ public class Utils {
             let feature = features[id]
             if let rules = feature?.rules {
                 for rule in rules {
-                    if rule.variations != nil {
+                    // A contextual bandit rule carries its variations under contextualVariations, so
+                    // checking `variations` alone would leave its hash and fallback attributes
+                    // unregistered and the sticky bucket service would never be asked for that
+                    // experiment's assignment documents.
+                    if rule.variations != nil || rule.contextualVariations != nil {
                         attributes.insert(rule.hashAttribute ?? "id")
                         if let fallbackAttribute = rule.fallbackAttribute {
                             attributes.insert(fallbackAttribute)
@@ -446,7 +483,9 @@ public class Utils {
                                     url: context.url,
                                     trackingClosure: context.trackingClosure)
         
-        let globalContext = GlobalContext(features: context.features, savedGroups: context.savedGroups)
+        let globalContext = GlobalContext(features: context.features,
+                                          savedGroups: context.savedGroups,
+                                          contextualBandits: context.contextualBandits)
         
         // should create manual force features
             let userContext = UserContext(attributes: context.attributes, stickyBucketAssignmentDocs: context.stickyBucketAssignmentDocs, forcedVariations: context.forcedVariations, forcedFeatureValues: context.forcedFeatureValues)

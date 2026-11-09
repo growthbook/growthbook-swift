@@ -1,0 +1,402 @@
+import XCTest
+@testable import GrowthBook
+
+// MARK: - MockPlugin
+
+/// Records all plugin calls for use in integration assertions.
+final class MockPlugin: GrowthBookPlugin {
+    private let lock = NSLock()
+
+    private var _initializedWith: String?
+    var initializedWith: String? { lock.lock(); defer { lock.unlock() }; return _initializedWith }
+
+    private var _experimentCallCount = 0
+    var experimentCallCount: Int { lock.lock(); defer { lock.unlock() }; return _experimentCallCount }
+
+    private var _featureCallCount = 0
+    var featureCallCount: Int { lock.lock(); defer { lock.unlock() }; return _featureCallCount }
+
+    private var _closeCalled = false
+    var closeCalled: Bool { lock.lock(); defer { lock.unlock() }; return _closeCalled }
+
+    func initialize(clientKey: String) {
+        lock.lock(); defer { lock.unlock() }
+        _initializedWith = clientKey
+    }
+    func onExperimentViewed(experiment: Experiment, result: ExperimentResult, attributes: JSON?) {
+        lock.lock(); defer { lock.unlock() }
+        _experimentCallCount += 1
+    }
+    func onFeatureEvaluated(featureKey: String, result: FeatureResult, attributes: JSON?) {
+        lock.lock(); defer { lock.unlock() }
+        _featureCallCount += 1
+    }
+    func close() {
+        lock.lock(); defer { lock.unlock() }
+        _closeCalled = true
+    }
+}
+
+
+// MARK: - Plugin integration tests
+
+/// Tests that MockPlugin receives the correct lifecycle and evaluation events via GrowthBookSDK.
+final class GrowthBookPluginIntegrationTests: XCTestCase {
+
+    private let clientKey = "sdk-test-key"
+
+    private func makeSDK(plugins: [GrowthBookPlugin] = [], features: Data? = nil) -> GrowthBookSDK {
+        var builder = GrowthBookBuilder(
+            apiHost: "https://host.com",
+            clientKey: clientKey,
+            attributes: ["id": "user-1"],
+            features: features,
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 60
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: nil))
+        for plugin in plugins { builder = builder.addPlugin(plugin) }
+        return builder.initializer()
+    }
+
+    private func featuresPayload() -> Data {
+        #"{"features":{"flag-a":{"defaultValue":true}}}"#.data(using: .utf8)!
+    }
+
+    // MARK: - Lifecycle
+
+    func testPluginReceivesInitialize() {
+        let plugin = MockPlugin()
+        _ = makeSDK(plugins: [plugin])
+        XCTAssertEqual(plugin.initializedWith, clientKey)
+    }
+
+    func testPluginCloseCalledOnSDKDeinit() {
+        let plugin = MockPlugin()
+        autoreleasepool { _ = makeSDK(plugins: [plugin]) }
+        XCTAssertTrue(plugin.closeCalled)
+    }
+
+    // MARK: - Experiment events
+
+    func testPluginReceivesOnExperimentViewed() {
+        let plugin = MockPlugin()
+        let sdk = makeSDK(plugins: [plugin])
+        // UUID key avoids ExperimentHelper deduplication across test runs
+        let exp = Experiment(key: "plugin-exp-\(UUID().uuidString)", variations: [JSON(0), JSON(1)], coverage: 1.0)
+        sdk.run(experiment: exp)
+        XCTAssertEqual(plugin.experimentCallCount, 1)
+    }
+
+    func testPluginNotCalledWhenUserNotInExperiment() {
+        let plugin = MockPlugin()
+        let sdk = makeSDK(plugins: [plugin])
+        // coverage = 0 → user never assigned → inExperiment = false
+        let exp = Experiment(key: "plugin-exp-\(UUID().uuidString)", variations: [JSON(0), JSON(1)], coverage: 0.0)
+        sdk.run(experiment: exp)
+        XCTAssertEqual(plugin.experimentCallCount, 0)
+    }
+
+    // MARK: - Feature events
+
+    func testPluginReceivesOnFeatureEvaluated() {
+        let plugin = MockPlugin()
+        let sdk = makeSDK(plugins: [plugin], features: featuresPayload())
+        _ = sdk.evalFeature(id: "flag-a")
+        XCTAssertEqual(plugin.featureCallCount, 1)
+    }
+
+    func testPluginReceivesFeatureEvaluatedForUnknownFeature() {
+        let plugin = MockPlugin()
+        let sdk = makeSDK(plugins: [plugin], features: featuresPayload())
+        _ = sdk.evalFeature(id: "nonexistent")
+        XCTAssertEqual(plugin.featureCallCount, 1)
+    }
+
+    // MARK: - Multiple plugins
+
+    func testMultiplePluginsAllReceiveEvents() {
+        let p1 = MockPlugin()
+        let p2 = MockPlugin()
+        let sdk = makeSDK(plugins: [p1, p2], features: featuresPayload())
+        _ = sdk.evalFeature(id: "flag-a")
+        XCTAssertEqual(p1.featureCallCount, 1)
+        XCTAssertEqual(p2.featureCallCount, 1)
+    }
+
+    func testMultiplePluginsAllInitialized() {
+        let p1 = MockPlugin()
+        let p2 = MockPlugin()
+        _ = makeSDK(plugins: [p1, p2])
+        XCTAssertEqual(p1.initializedWith, clientKey)
+        XCTAssertEqual(p2.initializedWith, clientKey)
+    }
+}
+
+// MARK: - GrowthBookTrackingPlugin unit tests
+
+final class GrowthBookTrackingPluginTests: XCTestCase {
+
+    private func makePlugin(
+        batchSize: Int = GrowthBookTrackingPlugin.Config.defaultBatchSize,
+        batchTimeout: TimeInterval = GrowthBookTrackingPlugin.Config.defaultBatchTimeout,
+        onRequest: ((URLRequest) -> Void)? = nil
+    ) -> GrowthBookTrackingPlugin {
+        GrowthBookTrackingPlugin(config: .init(batchSize: batchSize, batchTimeout: batchTimeout)) { request, completion in
+            onRequest?(request)
+            completion(true)
+        }
+    }
+
+    private func makeExperiment() -> Experiment {
+        Experiment(key: "test-exp", variations: [JSON(0), JSON(1)])
+    }
+
+    private func makeExperimentResult() -> ExperimentResult {
+        ExperimentResult(inExperiment: true, variationId: 1, value: JSON(1),
+                         hashAttribute: "id", hashValue: "user-1", key: "1")
+    }
+
+    // MARK: - No-op without clientKey
+
+    func testNoOpWithEmptyClientKey() {
+        var requestCount = 0
+        let plugin = makePlugin(batchSize: 1) { _ in requestCount += 1 }
+        plugin.initialize(clientKey: "")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        plugin.close()
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    // MARK: - Batch size flush
+
+    func testFlushWhenBatchSizeReached() {
+        var batches: [[[String: Any]]] = []
+        var urls: [String] = []
+        let plugin = makePlugin(batchSize: 3, batchTimeout: 60) { request in
+            urls.append(request.url?.absoluteString ?? "")
+            if let body = request.httpBody,
+               let batch = try? JSONSerialization.jsonObject(with: body) as? [[String: Any]] {
+                batches.append(batch)
+            }
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        // One more event than the batch size. If reaching the size sends, the fourth event is left
+        // over and the trailing flush sends it separately — 3 then 1. If it does not, nothing goes
+        // until the flush and all four arrive as one batch. Three events could not tell those apart,
+        // because the flush alone would also have produced a single batch of three.
+        //
+        // The experiments are distinct because identical exposures are deduplicated: repeating one
+        // would never fill the batch. This case is about the batch-size trigger, not about deduping.
+        for index in 0..<4 {
+            plugin.onExperimentViewed(experiment: Experiment(key: "batch-exp-\(index)", variations: [JSON(0), JSON(1)]),
+                                      result: makeExperimentResult(), attributes: nil)
+        }
+
+        // `flush()` is a `queue.sync`, so it drains the asyncs above and the assertions below need
+        // no wall-clock wait. That wait is what used to fail this test on a loaded CI runner: a
+        // starved `.utility` queue missed the ceiling and the code was never at fault.
+        plugin.flush()
+
+        XCTAssertEqual(batches.map(\.count), [3, 1], "Reaching the batch size must send on its own")
+        XCTAssertTrue(urls.first?.contains("client_key=sdk-test") == true)
+    }
+
+    func testNoFlushBeforeBatchSizeReached() {
+        var requestCount = 0
+        let plugin = makePlugin(batchSize: 5, batchTimeout: 60) { _ in requestCount += 1 }
+        plugin.initialize(clientKey: "sdk-test")
+        for _ in 0..<4 {
+            plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        }
+        Thread.sleep(forTimeInterval: 0.1)
+        XCTAssertEqual(requestCount, 0)
+        plugin.close()
+    }
+
+    // MARK: - Timer flush
+
+    func testTimerTriggersFlush() {
+        let expectation = expectation(description: "timer flush")
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 0.1) { _ in expectation.fulfill() }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        // A liveness check: what is asserted is that the timer flushes at all, never that it does
+        // so within a given second. The flush runs on a `.utility` queue, which a CI runner
+        // building four simulator platforms can starve for a long time — 30s was not enough on one
+        // such run, and the code was not at fault. The wait returns the moment it is fulfilled, so
+        // a generous ceiling costs a healthy run nothing and only delays the report of a genuine
+        // never-flushes regression. Unlike the batch-size case above, there is nothing to
+        // synchronise on here: the trigger is wall-clock by definition.
+        wait(for: [expectation], timeout: 120.0)
+        withExtendedLifetime(plugin) {}
+    }
+
+    // MARK: - close() synchronous flush
+
+    func testCloseFlushesSynchronously() {
+        var requestSent = false
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { _ in requestSent = true }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+
+        XCTAssertFalse(requestSent, "no request before close()")
+        plugin.close()
+        XCTAssertTrue(requestSent, "close() must flush synchronously")
+    }
+
+    func testCloseWithNoEventsDoesNotSendRequest() {
+        var requestCount = 0
+        let plugin = makePlugin() { _ in requestCount += 1 }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.close()
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    /// `batchSize: 1` flushes on enqueue, so by the time close() runs the event has already left
+    /// the buffer and its request is in flight. close() must still wait for that request.
+    func testCloseWaitsForRequestAlreadyInFlight() {
+        let started = expectation(description: "request started")
+
+        // The request's completion is held here instead of being scheduled on a delay: asserting
+        // ordering against a deadline means a runner that stalls long enough fails the test rather
+        // than the code. Nothing here waits on wall-clock time except the negative check below.
+        let heldCompletion = Atomic<((Bool) -> Void)?>(nil)
+        let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 30)) { _, completion in
+            heldCompletion.value = completion
+            started.fulfill()
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        wait(for: [started], timeout: 30.0)
+
+        let closeStarted = DispatchSemaphore(value: 0)
+        let closeReturned = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            closeStarted.signal()
+            plugin.close()
+            closeReturned.signal()
+        }
+
+        // Wait for the worker to be running before timing anything. The negative check below only
+        // means something once close() is under way; it used to begin as soon as the work was
+        // *queued*, so a worker the runner scheduled late let the window expire on its own, which
+        // read as "still blocked" and hid a close() that never waits at all.
+        //
+        // Requiring this signal also makes the test fail, rather than quietly pass, when the worker
+        // never runs — the right way round for a check that otherwise cannot be made.
+        XCTAssertEqual(
+            closeStarted.wait(timeout: .now() + 30), .success,
+            "the shutdown worker never started, so nothing below was actually verified"
+        )
+
+        // close() must still be blocked while the request is unfinished. A loaded runner only makes
+        // this wait more likely to time out, which is the passing outcome — the failure it catches
+        // is close() returning early, which no amount of slowness can produce.
+        //
+        // What is left between the signal above and close() blocking is a single `queue.sync` hop
+        // onto an idle serial queue. A close() that does not wait makes that same hop and then
+        // returns, so a window this much larger than the hop is what separates the two.
+        guard closeReturned.wait(timeout: .now() + 1.0) == .timedOut else {
+            return XCTFail("close() returned while a submitted request was still in flight")
+        }
+
+        heldCompletion.value?(true)
+        XCTAssertEqual(
+            closeReturned.wait(timeout: .now() + 30), .success,
+            "close() did not return after the in-flight request finished"
+        )
+    }
+
+    /// Minimal box so the send handler can hand the completion back to the test thread without
+    /// tripping the concurrency checker.
+    private final class Atomic<Value>: @unchecked Sendable {
+        private let lock = NSLock()
+        private var stored: Value
+        init(_ value: Value) { stored = value }
+        var value: Value {
+            get { lock.lock(); defer { lock.unlock() }; return stored }
+            set { lock.lock(); stored = newValue; lock.unlock() }
+        }
+    }
+
+    /// The wait above must stay bounded: a request that never completes may delay shutdown by
+    /// `batchTimeout`, not forever.
+    func testCloseGivesUpOnRequestThatNeverCompletes() {
+        let started = expectation(description: "request started")
+        let plugin = GrowthBookTrackingPlugin(config: .init(batchSize: 1, batchTimeout: 0.5)) { _, _ in
+            started.fulfill()  // never calls completion
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        wait(for: [started], timeout: 30.0)
+
+        // What matters is bounded vs. forever, so leave wide slack over the 0.5s `batchTimeout`
+        // rather than asserting a tight elapsed time a loaded runner cannot honour.
+        let start = Date()
+        plugin.close()
+        XCTAssertLessThan(Date().timeIntervalSince(start), 10.0, "close() must give up after batchTimeout")
+    }
+
+    // MARK: - Network failure
+
+    func testNetworkFailureDoesNotCrash() {
+        // Simulate a handler that never calls completion — close() must not deadlock.
+        // We use a short timeout so flushSync doesn't block indefinitely in prod code.
+        // Here the sendHandler always calls completion, so this just verifies no crash.
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60)
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        plugin.close()
+    }
+
+    // MARK: - Request format
+
+    func testRequestSentToCorrectEndpoint() {
+        var captured: URLRequest?
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { request in captured = request }
+        plugin.initialize(clientKey: "sdk-test")
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: nil)
+        plugin.close()
+        XCTAssertEqual(captured?.url?.absoluteString, "\(GrowthBookTrackingPlugin.Config.defaultIngestorHost)/track?client_key=sdk-test")
+        XCTAssertEqual(captured?.httpMethod, "POST")
+        XCTAssertEqual(captured?.value(forHTTPHeaderField: "Content-Type"), "application/json")
+        XCTAssertTrue(captured?.value(forHTTPHeaderField: "User-Agent")?.hasPrefix("growthbook-swift-sdk/") == true)
+    }
+
+    func testFeatureEvaluatedEventIncludedInPayload() {
+        var capturedEvents: [[String: Any]]?
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { request in
+            capturedEvents = try? JSONSerialization.jsonObject(with: request.httpBody!) as? [[String: Any]]
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        let featureResult = FeatureResult(value: JSON(true), isOn: true, source: "defaultValue")
+        plugin.onFeatureEvaluated(featureKey: "my-feature", result: featureResult, attributes: nil)
+        plugin.close()
+        XCTAssertEqual(capturedEvents?.first?["event_name"] as? String, "Feature Evaluated")
+        let props = capturedEvents?.first?["properties_json"] as? [String: Any]
+        XCTAssertEqual(props?["feature"] as? String, "my-feature")
+    }
+
+    /// `id` is one of the keys the ingestor reads as the unit's identity, so it is promoted to
+    /// `device_id` and everything else is left in `context_json`.
+    func testAttributesIncludedInEventPayload() {
+        var capturedEvent: [String: Any]?
+        let plugin = makePlugin(batchSize: 100, batchTimeout: 60) { request in
+            let events = try? JSONSerialization.jsonObject(with: request.httpBody!) as? [[String: Any]]
+            capturedEvent = events?.first
+        }
+        plugin.initialize(clientKey: "sdk-test")
+        let attrs = JSON(["id": "user-1", "plan": "pro"])
+        plugin.onExperimentViewed(experiment: makeExperiment(), result: makeExperimentResult(), attributes: attrs)
+        plugin.close()
+        XCTAssertEqual(capturedEvent?["device_id"] as? String, "user-1")
+        XCTAssertEqual(capturedEvent?["sdk_language"] as? String, "swift")
+        XCTAssertNotNil(capturedEvent?["sdk_version"])
+
+        let context = capturedEvent?["context_json"] as? [String: Any]
+        XCTAssertEqual(context?["plan"] as? String, "pro")
+        XCTAssertNil(context?["id"], "A promoted key must not be duplicated into context_json")
+    }
+}
