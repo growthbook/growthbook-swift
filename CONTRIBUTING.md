@@ -84,9 +84,9 @@ historical, not a hint that other targets exist.
 
 ### Public API
 
-Anything `public` is consumed by apps via SwiftPM, CocoaPods, or the prebuilt
-xcframework, so removing or changing a `public` symbol is a breaking change and
-needs an issue first. Adding is cheap. Prefer `internal` unless a caller
+Anything `public` is consumed by apps via SwiftPM or the prebuilt xcframework,
+so removing or changing a `public` symbol is a breaking change and needs an
+issue first. Adding is cheap. Prefer `internal` unless a caller
 genuinely needs the symbol — note that tests use `@testable import GrowthBook`,
 so `internal` is still fully testable and is not a reason to widen access.
 
@@ -216,8 +216,8 @@ Merging to `main` triggers `.github/workflows/main.yml`, which:
 3. runs the tests and builds the xcframework,
 4. creates the GitHub release and tag, and uploads `GrowthBook.xcframework.zip`.
 
-`.github/workflows/deploy.yml` then runs `pod trunk push` to publish to
-CocoaPods. SwiftPM needs nothing further — it consumes the git tag directly.
+SwiftPM needs nothing further — it consumes the git tag directly. The SDK is no
+longer published to CocoaPods (Trunk becomes read-only on December 2, 2026).
 
 > The `gbSdkVersion` value checked into `SDKVersion.swift` is stale by design.
 > CI rewrites it during the release build and never commits it back, so the
@@ -238,7 +238,7 @@ For example, `1.2.0` came from a merge titled
 `Merge pull request #176 … +semver: minor`.
 
 This is easy to miss, and it is not recoverable after the fact — once CI
-tags and publishes to CocoaPods, that version is taken. If a change alters
+tags the release, that version is taken. If a change alters
 which users a rule matches, decide on the bump *before* merging.
 
 ## Getting help
