@@ -311,9 +311,11 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("Hello"), conditionValue: JSON("hello")))
     }
 
-    // An invalid pattern can't be matched, so $regex/$regexi report "no match" (false)
-    // while their negations $notRegex/$notRegexi report "not matching" (true) —
-    // matching the corrected behavior in the JS/Go/Rust/Python SDKs.
+    // A malformed pattern — one that doesn't compile, or one that isn't a string at all — can't be
+    // matched, so $regex/$regexi report "no match" (false) while their negations $notRegex/$notRegexi
+    // report "not matching" (true). This keeps $notRegex a true negation of $regex, which is what
+    // `$not: { $regex }` already is: the UI saves the negated form that way, and JS has no
+    // $notRegex operator to copy.
     func testRegexOperatorReturnsFalseForInvalidPattern() {
         XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: "$regex", attributeValue: JSON("hello"), conditionValue: JSON("[")))
     }
@@ -330,13 +332,36 @@ class ConditionEvaluatorTests: XCTestCase {
         XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: "$notRegexi", attributeValue: JSON("hello"), conditionValue: JSON("[")))
     }
 
+    /// `$notRegex` has to stay the negation of `$regex` for every pattern, because the UI writes the
+    /// negated form as `$not: { $regex }` and the two must agree. Before this they disagreed on every
+    /// malformed pattern: the wrapper negated a failed match to true, the operator reported false.
+    func testNotRegexAgreesWithTheNotWrapper() {
+        for pattern in [JSON("["), JSON(["^US$"]), JSON(1), JSON(true), JSON(NSNull())] {
+            let viaNotWrapper = eval.isEvalCondition(
+                attributes: JSON(["country": "CA"]),
+                conditionObj: JSON(["country": ["$not": ["$regex": pattern]]])
+            )
+            let viaNotRegex = eval.isEvalCondition(
+                attributes: JSON(["country": "CA"]),
+                conditionObj: JSON(["country": ["$notRegex": pattern]])
+            )
+            XCTAssertEqual(viaNotWrapper, viaNotRegex,
+                           "$not + $regex and $notRegex disagree on pattern \(pattern.rawString() ?? "?")")
+        }
+    }
+
     /// A non-string pattern is malformed, so it must not turn into an empty pattern that matches
-    /// every string. Like a pattern that doesn't compile, neither the operator nor its negation matches.
+    /// every string. Like a pattern that doesn't compile, it matches nothing — so the positive forms
+    /// are false and the negated forms are true.
     func testNonStringRegexPatternMatchesNothing() {
         for pattern in [JSON(["^US$"]), JSON(1), JSON(true), JSON(["a": "b"]), JSON(NSNull())] {
-            for op in ["$regex", "$regexi", "$notRegex", "$notRegexi"] {
+            for op in ["$regex", "$regexi"] {
                 XCTAssertFalse(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON("CA"), conditionValue: pattern),
                                "\(op) with pattern \(pattern.rawString() ?? "?")")
+            }
+            for op in ["$notRegex", "$notRegexi"] {
+                XCTAssertTrue(eval.isEvalOperatorCondition(operatorKey: op, attributeValue: JSON("CA"), conditionValue: pattern),
+                              "\(op) with pattern \(pattern.rawString() ?? "?")")
             }
         }
         XCTAssertFalse(eval.isEvalCondition(attributes: JSON(["country": "CA"]), conditionObj: JSON(["country": ["$regex": ["^US$"]]])))
