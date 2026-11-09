@@ -23,14 +23,14 @@ jobs:
       run: ./Scripts/build.sh
 
   swift6_language_mode:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
     - uses: actions/checkout@v3
       with:
         clean: 'true'
-    # A separate job on its own toolchain: the build above is pinned to Xcode 15.2, whose Swift 5.9
-    # compiler does not accept -swift-version 6 at all. Tracking latest-stable is deliberate — the
-    # point of this job is to catch new concurrency diagnostics as they ship.
+    # A separate job on its own toolchain. The build above pins Xcode 16.4 for a reproducible
+    # framework; this one tracks latest-stable deliberately, so new concurrency diagnostics show up
+    # here as they ship rather than at the next toolchain bump.
     - uses: maxim-lobanov/setup-xcode@v1
       with:
         xcode-version: latest-stable
