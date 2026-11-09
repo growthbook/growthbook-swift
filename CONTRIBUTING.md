@@ -205,41 +205,40 @@ comments anchored to the code they were written about.
 
 ## Releasing
 
-Maintainers handle releases, and they are fully automatic — there is no manual
-step and no version to edit by hand.
+Releases use [release-please](https://github.com/googleapis/release-please).
+PRs are squash-merged, so the PR title becomes the commit on `main` and must
+follow [Conventional Commits](https://www.conventionalcommits.org/); a check
+enforces this. The title decides the version bump:
 
-Merging to `main` triggers `.github/workflows/main.yml`, which:
+| Title | Bump |
+| --- | --- |
+| `fix: …` | patch |
+| `feat: …` | minor |
+| `feat!: …` or a `BREAKING CHANGE:` footer | major |
+| `docs:`, `test:`, `chore:`, `ci:`, `refactor:` … | none |
 
-1. computes the version with [GitVersion](https://gitversion.net/) using
-   `.github/gitversion.yml`,
-2. writes it into `Sources/CommonMain/Plugins/SDKVersion.swift` at build time,
-3. runs the tests and builds the xcframework,
-4. creates the GitHub release and tag, and uploads `GrowthBook.xcframework.zip`.
+Each push to `main` runs `.github/workflows/release-please.yml`, which:
+
+1. runs the tests,
+2. opens or updates a release PR that bumps `version.txt`, `gbSdkVersion` in
+   `Sources/CommonMain/Plugins/SDKVersion.swift`, and `CHANGELOG.md`,
+3. when a maintainer merges that release PR, tags the release (for example
+   `2.1.0`, no `v` prefix), creates the GitHub release, then builds and attaches
+   `GrowthBook.xcframework.zip`.
 
 SwiftPM needs nothing further — it consumes the git tag directly. The SDK is no
 longer published to CocoaPods (Trunk becomes read-only on December 2, 2026).
 
-> The `gbSdkVersion` value checked into `SDKVersion.swift` is stale by design.
-> CI rewrites it during the release build and never commits it back, so the
-> value in the repo does not track the released version. Don't "fix" it.
-
-### Choosing the version bump
-
-`gitversion.yml` uses `mode: Mainline`, so **every merge to `main` bumps the
-patch version** unless the commit message says otherwise. To cut a minor or
-major release, include a marker in the merge commit message:
+Don't edit the version files or `CHANGELOG.md` by hand; release-please owns
+them. Editing a merged PR's title doesn't change its commit on `main`. To fix a
+wrong version or changelog entry, add an override to the merged PR's
+description; release-please rereads it on its next run:
 
 ```
-+semver: minor
-+semver: major
+BEGIN_COMMIT_OVERRIDE
+feat: correct conventional commit message
+END_COMMIT_OVERRIDE
 ```
-
-For example, `1.2.0` came from a merge titled
-`Merge pull request #176 … +semver: minor`.
-
-This is easy to miss, and it is not recoverable after the fact — once CI
-tags the release, that version is taken. If a change alters
-which users a rule matches, decide on the bump *before* merging.
 
 ## Getting help
 

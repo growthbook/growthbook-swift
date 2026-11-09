@@ -8,7 +8,7 @@ jobs:
   build_framework:
     runs-on: macos-15
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         clean: 'true'
         fetch-depth: 0
