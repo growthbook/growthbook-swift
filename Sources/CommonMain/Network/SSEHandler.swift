@@ -100,7 +100,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         self.onConnect = onConnect
     }
 
-    public func onDissconnect(onDisconnect: @escaping ((Int?, Bool?, NSError?) -> ())) {
+    public func onDisconnect(onDisconnect: @escaping ((Int?, Bool?, NSError?) -> ())) {
         self.onDisconnect = onDisconnect
     }
 

@@ -162,7 +162,7 @@ final class SSEHandlerReconnectTests: XCTestCase {
         let reported = expectation(description: "disconnect reported")
         var reconnectFlag: Bool?
         var forwardedError: NSError?
-        handler.onDissconnect { _, reconnect, error in
+        handler.onDisconnect { _, reconnect, error in
             reconnectFlag = reconnect
             forwardedError = error
             reported.fulfill()
@@ -190,7 +190,7 @@ final class SSEHandlerReconnectTests: XCTestCase {
         let reported = expectation(description: "every disconnect reported")
         reported.expectedFulfillmentCount = attempts
         var flags: [Bool?] = []
-        handler.onDissconnect { _, reconnect, _ in
+        handler.onDisconnect { _, reconnect, _ in
             flags.append(reconnect)
             reported.fulfill()
         }
@@ -217,7 +217,7 @@ final class SSEHandlerReconnectTests: XCTestCase {
         let reported = expectation(description: "disconnect reported")
         reported.expectedFulfillmentCount = 2
         var flags: [Bool?] = []
-        handler.onDissconnect { _, reconnect, _ in
+        handler.onDisconnect { _, reconnect, _ in
             flags.append(reconnect)
             reported.fulfill()
         }
