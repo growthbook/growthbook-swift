@@ -123,10 +123,22 @@ final class SSEHandlerReconnectTests: XCTestCase {
         XCTAssertFalse(handler.shouldReconnect(statusCode: 299))
     }
 
-    func testDoesNotReconnectOnClientOrServerErrors() {
+    /// A rejection that will not change on its own is believed the first time: retrying a revoked
+    /// key or a wrong path forever only burns battery.
+    func testDoesNotReconnectOnClientErrors() {
         XCTAssertFalse(handler.shouldReconnect(statusCode: 400))
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 401))
+        XCTAssertFalse(handler.shouldReconnect(statusCode: 403))
         XCTAssertFalse(handler.shouldReconnect(statusCode: 404))
-        XCTAssertFalse(handler.shouldReconnect(statusCode: 500))
+    }
+
+    /// The server saying "not now" — a proxy restarting mid-deploy, a gateway blip, a rate limit.
+    /// Ending streaming on these froze features over something that cleared in seconds.
+    func testReconnectsOnServerErrorsAndRateLimiting() {
+        XCTAssertTrue(handler.shouldReconnect(statusCode: 429))
+        for code in [500, 502, 503, 504, 599] {
+            XCTAssertTrue(handler.shouldReconnect(statusCode: code), "HTTP \(code) must be retryable")
+        }
     }
 
     // MARK: - Transport failures (no HTTP response)

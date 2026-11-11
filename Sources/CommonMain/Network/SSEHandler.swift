@@ -231,8 +231,19 @@ extension SSEHandler {
         }
     }
     
+    /// Whether a stream that finished with this status should be retried.
+    ///
+    /// 200 is a stream that was healthy and ended — the ordinary case, and the one the backoff was
+    /// written for. 5xx and 429 are the server saying "not now": a proxy restarting mid-deploy, a
+    /// gateway blip, a rate limit. Ending streaming on those left features frozen for the life of
+    /// the instance over something that cleared in seconds.
+    ///
+    /// Everything else stays terminal. That is a deliberate difference from the reference SDK
+    /// rather than parity with it: `EventSource` gives JS no status code at all, so it retries
+    /// every failure including 401 and 404 — a revoked client key there reconnects forever. Here a
+    /// rejection that will not change on its own is believed the first time.
     func shouldReconnect(statusCode: Int) -> Bool {
-        return statusCode == 200
+        return statusCode == 200 || statusCode == 429 || (500...599).contains(statusCode)
     }
 
     /// A stream that completed without an HTTP response never reached the server: DNS failure,
