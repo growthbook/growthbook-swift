@@ -21,8 +21,8 @@ final class SSEHandlerReconnectTests: XCTestCase {
         XCTAssertEqual(handler.retryTime, 1000)
     }
 
-    func testMaxRetryCountIs10() {
-        XCTAssertEqual(handler.maxRetryCount, 10)
+    func testMaxRetryDelayIs5Minutes() {
+        XCTAssertEqual(handler.maxRetryDelayMs, 300_000)
     }
 
     // MARK: - Backoff delay calculation
@@ -38,16 +38,30 @@ final class SSEHandlerReconnectTests: XCTestCase {
         }
     }
 
-    func testBackoffDelayCappedAt30s() {
-        XCTAssertEqual(handler.backoffDelay(for: 5), 30_000)  // 1000 * 2^5 = 32000 → capped
-        XCTAssertEqual(handler.backoffDelay(for: 10), 30_000)
+    func testBackoffDelayCappedAt5Minutes() {
+        XCTAssertEqual(handler.backoffDelay(for: 9), 300_000)  // 1000 * 2^9 = 512000 → capped
+        XCTAssertEqual(handler.backoffDelay(for: 10), 300_000)
+    }
+
+    /// With no attempt limit the count keeps climbing, and the old `pow(2, count)` turned into an
+    /// Int trapped once it passed Int.max — a few seconds of outage on 32-bit watchOS.
+    func testBackoffDelayDoesNotOverflowAtAbsurdRetryCounts() {
+        XCTAssertEqual(handler.backoffDelay(for: 1_000), 300_000)
+        XCTAssertEqual(handler.backoffDelay(for: Int.max), 300_000)
+    }
+
+    /// A server may send `retry: 0`. The delay must still climb rather than stay at zero.
+    func testBackoffDelayHandlesAZeroRetryTime() {
+        handler.retryTime = 0
+        XCTAssertEqual(handler.backoffDelay(for: 0), 1)
+        XCTAssertEqual(handler.backoffDelay(for: Int.max), 300_000)
     }
 
     func testBackoffDelayRespectsCustomRetryTime() {
         handler.retryTime = 2_000
         XCTAssertEqual(handler.backoffDelay(for: 0), 2_000)
         XCTAssertEqual(handler.backoffDelay(for: 1), 4_000)
-        XCTAssertEqual(handler.backoffDelay(for: 4), 30_000)  // 2000 * 2^4 = 32000 → capped
+        XCTAssertEqual(handler.backoffDelay(for: 8), 300_000)  // 2000 * 2^8 = 512000 → capped
     }
 
     // MARK: - disconnect() resets state
@@ -99,7 +113,7 @@ final class SSEHandlerReconnectTests: XCTestCase {
         XCTAssertTrue(handler.shouldReconnect(statusCode: nil))
     }
 
-    func testTransportErrorSchedulesBoundedRetry() {
+    func testTransportErrorSchedulesRetry() {
         handler.connectionStatus = .connecting
         let reported = expectation(description: "disconnect reported")
         var reconnectFlag: Bool?
@@ -120,13 +134,15 @@ final class SSEHandlerReconnectTests: XCTestCase {
         handler.disconnect()  // keep the scheduled reconnect from reaching the network
     }
 
-    /// The retry budget is shared with HTTP failures, so a permanently broken connection stops.
-    func testTransportErrorsStopAfterMaxRetries() {
+    /// Streaming is not abandoned after any number of failures. A budget that ran out ended
+    /// streaming for the life of the instance, so a phone offline for a few minutes came back to
+    /// frozen features until it was relaunched.
+    func testTransportErrorsKeepRetryingIndefinitely() {
         handler.connectionStatus = .connecting
 
         // The callback is installed up front: every completion queues its report on the main queue,
         // and those reports only run once this test starts waiting.
-        let attempts = handler.maxRetryCount + 1
+        let attempts = 40
         let reported = expectation(description: "every disconnect reported")
         reported.expectedFulfillmentCount = attempts
         var flags: [Bool?] = []
@@ -138,15 +154,36 @@ final class SSEHandlerReconnectTests: XCTestCase {
         for _ in 0..<attempts {
             handler.handleStreamCompletion(statusCode: nil, error: transportError())
         }
-        XCTAssertEqual(handler.retryCount, handler.maxRetryCount, "The retry limit must not be exceeded")
+        XCTAssertEqual(handler.retryCount, attempts, "Every failure must schedule another attempt")
 
         wait(for: [reported], timeout: 30.0)
         XCTAssertEqual(flags.count, attempts)
-        XCTAssertEqual(flags.dropLast().compactMap { $0 }.filter { $0 }.count, handler.maxRetryCount,
-                       "Every attempt within the budget must promise a reconnect")
-        XCTAssertEqual(flags.last ?? nil, false, "Past the retry limit the stream must stay down")
+        XCTAssertEqual(flags.compactMap { $0 }.filter { $0 }.count, attempts,
+                       "Every attempt must promise a reconnect, however many have failed")
+        XCTAssertEqual(handler.backoffDelay, handler.maxRetryDelayMs,
+                       "Retries settle at the ceiling rather than stopping")
 
         handler.disconnect()
+    }
+
+    /// The one thing that does stop it: asking. `disconnect()` while a retry is pending must stay
+    /// terminal, or an explicit teardown would be undone by the reconnect it raced.
+    func testDisconnectDuringBackoffIsTerminal() {
+        handler.connectionStatus = .connecting
+        let reported = expectation(description: "disconnect reported")
+        reported.expectedFulfillmentCount = 2
+        var flags: [Bool?] = []
+        handler.onDissconnect { _, reconnect, _ in
+            flags.append(reconnect)
+            reported.fulfill()
+        }
+
+        handler.handleStreamCompletion(statusCode: nil, error: transportError())
+        handler.disconnect()
+        handler.handleStreamCompletion(statusCode: nil, error: transportError())
+
+        wait(for: [reported], timeout: 30.0)
+        XCTAssertEqual(flags.last ?? nil, false, "After disconnect() nothing may schedule a retry")
     }
 
     /// An explicitly requested disconnect must not be undone by the backoff.

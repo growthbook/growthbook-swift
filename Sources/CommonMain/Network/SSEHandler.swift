@@ -23,12 +23,28 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     private var urlSession: URLSession?
 
     private(set) var retryCount = 0
-    let maxRetryCount = 10
-    let maxRetryDelayMs = 30_000
+    /// The ceiling the backoff climbs to and then stays at. Matches the reference SDK's
+    /// `MAX_BACKOFF_MS`. Reconnecting is not abandoned at the ceiling, so this is the steady-state
+    /// poll interval for as long as the server is unreachable — which is why it is minutes rather
+    /// than seconds. It only applies to long outages: the backoff restarts at `retryTime` and is
+    /// reset by a successful connect, so a brief drop still recovers within seconds.
+    let maxRetryDelayMs = 300_000
 
     // Internal for testing: accepts an explicit count so tests don't need to mutate retryCount.
+    //
+    // Doubling in a loop rather than `retryTime * pow(2, count)`: with no attempt limit `count`
+    // grows without bound, and converting the resulting Double to Int traps once it passes
+    // Int.max — on 32-bit watchOS that is only a few seconds of outage away. The loop stops at the
+    // ceiling instead, so the value never approaches the overflow. The base is floored at 1ms
+    // because a server may send `retry: 0`, which would otherwise never grow and spin the loop.
     func backoffDelay(for count: Int) -> Int {
-        min(retryTime * Int(pow(2, Double(count))), maxRetryDelayMs)
+        var delay = max(retryTime, 1)
+        var doublings = 0
+        while doublings < count && delay < maxRetryDelayMs {
+            delay *= 2
+            doublings += 1
+        }
+        return min(delay, maxRetryDelayMs)
     }
 
     var backoffDelay: Int { backoffDelay(for: retryCount) }
@@ -128,7 +144,10 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
 
         let reconnect = shouldReconnect(statusCode: statusCode)
 
-        if reconnect && retryCount < maxRetryCount {
+        // No attempt limit. A budget that runs out ends streaming for the life of the instance, so
+        // a few minutes offline left features frozen until the app was relaunched. Retrying stops
+        // only where it is asked to: `disconnect()` or a cancelled task, both handled above.
+        if reconnect {
             let delay = backoffDelay
             retryCount += 1
             mainQueue.asyncAfter(deadline: .now() + .milliseconds(delay)) { [weak self] in
