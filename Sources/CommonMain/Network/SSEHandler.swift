@@ -47,6 +47,22 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         return min(delay, maxRetryDelayMs)
     }
 
+    /// The backoff delay with jitter: somewhere in the upper half of the computed delay.
+    ///
+    /// Without it every client that lost the same host waits exactly the same time and retries in
+    /// lockstep, which lands hardest on a server that is just coming back up. That did not matter
+    /// while retries stopped after ten attempts; now that they continue indefinitely at the
+    /// ceiling, those clients would stay synchronised for as long as the outage lasts.
+    ///
+    /// Jitter is applied after the ceiling rather than before it, so it still spreads clients once
+    /// the delay has capped — the point at which they are most synchronised. The reference SDK
+    /// multiplies before capping, so its jitter disappears at exactly that point.
+    func jitteredDelay(for count: Int) -> Int {
+        let delay = backoffDelay(for: count)
+        guard delay > 1 else { return delay }
+        return Int.random(in: (delay / 2)...delay)
+    }
+
     var backoffDelay: Int { backoffDelay(for: retryCount) }
 
     public init(
@@ -148,7 +164,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         // a few minutes offline left features frozen until the app was relaunched. Retrying stops
         // only where it is asked to: `disconnect()` or a cancelled task, both handled above.
         if reconnect {
-            let delay = backoffDelay
+            let delay = jitteredDelay(for: retryCount)
             retryCount += 1
             mainQueue.asyncAfter(deadline: .now() + .milliseconds(delay)) { [weak self] in
                 guard let self, self.connectionStatus != .disconnected else { return }

@@ -64,6 +64,38 @@ final class SSEHandlerReconnectTests: XCTestCase {
         XCTAssertEqual(handler.backoffDelay(for: 8), 300_000)  // 2000 * 2^8 = 512000 → capped
     }
 
+    // MARK: - Jitter
+
+    /// The delay handed to the scheduler lands in the upper half of the computed backoff, so
+    /// clients that dropped together do not come back together.
+    func testJitteredDelayStaysWithinTheUpperHalfOfTheBackoff() {
+        for count in 0...12 {
+            let base = handler.backoffDelay(for: count)
+            for _ in 0..<50 {
+                let jittered = handler.jitteredDelay(for: count)
+                XCTAssertGreaterThanOrEqual(jittered, base / 2, "retry \(count)")
+                XCTAssertLessThanOrEqual(jittered, base, "retry \(count)")
+            }
+        }
+    }
+
+    /// Jitter has to survive the ceiling: that is where every client is most synchronised, and
+    /// where the reference SDK loses it by multiplying before capping.
+    func testJitterStillAppliesOnceTheDelayHasCapped() {
+        var seen = Set<Int>()
+        for _ in 0..<200 { seen.insert(handler.jitteredDelay(for: 20)) }
+        XCTAssertGreaterThan(seen.count, 1, "Capped delays must not all be identical")
+        XCTAssertLessThanOrEqual(seen.max() ?? 0, handler.maxRetryDelayMs)
+        XCTAssertGreaterThanOrEqual(seen.min() ?? 0, handler.maxRetryDelayMs / 2)
+    }
+
+    /// A 1ms delay has no room to spread, and halving it would round to zero — which would retry
+    /// immediately, the tight loop this whole area exists to prevent.
+    func testJitterLeavesTheSmallestDelayAlone() {
+        handler.retryTime = 0
+        XCTAssertEqual(handler.jitteredDelay(for: 0), 1)
+    }
+
     // MARK: - disconnect() resets state
 
     func testDisconnectSetsStatusToDisconnected() {
