@@ -8,7 +8,7 @@
 import Foundation
 import os
 
-public enum Level: Int {
+public enum Level: Int, Sendable {
     case trace, debug, info, warning, error
 
     var description: String {
@@ -22,20 +22,51 @@ extension Level: Comparable {
     }
 }
 
-open class GBLogger {
+/// The SDK logger.
+///
+/// `@unchecked Sendable` is a claim the compiler cannot verify, so it has to be earned: every
+/// mutable property below is guarded by `stateLock`, and the only other stored state — the logging
+/// queue and the OS logger — is immutable after init. Configuration can therefore be changed from
+/// any thread while logging happens on another.
+///
+/// The lock is never held across formatting: `Formatter` reads `logger?.theme` while it formats, so
+/// holding it there would deadlock on the very first themed message.
+open class GBLogger: @unchecked Sendable {
+    private let stateLock = NSLock()
+
+    private var _enabled: Bool = true
+    private var _formatter: Formatter
+    private var _theme: Theme?
+    private var _minLevel: Level
+
     /// The logger state.
-    open var enabled: Bool = true
+    open var enabled: Bool {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _enabled }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _enabled = newValue }
+    }
 
     /// The logger formatter.
     open var formatter: Formatter {
-        didSet { formatter.logger = self }
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _formatter }
+        set {
+            stateLock.lock()
+            defer { stateLock.unlock() }
+            _formatter = newValue
+            newValue.logger = self
+        }
     }
 
     /// The logger theme.
-    open var theme: Theme?
+    open var theme: Theme? {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _theme }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _theme = newValue }
+    }
 
     /// The minimum level of severity.
-    open var minLevel: Level
+    open var minLevel: Level {
+        get { stateLock.lock(); defer { stateLock.unlock() }; return _minLevel }
+        set { stateLock.lock(); defer { stateLock.unlock() }; _minLevel = newValue }
+    }
 
     /// The logger format.
     open var format: String {
@@ -49,8 +80,8 @@ open class GBLogger {
 
     /// The queue used for logging.
     private let queue = DispatchQueue(label: "delba.log")
-    
-    private var osLogger: Any? = {
+
+    private let osLogger: Any? = {
         if #available(iOS 14.0, macCatalyst 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, visionOS 1.0, *) {
             return Logger(subsystem: "com.growthbook.sdk", category: "GrowthBook")
         } else {
@@ -67,9 +98,11 @@ open class GBLogger {
      - returns: A newly created logger.
      */
     public init(formatter: Formatter = .default, theme: Theme? = nil, minLevel: Level = .trace) {
-        self.formatter = formatter
-        self.theme = theme
-        self.minLevel = minLevel
+        // Assign the storage directly: the instance has not escaped yet, so there is nothing to
+        // serialise against, and going through the setters would take a lock for no reason.
+        self._formatter = formatter
+        self._theme = theme
+        self._minLevel = minLevel
 
         formatter.logger = self
     }

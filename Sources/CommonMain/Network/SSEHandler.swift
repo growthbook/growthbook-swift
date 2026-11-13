@@ -6,7 +6,7 @@ enum SSEConnectionStatus {
     case disconnected
 }
 
-class SSEHandler: NSObject, URLSessionDataDelegate {
+class SSEHandler: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     static let DefaultRetryTime = 1000
     public let url: URL
     public var lastEventId: String?
@@ -16,7 +16,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
 
     private var onConnect: (() -> Void)?
     private var onDisconnect: ((Int?, Bool?, NSError?) -> Void)?
-    private var eventListeners: [String: (_ id: String?, _ event: String?, _ data: String?) -> Void] = [:]
+    private var eventListeners: [String: @Sendable (_ id: String?, _ event: String?, _ data: String?) -> Void] = [:]
     private var eventHandler: EventHandler?
     private var operationQueue: OperationQueue
     private var mainQueue = DispatchQueue.main
@@ -59,7 +59,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     }
 
     public func addEventListener(event: String,
-                                 handler: @escaping ((_ id: String?, _ event: String?, _ data: String?) -> ())) {
+                                 handler: @escaping @Sendable (_ id: String?, _ event: String?, _ data: String?) -> Void) {
         eventListeners[event] = handler
     }
 

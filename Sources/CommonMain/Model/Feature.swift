@@ -1,7 +1,7 @@
 import Foundation
 
 /// A Feature object consists of possible values plus rules for how to assign values to users.
-@objc public class Feature: NSObject, Codable, Sendable {
+@objc public class Feature: NSObject, Codable, @unchecked Sendable {
     /// The default value (should use null if not specified)
     public let defaultValue: JSON?
     /// Array of Rule objects that determine when and how the defaultValue gets overridden
@@ -221,7 +221,11 @@ enum FeatureSource: String {
 }
 
  /// Result for Feature
-@objc public class FeatureResult: NSObject, Codable {
+///
+/// Immutable after init, like `Feature` and `ExperimentResult` above — which is what the
+/// conformance rests on. It is handed to plugins from whichever thread ran the evaluation, so it
+/// has to cross threads.
+@objc public class FeatureResult: NSObject, Codable, @unchecked Sendable {
     /// The assigned value of the feature
     public let value: JSON?
     /// The assigned value cast to a boolean
