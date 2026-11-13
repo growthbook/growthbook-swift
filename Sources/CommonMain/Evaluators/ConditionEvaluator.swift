@@ -377,11 +377,11 @@ class ConditionEvaluator {
             guard let source = attributeValue.string else {
                 return operatorKey.hasPrefix("$not")
             }
-            // A pattern that isn't a string is malformed, like one that doesn't compile, so
-            // neither form matches. `stringValue` would turn it into an empty pattern that
-            // matches every string.
+            // A pattern that isn't a string is malformed, like one that doesn't compile, so it
+            // matches nothing and the negated forms report "not matching". `stringValue` would
+            // turn it into an empty pattern that matches every string.
             guard let pattern = conditionValue.string else {
-                return false
+                return operatorKey.hasPrefix("$not")
             }
             return isContains(
                 source: source,
@@ -540,7 +540,10 @@ class ConditionEvaluator {
             
             return negate ? !isMatch : isMatch
         } catch {
-            return false
+            // A pattern that doesn't compile matches nothing, so the negated operator
+            // ($notRegex/$notRegexi) reports "not matching" as true — the same answer
+            // `$not: { $regex }` gives.
+            return negate
         }
     }
 
