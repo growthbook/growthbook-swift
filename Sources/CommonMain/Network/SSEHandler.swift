@@ -17,7 +17,10 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     private var onConnect: (() -> Void)?
     private var onDisconnect: ((Int?, Bool?, NSError?) -> Void)?
     private var eventListeners: [String: (_ id: String?, _ event: String?, _ data: String?) -> Void] = [:]
-    private var eventHandler: EventHandler?
+    /// Internal rather than private so a test can deliver data without opening a connection:
+    /// `connect()` is what creates this, and reaching it for real would mean a unit test dialling
+    /// the configured host. Same reason `handleStreamCompletion` is internal.
+    var eventHandler: EventHandler?
     var operationQueue: OperationQueue
     private var mainQueue = DispatchQueue.main
     private var urlSession: URLSession?
@@ -27,7 +30,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     /// `MAX_BACKOFF_MS`. Reconnecting is not abandoned at the ceiling, so this is the steady-state
     /// poll interval for as long as the server is unreachable — which is why it is minutes rather
     /// than seconds. It only applies to long outages: the backoff restarts at `retryTime` and is
-    /// reset by a successful connect, so a brief drop still recovers within seconds.
+    /// reset once data arrives, so a brief drop on a working stream still recovers within seconds.
     let maxRetryDelayMs = 300_000
 
     // Internal for testing: accepts an explicit count so tests don't need to mutate retryCount.
@@ -133,7 +136,11 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
 
         completionHandler(URLSession.ResponseDisposition.allow)
         connectionStatus = .connected
-        retryCount = 0
+        // The backoff is deliberately not reset here. A response only means the server answered,
+        // not that the stream works: now that 5xx and 429 are retried, a server stuck on 503
+        // answers every attempt, and resetting on each one pinned the delay at its first value —
+        // one request every half-second for as long as the outage lasted. A 200 that closes
+        // immediately loops the same way. The counter is reset where data actually arrives.
         mainQueue.async { [weak self] in self?.onConnect?() }
     }
 
@@ -224,6 +231,14 @@ extension SSEHandler {
             if event.onlyRetryEvent == true {
                 continue
             }
+
+            // Delivered data means this connection is productive, so the reconnect backoff starts
+            // over. Here rather than on the response: a server that answers and then gives nothing
+            // — a 503, or a 200 it closes straight away — would otherwise hold the counter at zero
+            // and the growing delay would never apply. A bare `retry:` directive does not count,
+            // or a server could send one and close in a loop to keep the delay down. The C# SDK
+            // resets in the same place and for the same reason.
+            retryCount = 0
 
             if let eventName = event.event, let eventHandler = eventListeners[eventName] {
                 mainQueue.async { eventHandler(event.id, event.event, event.data) }

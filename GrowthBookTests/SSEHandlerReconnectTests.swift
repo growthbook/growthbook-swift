@@ -141,6 +141,90 @@ final class SSEHandlerReconnectTests: XCTestCase {
         }
     }
 
+    // MARK: - What resets the backoff
+
+    private func deliverResponse(statusCode: Int, to handler: SSEHandler) {
+        let url = URL(string: "https://example.com/events")!
+        let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil)!
+        handler.urlSession(URLSession.shared,
+                           dataTask: URLSession.shared.dataTask(with: url),
+                           didReceive: response,
+                           completionHandler: { _ in })
+    }
+
+    private func deliver(_ text: String, to handler: SSEHandler) {
+        if handler.eventHandler == nil { handler.eventHandler = EventHandler() }
+        handler.urlSession(URLSession.shared,
+                           dataTask: URLSession.shared.dataTask(with: URL(string: "https://example.com/events")!),
+                           didReceive: Data(text.utf8))
+    }
+
+    /// A server stuck on 503 answers every attempt. Resetting on the answer pinned the delay at
+    /// its first value, so the retry that is meant to back off ran about once a second for as long
+    /// as the outage lasted.
+    func testRepeated503sGrowTheDelay() {
+        handler.connectionStatus = .connecting
+        handler.onDisconnect { _, _, _ in }
+
+        for _ in 0..<5 {
+            deliverResponse(statusCode: 503, to: handler)
+            handler.handleStreamCompletion(statusCode: 503, error: nil)
+        }
+
+        XCTAssertEqual(handler.retryCount, 5, "Every failed attempt has to count")
+        XCTAssertEqual(handler.backoffDelay, 32_000, "1s doubled five times, not pinned at the first delay")
+        XCTAssertGreaterThan(handler.backoffDelay, handler.backoffDelay(for: 0))
+        handler.disconnect()
+    }
+
+    /// A 200 the server closes straight away is the same situation: answered, delivered nothing.
+    func testA200ThatDeliversNothingStillGrowsTheDelay() {
+        handler.connectionStatus = .connecting
+        handler.onDisconnect { _, _, _ in }
+
+        for _ in 0..<3 {
+            deliverResponse(statusCode: 200, to: handler)
+            handler.handleStreamCompletion(statusCode: 200, error: nil)
+        }
+
+        XCTAssertEqual(handler.retryCount, 3)
+        handler.disconnect()
+    }
+
+    /// ...and a stream that does deliver starts the backoff over, so an hour of healthy streaming
+    /// is not punished for a drop that came before it.
+    func testDeliveredDataResetsTheBackoff() {
+        handler.connectionStatus = .connecting
+        handler.onDisconnect { _, _, _ in }
+
+        deliverResponse(statusCode: 503, to: handler)
+        handler.handleStreamCompletion(statusCode: 503, error: nil)
+        XCTAssertEqual(handler.retryCount, 1)
+
+        handler.connectionStatus = .connected
+        deliver("event: features\ndata: {}\n\n", to: handler)
+
+        XCTAssertEqual(handler.retryCount, 0, "Data proves the connection is productive")
+        handler.disconnect()
+    }
+
+    /// A bare `retry:` directive is not delivered data. Counting it would let a server send one
+    /// and close in a loop to hold the delay down — the thing the backoff exists to prevent.
+    func testARetryDirectiveAloneDoesNotResetTheBackoff() {
+        handler.connectionStatus = .connecting
+        handler.onDisconnect { _, _, _ in }
+
+        deliverResponse(statusCode: 503, to: handler)
+        handler.handleStreamCompletion(statusCode: 503, error: nil)
+        XCTAssertEqual(handler.retryCount, 1)
+
+        handler.connectionStatus = .connected
+        deliver("retry: 1000\n\n", to: handler)
+
+        XCTAssertEqual(handler.retryCount, 1, "A retry directive is not productive data")
+        handler.disconnect()
+    }
+
     // MARK: - Transport failures (no HTTP response)
 
     private func transportError() -> NSError {
