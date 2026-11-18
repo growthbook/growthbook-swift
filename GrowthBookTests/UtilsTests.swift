@@ -214,6 +214,25 @@ class UtilsTests: XCTestCase {
         XCTAssertEqual(endValue, expectedValue)
     }
 
+    /// Build metadata is everything after the first `+`, even across a newline
+    func testPaddedVersionStringStripsBuildMetadata() throws {
+        let plain = Utils.paddedVersionString(input: "1.2.3")
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+build"), plain)
+        XCTAssertEqual(Utils.paddedVersionString(input: "v1.2.3+build+more.1-2"), plain)
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+"), plain)
+        XCTAssertEqual(Utils.paddedVersionString(input: "1.2.3+build\nx"), plain)
+        XCTAssertEqual(Utils.paddedVersionString(input: "vv1.2.3"), "v1-    2-    3-~")
+        XCTAssertEqual(Utils.paddedVersionString(input: "+build"), "")
+    }
+
+    /// The old `(^v|\+.*$)` regex took about 30 s on this input
+    func testPaddedVersionStringIsLinearOnManyPluses() throws {
+        let input = String(repeating: "+", count: 20000) + "\nx"
+        let start = Date()
+        XCTAssertEqual(Utils.paddedVersionString(input: input), "")
+        XCTAssertLessThan(Date().timeIntervalSince(start), 1)
+    }
+
     /// Numeric parts wider than the padding target used to trap in `String(repeating:count:)`
     func testPaddedVersionStringWithOversizedNumericParts() throws {
         XCTAssertEqual(Utils.paddedVersionString(input: "123456789"), "123456789")
