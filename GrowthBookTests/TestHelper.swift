@@ -106,6 +106,11 @@ class TestHelper {
     func getSavedGroupReferencesV2ConditionData() -> [JSON]? { savedGroupReferencesV2("evalCondition") }
     func getSavedGroupReferencesV2FeatureData()   -> [JSON]? { savedGroupReferencesV2("feature") }
     func getSavedGroupReferencesV2RunData()       -> [JSON]? { savedGroupReferencesV2("run") }
+
+    /// A section of the spec's `savedGroupReferencesRemote` key: `evalCondition` or `feature`.
+    func getSavedGroupReferencesRemoteData(_ section: String) -> [JSON]? {
+        testData?.dictionaryValue["savedGroupReferencesRemote"]?.dictionaryValue[section]?.arrayValue
+    }
     
 
     func getQueryStringOverrideData() -> [JSON]? {
