@@ -4,15 +4,20 @@ import Foundation
     var features: Features
     public var experiments: [Experiment]?
     public var savedGroups: JSON?
+    /// Contextual bandit definitions from the feature payload, keyed by bandit ref. Read during
+    /// evaluation to resolve contextual bandit feature rules. May be `nil` or empty.
+    public var contextualBandits: JSON?
 
     init(
         features: Features = [:],
         experiments: [Experiment]? = nil,
-        savedGroups: JSON? = nil
+        savedGroups: JSON? = nil,
+        contextualBandits: JSON? = nil
     ) {
         self.features = features
         self.experiments = experiments
         self.savedGroups = savedGroups
+        self.contextualBandits = contextualBandits
     }
 }
 
@@ -29,7 +34,9 @@ import Foundation
     public var stickyBucketAssignmentDocs: [String: StickyAssignmentsDocument]?
     /// Features that uses sticky bucketing
     public var stickyBucketIdentifierAttributes: [String]?
-    
+    /// Registry that dispatches events to all registered plugins.
+    public let pluginRegistry: PluginRegistry
+
     public var url: String?
 
     init(isEnabled: Bool,
@@ -38,13 +45,15 @@ import Foundation
          stickyBucketService: StickyBucketServiceProtocol? = nil,
          isQaMode: Bool,
          url: String? = nil,
-         trackingClosure: @escaping (Experiment, ExperimentResult) -> Void) {
+         trackingClosure: @escaping (Experiment, ExperimentResult) -> Void,
+         pluginRegistry: PluginRegistry = .empty) {
         self.isEnabled = isEnabled
         self.stickyBucketAssignmentDocs = stickyBucketAssignmentDocs
         self.stickyBucketIdentifierAttributes = stickyBucketIdentifierAttributes
         self.stickyBucketService = stickyBucketService
         self.isQaMode = isQaMode
         self.trackingClosure = trackingClosure
+        self.pluginRegistry = pluginRegistry
         self.url = url
     }
 }

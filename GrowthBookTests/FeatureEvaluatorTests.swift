@@ -9,11 +9,18 @@ class FeatureEvaluatorTests: XCTestCase {
         features: Features = [:],
         attributes: JSON = JSON(["id": "user-1"]),
         forcedFeatureValues: JSON? = nil,
-        savedGroups: JSON? = nil
+        savedGroups: JSON? = nil,
+        stickyBucketService: StickyBucketServiceProtocol? = nil,
+        trackingClosure: @escaping TrackingCallback = { _, _ in }
     ) -> EvalContext {
         let globalContext = GlobalContext(features: features, savedGroups: savedGroups)
         let userContext = UserContext(attributes: attributes, forcedFeatureValues: forcedFeatureValues)
-        let options = ClientOptions(isEnabled: true, stickyBucketService: nil, isQaMode: false, trackingClosure: { _, _ in })
+        let options = ClientOptions(
+            isEnabled: true,
+            stickyBucketService: stickyBucketService,
+            isQaMode: false,
+            trackingClosure: trackingClosure
+        )
         return EvalContext(globalContext: globalContext, userContext: userContext, stackContext: StackContext(), options: options)
     }
 
@@ -123,8 +130,124 @@ class FeatureEvaluatorTests: XCTestCase {
         XCTAssertEqual(result.source, FeatureSource.defaultValue.rawValue)
     }
 
-    func testForceRuleWithRangeSkipsCoverageCheck() {
-        // When range is set, the separate coverage check block is skipped
+    func testForceRuleUsesHashVersionTwoWithoutLegacySecondGate() {
+        // Standard GrowthBook vector: v2 bucket is 0.134 (included), while v1 is 0.502 (excluded).
+        let rule = FeatureRule(coverage: 0.5, force: JSON(1), hashVersion: 2)
+        let feature = Feature(defaultValue: JSON(0), rules: [rule])
+        let result = evaluate(
+            "feature",
+            in: makeContext(features: ["feature": feature], attributes: JSON(["id": "user2"]))
+        )
+
+        XCTAssertEqual(result.source, FeatureSource.force.rawValue)
+        XCTAssertEqual(result.value, JSON(1))
+    }
+
+    func testForceRuleUsesConfiguredSeed() {
+        // For user 4, v1(custom-seed)=0.242 while v1(feature)=0.943.
+        let rule = FeatureRule(coverage: 0.5, force: JSON(true), hashVersion: 1, seed: "custom-seed")
+        let feature = Feature(defaultValue: JSON(false), rules: [rule])
+        let result = evaluate(
+            "feature",
+            in: makeContext(features: ["feature": feature], attributes: JSON(["id": "4"]))
+        )
+
+        XCTAssertEqual(result.source, FeatureSource.force.rawValue)
+        XCTAssertTrue(result.isOn)
+    }
+
+    func testForceRuleTracksAcceptedV2Assignment() {
+        let experimentKey = "remote-exp-\(UUID().uuidString)"
+        let track = Track(json: [
+            "experiment": JSON(["key": experimentKey, "variations": [false, true]]),
+            "result": JSON([
+                "inExperiment": true,
+                "variationId": 1,
+                "value": true,
+                "hashAttribute": "id",
+                "hashValue": "user2",
+                "key": "1"
+            ])
+        ])
+        let rule = FeatureRule(coverage: 0.5, force: JSON(true), hashVersion: 2, tracks: [track])
+        let feature = Feature(defaultValue: JSON(false), rules: [rule])
+        var tracked = 0
+        let result = evaluate(
+            "feature",
+            in: makeContext(
+                features: ["feature": feature],
+                attributes: JSON(["id": "user2"]),
+                trackingClosure: { _, _ in tracked += 1 }
+            )
+        )
+
+        XCTAssertEqual(result.source, FeatureSource.force.rawValue)
+        XCTAssertEqual(tracked, 1)
+    }
+
+    func testForceRuleUsesFallbackAttributeWhenStickyBucketingDefaultsEnabled() {
+        let rule = FeatureRule(
+            force: JSON(true),
+            hashAttribute: "id",
+            fallBackAttribute: "anonymousId",
+            hashVersion: 2,
+            range: BucketRange(number1: 0.0, number2: 1.0)
+        )
+        let feature = Feature(defaultValue: JSON(false), rules: [rule])
+        let result = evaluate(
+            "feature",
+            in: makeContext(
+                features: ["feature": feature],
+                attributes: JSON(["anonymousId": "anon-1"]),
+                stickyBucketService: NoopStickyBucketService()
+            )
+        )
+
+        XCTAssertEqual(result.source, FeatureSource.force.rawValue)
+        XCTAssertTrue(result.isOn)
+    }
+
+    func testForceRuleRangeUsesConfiguredHashAttribute() {
+        let rule = FeatureRule(
+            force: JSON(true),
+            hashAttribute: "userId",
+            hashVersion: 2,
+            range: BucketRange(number1: 0.0, number2: 1.0)
+        )
+        let feature = Feature(defaultValue: JSON(false), rules: [rule])
+        let result = evaluate(
+            "feature",
+            in: makeContext(features: ["feature": feature], attributes: JSON(["userId": "user-1"]))
+        )
+
+        XCTAssertEqual(result.source, FeatureSource.force.rawValue)
+        XCTAssertTrue(result.isOn)
+    }
+
+    func testExperimentRuleAppliesFilters() {
+        let filter = Filter(
+            attribute: nil,
+            seed: "filter-seed",
+            hashVersion: 2,
+            ranges: [BucketRange(number1: 0.0, number2: 0.0)],
+            fallbackAttribute: nil
+        )
+        let rule = FeatureRule(
+            variations: [JSON("control"), JSON("variant")],
+            hashVersion: 2,
+            filters: [filter]
+        )
+        let feature = Feature(defaultValue: JSON("default"), rules: [rule])
+        let result = evaluate(
+            "feature",
+            in: makeContext(features: ["feature": feature], attributes: JSON(["id": "user-1"]))
+        )
+
+        XCTAssertEqual(result.source, FeatureSource.defaultValue.rawValue)
+        XCTAssertEqual(result.value, JSON("default"))
+    }
+
+    func testForceRuleRangeTakesPrecedenceOverCoverage() {
         let range = BucketRange(json: JSON([0.0, 1.0]))
         let rule = FeatureRule(coverage: 1.0, force: JSON("forced"), range: range)
         let feature = Feature(defaultValue: JSON("default"), rules: [rule])

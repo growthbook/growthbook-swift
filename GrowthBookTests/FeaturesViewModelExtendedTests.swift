@@ -10,9 +10,11 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         var successCount = 0
         var failCount = 0
         var savedGroupsCount = 0
+        var contextualBanditsCount = 0
         var lastError: SDKError?
         var lastFeatures: Features?
         var lastSavedGroups: JSON?
+        var lastContextualBandits: JSON?
 
         func featuresFetchedSuccessfully(features: Features, isRemote: Bool) {
             successCount += 1
@@ -27,6 +29,11 @@ class FeaturesViewModelExtendedTests: XCTestCase {
             lastSavedGroups = savedGroups
         }
         func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) { failCount += 1 }
+        func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool) {
+            contextualBanditsCount += 1
+            lastContextualBandits = contextualBandits
+        }
+        func contextualBanditsFetchFailed(error: SDKError, isRemote: Bool) { failCount += 1 }
         func featuresAPIModelSuccessfully(model: FeaturesDataModel) {}
 
         // featuresUpdateIsComplete
@@ -250,6 +257,61 @@ class FeaturesViewModelExtendedTests: XCTestCase {
         XCTAssertEqual(capture.featuresUpdateIsCompleteCallCount, 1)
         XCTAssertEqual(capture.featuresUpdateIsCompleteArguments[0].error?.code, .failedToFetchData)
         XCTAssertTrue(capture.featuresUpdateIsCompleteArguments[0].isRemote)
+    }
+
+    // MARK: - SSE empty / heartbeat payload handling
+
+    /// Empty SSE data ("") must not reach prepareFeaturesData.
+    /// Regression: before the fix, `"".data(using: .utf8)` is non-nil so the guard
+    /// `guard let jsonData = data?.data(using: .utf8)` passed, triggering a spurious
+    /// featuresFetchFailed(error: .failedParsedData) call.
+    func testPrepareFeaturesDataEmptyPayloadTriggersError() {
+        let capture = Capture()
+        let vm = makeVM(delegate: capture)
+        vm.prepareFeaturesData(data: Data())
+        XCTAssertGreaterThan(capture.failCount, 0, "Empty Data should be treated as a parse error")
+        XCTAssertEqual(capture.lastError, .failedParsedData)
+    }
+
+    /// SSE comment lines (heartbeat / keepalive, e.g. ": heartbeat") must be filtered
+    /// before any listener is invoked — SSEEvent.init returns nil for them.
+    func testSSEEventHeartbeatCommentIsNil() {
+        let newlines = ["\r\n", "\n", "\r"]
+        XCTAssertNil(SSEEvent(eventString: ": heartbeat", newLineCharacters: newlines))
+        XCTAssertNil(SSEEvent(eventString: ":", newLineCharacters: newlines))
+        XCTAssertNil(SSEEvent(eventString: ": keepalive", newLineCharacters: newlines))
+    }
+
+    /// A well-formed SSE event with an empty data field should produce a non-nil SSEEvent
+    /// whose data property is the empty string — confirming the guard `!data.isEmpty` in
+    /// connectBackgroundSync is what prevents the empty payload from reaching prepareFeaturesData.
+    func testSSEEventEmptyDataFieldIsEmptyString() {
+        let newlines = ["\r\n", "\n", "\r"]
+        let event = SSEEvent(eventString: "event: features\ndata: ", newLineCharacters: newlines)
+        XCTAssertNotNil(event)
+        XCTAssertEqual(event?.data ?? "non-empty", "")
+    }
+
+    /// An SSE event with a valid JSON payload must be passed through to prepareFeaturesData
+    /// and result in a successful feature load.
+    func testSSEEventValidJsonPayloadProducesSuccess() {
+        let capture = Capture()
+        let vm = makeVM(delegate: capture)
+        let validJSON = """
+        {"status":200,"features":{"sse-flag":{"defaultValue":true}}}
+        """
+        vm.prepareFeaturesData(data: validJSON.data(using: .utf8)!)
+        XCTAssertEqual(capture.successCount, 1)
+        XCTAssertNotNil(capture.lastFeatures?["sse-flag"])
+    }
+
+    /// An SSE event with an invalid JSON payload must not crash and must fire featuresFetchFailed.
+    func testSSEEventInvalidJsonPayloadProducesError() {
+        let capture = Capture()
+        let vm = makeVM(delegate: capture)
+        vm.prepareFeaturesData(data: "not-json".data(using: .utf8)!)
+        XCTAssertGreaterThan(capture.failCount, 0)
+        XCTAssertEqual(capture.lastError, .failedParsedData)
     }
 
     // MARK: - fetchFeatures is not stale reports featuresAreUpToDate to the delegate
