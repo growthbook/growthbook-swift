@@ -512,6 +512,10 @@ protocol GrowthBookProtocol: AnyObject {
     /// is bucketed into, so under stableSession they must be frozen for the session just like the
     /// features are.
     private var banditsEstablished: Bool = false
+    /// True once the session's saved groups are locked with its features. A latch of its own for
+    /// the same reason as `banditsEstablished`: saved groups decide who a rule targets, so under
+    /// stableSession replacing them mid-session would change results just as new features would.
+    private var savedGroupsEstablished: Bool = false
 
     /// Delivers what plugins have buffered, and waits for it to leave the device.
     ///
@@ -593,6 +597,11 @@ protocol GrowthBookProtocol: AnyObject {
         if contextManager.getGlobalConfig().stableSession,
            contextManager.getEvaluationData().contextualBandits != nil {
             banditsEstablished = true
+        }
+        // Saved groups lock with the features they arrived with: only when the features were
+        // preloaded. A payload whose features didn't load leaves both to the first fetch.
+        if contextManager.getGlobalConfig().stableSession, features != nil {
+            savedGroupsEstablished = true
         }
 
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, preloadedFeatures: features)
@@ -905,8 +914,23 @@ protocol GrowthBookProtocol: AnyObject {
 
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         withLock {
+            let stableSession = contextManager.getGlobalConfig().stableSession
+
+            // Replacing the groups mid-session would change who rules target, which stableSession
+            // exists to prevent. The network path has already cached them for the next session.
+            if stableSession && savedGroupsEstablished {
+                logger.debug("stableSession: saved groups not applied — session saved groups already established")
+                return
+            }
+
             self.contextManager.updateEvalData { data in
                 data.savedGroups = savedGroups
+            }
+
+            // Lock only once the features have: groups read before any features (say, a cache
+            // holding groups but no readable features) must not outlive the features they belong to
+            if stableSession && sessionEstablished {
+                savedGroupsEstablished = true
             }
         }
     }
