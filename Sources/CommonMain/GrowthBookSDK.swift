@@ -318,6 +318,14 @@ protocol GrowthBookProtocol: AnyObject {
         // applied independently of hasPreloadedPayload: a payload can legitimately carry bandits
         // while the features themselves come from cache or network.
         var initialContextualBandits: JSON? = nil
+        // Saved groups travel in the same envelope as the features and must reach evaluation:
+        // without them every `$inGroup` resolves against an empty group and, worse, every
+        // `$notInGroup` matches, so a rule meant to exclude a group would apply to everyone.
+        // Applied independently of hasPreloadedPayload — a payload can carry saved groups while
+        // the features themselves come from cache or network.
+        var initialSavedGroups: JSON? = nil
+        // initialSavedGroups as the saved-groups cache stores them, written with the features below
+        var savedGroupsCacheContent: Data? = nil
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
@@ -331,23 +339,34 @@ protocol GrowthBookProtocol: AnyObject {
                     from: featuresModel,
                     encryptionKey: growthBookBuilderModel.encryptionKey
                 )
-                if let features = featuresModel.features {
-                    initialFeatures = features
-                    hasPreloadedPayload = true
-                } else if let encryptedString = featuresModel.encryptedFeatures,
-                          let encryptionKey = growthBookBuilderModel.encryptionKey,
-                          !encryptionKey.isEmpty {
-                    // Preloaded payload uses encryptedFeatures — decrypt inline so
-                    // the SDK can serve features immediately without a network round-trip.
-                    let crypto = Crypto()
-                    if let features = crypto.getFeaturesFromEncryptedFeatures(
+                initialSavedGroups = parsePreloadedSavedGroups(
+                    from: featuresModel,
+                    encryptionKey: growthBookBuilderModel.encryptionKey
+                )
+                if let savedGroups = initialSavedGroups {
+                    // The encrypted string for an encrypted payload, JSON otherwise
+                    if let encrypted = featuresModel.encryptedSavedGroups, !encrypted.isEmpty {
+                        savedGroupsCacheContent = encrypted.data(using: .utf8)
+                    } else {
+                        savedGroupsCacheContent = try? JSONEncoder().encode(savedGroups)
+                    }
+                }
+                // encryptedFeatures wins, as on the network path: an encrypted API payload also
+                // carries an empty `features` object, which would otherwise load no features.
+                if let encryptedString = featuresModel.encryptedFeatures, !encryptedString.isEmpty {
+                    // Decrypt inline so the SDK can serve features without a network round-trip
+                    if let encryptionKey = growthBookBuilderModel.encryptionKey, !encryptionKey.isEmpty,
+                       let features = Crypto().getFeaturesFromEncryptedFeatures(
                         encryptedString: encryptedString,
                         encryptionKey: encryptionKey
-                    ) {
+                       ) {
                         initialFeatures = features
                         hasPreloadedPayload = true
                     }
-                    // decrypt failed → hasPreloadedPayload stays false → fallback fetch fires
+                    // No key or decrypt failed → hasPreloadedPayload stays false → fallback fetch fires
+                } else if let features = featuresModel.features {
+                    initialFeatures = features
+                    hasPreloadedPayload = true
                 }
             } else if let features = try? decoder.decode(Features.self, from: featuresData) {
                 // Fallback: try to decode directly as Features dictionary
@@ -374,7 +393,7 @@ protocol GrowthBookProtocol: AnyObject {
             stickyBucketAssignmentDocs: nil,
             stickyBucketIdentifierAttributes: nil,
             features: initialFeatures,
-            savedGroups: nil,
+            savedGroups: initialSavedGroups,
             contextualBandits: initialContextualBandits,
             url: nil,
             forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues,
@@ -397,6 +416,13 @@ protocol GrowthBookProtocol: AnyObject {
         if hasPreloadedPayload && !initialFeatures.isEmpty,
            let featureData = try? JSONEncoder().encode(initialFeatures) {
             cachingManager.saveContent(fileName: Constants.featureCache, content: featureData)
+            // Cache the saved groups with the features they belong to: a later launch that reads the
+            // features from cache would otherwise evaluate them without the groups, and every
+            // `$notInGroup` would match. Stored as the network path stores them, which is the form
+            // fetchCachedFeatures() reads back.
+            if let savedGroupsCacheContent {
+                cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsCacheContent)
+            }
         }
 
         // Pass the parsed features when the caller supplied a valid, non-empty payload,
@@ -430,6 +456,32 @@ protocol GrowthBookProtocol: AnyObject {
         }
         return model.contextualBandits
     }
+
+    /// Extracts the `savedGroups` section from a preloaded (offline-mode) payload, decrypting it
+    /// first when the payload uses `encryptedSavedGroups`.
+    ///
+    /// Returns `nil` when the payload carries no saved groups or when decryption fails. Note that
+    /// `nil` is not a neutral outcome for evaluation: conditions using `$notInGroup` will match
+    /// every user, so a decryption failure is logged as an error rather than passed over silently.
+    private func parsePreloadedSavedGroups(from model: FeaturesDataModel, encryptionKey: String?) -> JSON? {
+        if let encryptedSavedGroups = model.encryptedSavedGroups, !encryptedSavedGroups.isEmpty {
+            guard let encryptionKey, !encryptionKey.isEmpty else {
+                logger.error("Preloaded payload has encryptedSavedGroups but no encryption key was provided. " +
+                             "Saved group conditions will not evaluate correctly.")
+                return nil
+            }
+            guard let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(
+                encryptedString: encryptedSavedGroups,
+                encryptionKey: encryptionKey
+            ) else {
+                logger.error("Failed to decrypt saved groups from preloaded payload. " +
+                             "Saved group conditions will not evaluate correctly.")
+                return nil
+            }
+            return savedGroups
+        }
+        return model.savedGroups
+    }
 }
 
 /// The main export of the libraries is a simple GrowthBook wrapper class that takes a Context object in the constructor.
@@ -460,6 +512,10 @@ protocol GrowthBookProtocol: AnyObject {
     /// is bucketed into, so under stableSession they must be frozen for the session just like the
     /// features are.
     private var banditsEstablished: Bool = false
+    /// True once the session's saved groups are locked with its features. A latch of its own for
+    /// the same reason as `banditsEstablished`: saved groups decide who a rule targets, so under
+    /// stableSession replacing them mid-session would change results just as new features would.
+    private var savedGroupsEstablished: Bool = false
 
     /// Delivers what plugins have buffered, and waits for it to leave the device.
     ///
@@ -541,6 +597,11 @@ protocol GrowthBookProtocol: AnyObject {
         if contextManager.getGlobalConfig().stableSession,
            contextManager.getEvaluationData().contextualBandits != nil {
             banditsEstablished = true
+        }
+        // Saved groups lock with the features they arrived with: only when the features were
+        // preloaded. A payload whose features didn't load leaves both to the first fetch.
+        if contextManager.getGlobalConfig().stableSession, features != nil {
+            savedGroupsEstablished = true
         }
 
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, preloadedFeatures: features)
@@ -853,8 +914,23 @@ protocol GrowthBookProtocol: AnyObject {
 
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         withLock {
+            let stableSession = contextManager.getGlobalConfig().stableSession
+
+            // Replacing the groups mid-session would change who rules target, which stableSession
+            // exists to prevent. The network path has already cached them for the next session.
+            if stableSession && savedGroupsEstablished {
+                logger.debug("stableSession: saved groups not applied — session saved groups already established")
+                return
+            }
+
             self.contextManager.updateEvalData { data in
                 data.savedGroups = savedGroups
+            }
+
+            // Lock only once the features have: groups read before any features (say, a cache
+            // holding groups but no readable features) must not outlive the features they belong to
+            if stableSession && sessionEstablished {
+                savedGroupsEstablished = true
             }
         }
     }

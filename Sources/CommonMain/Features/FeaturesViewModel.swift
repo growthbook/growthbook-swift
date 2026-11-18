@@ -95,7 +95,12 @@ class FeaturesViewModel {
         // Check for cache data
         if let data = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
-            if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
+            // The network and preload paths cache features already decrypted, so plain JSON comes
+            // first even with an encryption key; an encrypted string is still read for older caches.
+            if let features = try? decoder.decode(Features.self, from: data) {
+                // Call Success Delegate with mention of data available but its not remote
+                delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
+            } else if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
                 let crypto: CryptoProtocol = Crypto()
                 if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                     delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
@@ -105,9 +110,6 @@ class FeaturesViewModel {
                     if logging { logger.error("Failed get features from cached encrypted features") }
                     return error
                 }
-            } else if let features = try? decoder.decode(Features.self, from: data) {
-                // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
             } else {
                 let error = SDKError.failedParsedData
                 delegate?.featuresFetchFailed(error: error, isRemote: isRemote)
