@@ -315,6 +315,8 @@ protocol GrowthBookProtocol: AnyObject {
         // Applied independently of hasPreloadedPayload — a payload can carry saved groups while
         // the features themselves come from cache or network.
         var initialSavedGroups: JSON? = nil
+        // initialSavedGroups as the saved-groups cache stores them, written with the features below
+        var savedGroupsCacheContent: Data? = nil
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
@@ -332,23 +334,30 @@ protocol GrowthBookProtocol: AnyObject {
                     from: featuresModel,
                     encryptionKey: growthBookBuilderModel.encryptionKey
                 )
-                if let features = featuresModel.features {
-                    initialFeatures = features
-                    hasPreloadedPayload = true
-                } else if let encryptedString = featuresModel.encryptedFeatures,
-                          let encryptionKey = growthBookBuilderModel.encryptionKey,
-                          !encryptionKey.isEmpty {
-                    // Preloaded payload uses encryptedFeatures — decrypt inline so
-                    // the SDK can serve features immediately without a network round-trip.
-                    let crypto = Crypto()
-                    if let features = crypto.getFeaturesFromEncryptedFeatures(
+                if let savedGroups = initialSavedGroups {
+                    // The encrypted string for an encrypted payload, JSON otherwise
+                    if let encrypted = featuresModel.encryptedSavedGroups, !encrypted.isEmpty {
+                        savedGroupsCacheContent = encrypted.data(using: .utf8)
+                    } else {
+                        savedGroupsCacheContent = try? JSONEncoder().encode(savedGroups)
+                    }
+                }
+                // encryptedFeatures wins, as on the network path: an encrypted API payload also
+                // carries an empty `features` object, which would otherwise load no features.
+                if let encryptedString = featuresModel.encryptedFeatures, !encryptedString.isEmpty {
+                    // Decrypt inline so the SDK can serve features without a network round-trip
+                    if let encryptionKey = growthBookBuilderModel.encryptionKey, !encryptionKey.isEmpty,
+                       let features = Crypto().getFeaturesFromEncryptedFeatures(
                         encryptedString: encryptedString,
                         encryptionKey: encryptionKey
-                    ) {
+                       ) {
                         initialFeatures = features
                         hasPreloadedPayload = true
                     }
-                    // decrypt failed → hasPreloadedPayload stays false → fallback fetch fires
+                    // No key or decrypt failed → hasPreloadedPayload stays false → fallback fetch fires
+                } else if let features = featuresModel.features {
+                    initialFeatures = features
+                    hasPreloadedPayload = true
                 }
             } else if let features = try? decoder.decode(Features.self, from: featuresData) {
                 // Fallback: try to decode directly as Features dictionary
@@ -397,6 +406,13 @@ protocol GrowthBookProtocol: AnyObject {
         if hasPreloadedPayload && !initialFeatures.isEmpty,
            let featureData = try? JSONEncoder().encode(initialFeatures) {
             cachingManager.saveContent(fileName: Constants.featureCache, content: featureData)
+            // Cache the saved groups with the features they belong to: a later launch that reads the
+            // features from cache would otherwise evaluate them without the groups, and every
+            // `$notInGroup` would match. Stored as the network path stores them, which is the form
+            // fetchCachedFeatures() reads back.
+            if let savedGroupsCacheContent {
+                cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsCacheContent)
+            }
         }
 
         // Pass the parsed features when the caller supplied a valid, non-empty payload,

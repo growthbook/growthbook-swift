@@ -174,7 +174,104 @@ class OfflineSavedGroupsTests: XCTestCase {
         manager.clearCache()
     }
 
+    /// An encrypted API payload also carries an empty `features` object; the encrypted features win.
+    func testEncryptedPayloadWithEmptyFeaturesObjectIsApplied() throws {
+        let clientKey = "offline-sg-encrypted-api-shape"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            encryptionKey: encryptionKey,
+            attributes: ["id": "user-vip"],
+            features: Data(try encryptedPayload(includeEmptyFeatures: true).utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: nil))
+        .initializer()
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "on")
+    }
+
+    // MARK: - Cold start from the cache a preloaded payload wrote
+
+    /// A later launch without the payload reads the features from cache, and must get the saved
+    /// groups with them; otherwise `$notInGroup` matches the member it should exclude.
+    func testColdStartFromCacheKeepsPreloadedSavedGroups() {
+        let clientKey = "offline-sg-cold-start"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = makeSDK(payload: notInGroupPayload(), userId: "user-vip", clientKey: clientKey)
+        let coldStart = makeCachedSDK(clientKey: clientKey, encryptionKey: nil)
+
+        XCTAssertEqual(coldStart.evalFeature(id: "my-feature").value?.stringValue, "off",
+                       "$notInGroup must not match a member after a cold start from cache")
+    }
+
+    func testColdStartFromCacheKeepsEncryptedPreloadedSavedGroups() throws {
+        let clientKey = "offline-sg-cold-start-encrypted"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            encryptionKey: encryptionKey,
+            attributes: ["id": "user-vip"],
+            features: Data(try encryptedPayload(includeEmptyFeatures: true).utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: nil))
+        .initializer()
+        let coldStart = makeCachedSDK(clientKey: clientKey, encryptionKey: encryptionKey)
+
+        XCTAssertEqual(coldStart.evalFeature(id: "my-feature").value?.stringValue, "on",
+                       "the encrypted saved groups must be cached in the form the cache is read back in")
+    }
+
     // MARK: - Helper
+
+    private let encryptionKey = "Zvwv/+uhpFDznZ6SX28Yjg=="
+
+    /// `$inGroup: vips` with `user-vip` in the group, as encrypted features and saved groups.
+    private func encryptedPayload(includeEmptyFeatures: Bool) throws -> String {
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$inGroup":"vips"}},"force":"on"}]}}"#
+        let savedGroups = #"{"vips":["user-vip"]}"#
+        return """
+        {
+          \(includeEmptyFeatures ? #""features": {},"# : "")
+          "encryptedFeatures": "\(try encrypt(features, key: encryptionKey))",
+          "encryptedSavedGroups": "\(try encrypt(savedGroups, key: encryptionKey))"
+        }
+        """
+    }
+
+    /// An SDK with no payload and no network, so it starts from what the cache holds.
+    private func makeCachedSDK(clientKey: String, encryptionKey: String?) -> GrowthBookSDK {
+        let loaded = expectation(description: "cache loaded")
+        loaded.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            encryptionKey: encryptionKey,
+            attributes: ["id": "user-vip"],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in loaded.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData))
+        .initializer()
+        wait(for: [loaded], timeout: 5)
+        return sdk
+    }
 
     /// Encrypts `plainText` in the `iv.cipherText` base64 form the SDK expects.
     private func encrypt(_ plainText: String, key: String) throws -> String {
