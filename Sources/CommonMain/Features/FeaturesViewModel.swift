@@ -14,6 +14,9 @@ protocol FeaturesFlowDelegate: AnyObject {
     /// A payload arrived that carries no saved groups at all — neither plain nor encrypted.
     func savedGroupsCleared(isRemote: Bool)
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool)
+    /// Runs `body` under the lock that guards the delegate's state, so a check and the update it
+    /// guards can't interleave with other updates.
+    func performLocked(_ body: () -> Void)
 }
 
 extension FeaturesFlowDelegate {
@@ -21,6 +24,7 @@ extension FeaturesFlowDelegate {
     func contextualBanditsCleared(isRemote: Bool) {}
     /// Default no-op: only GrowthBookSDK owns saved-group state.
     func savedGroupsCleared(isRemote: Bool) {}
+    func performLocked(_ body: () -> Void) { body() }
 }
 
 /// View Model for Features
@@ -33,6 +37,9 @@ class FeaturesViewModel {
     internal var sseHandler: SSEHandler?
     private let ttlSeconds: Int
     private var expiresAt: TimeInterval?
+    /// Numbers remote-eval requests, so a reply for older inputs never replaces a newer one's.
+    /// Read and written only inside `delegate.performLocked`.
+    private var latestRemoteEvalRequest = 0
     
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, preloadedFeatures: Features? = nil) {
         self.delegate = delegate
@@ -127,26 +134,26 @@ class FeaturesViewModel {
             if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
         }
 
+        // Saved groups and bandits are cached as plain JSON when the payload had them unencrypted,
+        // even with an encryption key, so plain JSON comes first here as for the features.
         if let savedGroupsData = manager.getContent(fileName: Constants.savedGroupsCache),
            !savedGroupsData.isEmpty {
-            if let encryptionKey, !encryptionKey.isEmpty {
-                if let encryptedString = String(data: savedGroupsData, encoding: .utf8),
-                   let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                    delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
-                }
-            } else if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
+            if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
+                delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
+            } else if let encryptionKey, !encryptionKey.isEmpty,
+                      let encryptedString = String(data: savedGroupsData, encoding: .utf8),
+                      let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
             }
         }
 
         if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache),
            !contextualBanditsData.isEmpty {
-            if let encryptionKey, !encryptionKey.isEmpty {
-                if let encryptedString = String(data: contextualBanditsData, encoding: .utf8),
-                   let contextualBandits = Crypto().getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                    delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
-                }
-            } else if let contextualBandits = try? JSONDecoder().decode(JSON.self, from: contextualBanditsData) {
+            if let contextualBandits = try? JSONDecoder().decode(JSON.self, from: contextualBanditsData) {
+                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
+            } else if let encryptionKey, !encryptionKey.isEmpty,
+                      let encryptedString = String(data: contextualBanditsData, encoding: .utf8),
+                      let contextualBandits = Crypto().getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                 delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
             }
         }
@@ -170,15 +177,27 @@ class FeaturesViewModel {
         }
 
         if remoteEval {
-            dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { result in
-                switch result {
-                case .success(let data):
-                    self.prepareFeaturesData(data: data)
-                case .failure(let error):
-                    logger.error("Failed get features: \(error.localizedDescription)")
-                    let error: SDKError = .failedToLoadData
-                    self.delegate?.featuresFetchFailed(error: error, isRemote: true)
-                    self.delegate?.featuresUpdateIsComplete(error: error, isRemote: true)
+            var request = 0
+            performLocked {
+                latestRemoteEvalRequest += 1
+                request = latestRemoteEvalRequest
+            }
+            dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { [request] result in
+                self.performLocked {
+                    // Replies can arrive out of order; only the newest request's inputs are current
+                    guard request == self.latestRemoteEvalRequest else {
+                        self.delegate?.featuresUpdateIsComplete(error: nil, isRemote: true)
+                        return
+                    }
+                    switch result {
+                    case .success(let data):
+                        self.prepareFeaturesData(data: data)
+                    case .failure(let error):
+                        logger.error("Failed get features: \(error.localizedDescription)")
+                        let error: SDKError = .failedToLoadData
+                        self.delegate?.featuresFetchFailed(error: error, isRemote: true)
+                        self.delegate?.featuresUpdateIsComplete(error: error, isRemote: true)
+                    }
                 }
             }
         } else {
@@ -203,6 +222,10 @@ class FeaturesViewModel {
         }
     }
     
+    private func performLocked(_ body: () -> Void) {
+        if let delegate { delegate.performLocked(body) } else { body() }
+    }
+
     /// Cache API Response and push success event
     func prepareFeaturesData(data: Data) {
         // Call Success Delegate with mention of data available with remote
@@ -253,9 +276,12 @@ class FeaturesViewModel {
                 return
             }
             
-            if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+            // Encrypted groups that can't be opened are an error, not a payload without groups:
+            // clearing them would make every `$notInGroup` match.
+            if let encryptedSavedGroups = jsonPetitions.encryptedSavedGroups, !encryptedSavedGroups.isEmpty {
                 let crypto = Crypto()
-                if let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
+                if let encryptionKey, !encryptionKey.isEmpty,
+                   let savedGroups = crypto.getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedSavedGroups, encryptionKey: encryptionKey) {
                     if let encryptedSavedGroups = encryptedSavedGroups.data(using: .utf8) {
                         manager.saveContent(fileName: Constants.savedGroupsCache, content: encryptedSavedGroups)
                     } else {
@@ -281,9 +307,10 @@ class FeaturesViewModel {
                 delegate?.savedGroupsCleared(isRemote: true)
             }
 
-            if let encryptedContextualBandits = jsonPetitions.encryptedContextualBandits, !encryptedContextualBandits.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
+            if let encryptedContextualBandits = jsonPetitions.encryptedContextualBandits, !encryptedContextualBandits.isEmpty {
                 let crypto = Crypto()
-                if let contextualBandits = crypto.getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedContextualBandits, encryptionKey: encryptionKey) {
+                if let encryptionKey, !encryptionKey.isEmpty,
+                   let contextualBandits = crypto.getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedContextualBandits, encryptionKey: encryptionKey) {
                     if let encryptedContextualBanditsData = encryptedContextualBandits.data(using: .utf8) {
                         manager.saveContent(fileName: Constants.contextualBanditsCache, content: encryptedContextualBanditsData)
                     } else {

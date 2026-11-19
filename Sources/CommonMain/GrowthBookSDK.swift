@@ -612,6 +612,8 @@ protocol GrowthBookProtocol: AnyObject {
 
         let evalData = contextManager.getEvaluationData()
         let globalConfig = contextManager.getGlobalConfig()
+        // Set on the preload path too: later refreshes and streamed payloads need it
+        featureVM.encryptionKey = globalConfig.encryptionKey ?? ""
 
         if let features = features {
             contextManager.updateEvalData { data in
@@ -623,7 +625,6 @@ protocol GrowthBookProtocol: AnyObject {
                 sessionEstablished = true
             }
         } else {
-            featureVM.encryptionKey = globalConfig.encryptionKey ?? ""
             refreshCache()
         }
 
@@ -706,6 +707,10 @@ protocol GrowthBookProtocol: AnyObject {
             cachingManager: cachingManager,
             ttlSeconds: ttlSeconds
         )
+    }
+
+    func performLocked(_ body: () -> Void) {
+        withLock(body)
     }
 
     private func withLock<T>(_ body: () throws -> T) rethrows -> T {

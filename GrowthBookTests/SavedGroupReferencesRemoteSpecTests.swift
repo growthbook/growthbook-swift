@@ -149,6 +149,35 @@ class SavedGroupReferencesRemoteSpecTests: XCTestCase {
         XCTAssertEqual(client.callCount, 3)
     }
 
+    /// A reply for older inputs that arrives last must not replace the newer inputs' results.
+    func testOlderRemoteEvalReplyArrivingLastIsIgnored() {
+        let clientKey = "sdk-remote-eval-reply-order"
+        CachingManager(apiKey: clientKey).clearCache()
+        defer { CachingManager(apiKey: clientKey).clearCache() }
+        let client = HeldPostClient(successResponse: nil, error: nil as Error?)
+        let sdk = GrowthBookBuilder(
+            apiHost: "https://host.com",
+            clientKey: clientKey,
+            attributes: ["id": "u1"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            remoteEval: true
+        )
+        .setNetworkDispatcher(networkDispatcher: client)
+        .initializer()
+
+        sdk.setRemoteGroupIds(["grp_old"])
+        sdk.setRemoteGroupIds(["grp_new"])
+        XCTAssertEqual(client.held.count, 3)
+
+        let reply = { (value: String) in Data(#"{"features":{"flag":{"defaultValue":"\#(value)"}}}"#.utf8) }
+        client.held[2](reply("new"))
+        client.held[1](reply("old"))
+        client.held[0](reply("initial"))
+
+        XCTAssertEqual(sdk.evalFeature(id: "flag").value?.stringValue, "new")
+    }
+
     /// The flag is cached on `savedGroups` changes, so every read doesn't rescan the payload
     func testHasRemoteSavedGroupsFollowsSavedGroupsChanges() {
         let data = EvaluationData(streamingHost: nil, attributes: JSON([:]), forcedVariations: nil,
@@ -235,6 +264,15 @@ class SavedGroupReferencesRemoteSpecTests: XCTestCase {
             XCTFail("\(failures.count) of \(total) savedGroupReferencesRemote.\(section) cases failed:\n"
                     + failures.joined(separator: "\n"))
         }
+    }
+}
+
+/// Holds each remote-eval reply until the test sends it, so replies can arrive out of order.
+private class HeldPostClient: MockNetworkClient {
+    var held: [(Data) -> Void] = []
+
+    override func consumePOSTRequest(url: String, params: [String: Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (any Error) -> Void) {
+        held.append(successResult)
     }
 }
 
