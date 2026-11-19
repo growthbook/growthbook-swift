@@ -4,15 +4,20 @@ import Foundation
     var features: Features
     public var experiments: [Experiment]?
     public var savedGroups: JSON?
+    /// Contextual bandit definitions from the feature payload, keyed by bandit ref. Read during
+    /// evaluation to resolve contextual bandit feature rules. May be `nil` or empty.
+    public var contextualBandits: JSON?
 
     init(
         features: Features = [:],
         experiments: [Experiment]? = nil,
-        savedGroups: JSON? = nil
+        savedGroups: JSON? = nil,
+        contextualBandits: JSON? = nil
     ) {
         self.features = features
         self.experiments = experiments
         self.savedGroups = savedGroups
+        self.contextualBandits = contextualBandits
     }
 }
 

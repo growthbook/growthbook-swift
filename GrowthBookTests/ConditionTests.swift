@@ -7,7 +7,9 @@ class ConditionTests: XCTestCase {
     var evalConditions: [JSON]?
 
     override func setUp() {
-        evalConditions = TestHelper().getEvalConditionData()
+        let helper = TestHelper()
+        // The canonical corpus plus the cases this fork keeps on its own (see getLocalEvalConditionData).
+        evalConditions = (helper.getEvalConditionData() ?? []) + (helper.getLocalEvalConditionData() ?? [])
     }
 
     func testConditions() throws {
@@ -34,7 +36,7 @@ class ConditionTests: XCTestCase {
         logger.info("Passed TESTS - \(passedScenarios.count)")
         logger.info("Failed TESTS - \(failedScenarios.count)")
 
-        XCTAssertTrue(failedScenarios.count == 0)
+        XCTAssertTrue(failedScenarios.isEmpty, "Failed cases:\n" + failedScenarios.joined())
     }
 
     func testInValidConditionObj() throws {
@@ -42,13 +44,14 @@ class ConditionTests: XCTestCase {
 
         XCTAssertFalse(evaluator.isEvalCondition(attributes: JSON(), conditionObj: [JSON()]))
 
-        XCTAssertFalse(evaluator.isOperatorObject(obj: JSON([:])))
+        // An empty object has no operators, so it is an operator object that always passes (spec 0.11.0)
+        XCTAssertTrue(evaluator.isOperatorObject(obj: JSON([:])))
 
         XCTAssertTrue(evaluator.getType(obj: nil) == AttributeType.gbUnknown.rawValue)
 
         XCTAssertTrue(evaluator.getPath(obj: JSON("test"), key: "key") == nil)
 
-        XCTAssertTrue(evaluator.isEvalConditionValue(conditionValue: JSON([:]), attributeValue: nil) == false)
+        XCTAssertTrue(evaluator.isEvalConditionValue(conditionValue: JSON([:]), attributeValue: nil))
 
         XCTAssertTrue(evaluator.isEvalOperatorCondition(operatorKey: "$lte", attributeValue: JSON("abc"), conditionValue: JSON("abc")))
 

@@ -30,7 +30,7 @@ class ExperimentEvaluatorTests: XCTestCase {
         ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
     }
 
-    private func twoVariationExp(key: String = "exp", coverage: Float? = nil) -> Experiment {
+    private func twoVariationExp(key: String = "exp", coverage: Double? = nil) -> Experiment {
         Experiment(key: key, variations: [JSON("control"), JSON("variant")], coverage: coverage)
     }
 
