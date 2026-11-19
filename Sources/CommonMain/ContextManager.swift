@@ -232,12 +232,17 @@ import Foundation
   private func effectiveAttributes() -> JSON {
     guard let overrides = evalData.attributeOverrides,
           !overrides.dictionaryValue.isEmpty else {
-      return evalData.attributes
+      return evalData.evaluationAttributes
     }
 
     var merged = evalData.attributes.dictionaryValue
     for (key, value) in overrides.dictionaryValue {
       merged[key] = value
+    }
+    // Resolved remote group ids stay the last word on their reserved key, as they are over the
+    // base attributes in `evaluationAttributes`: an override can't fake group membership.
+    if let remoteGroupIds = evalData.remoteGroupIds {
+      merged[Constants.remoteGroupIdsAttribute] = JSON(remoteGroupIds)
     }
     return JSON(merged)
   }
