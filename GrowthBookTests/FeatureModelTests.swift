@@ -340,16 +340,16 @@ class FeatureDecodeTests: XCTestCase {
     func testBucketRangeEncodeToArray() throws {
         let range = BucketRange(number1: 0.1, number2: 0.9)
         let encoded = try JSONEncoder().encode(range)
-        let decoded = try JSONDecoder().decode([Float].self, from: encoded)
-        XCTAssertEqual(decoded[0], 0.1, accuracy: 0.0001)
-        XCTAssertEqual(decoded[1], 0.9, accuracy: 0.0001)
+        let decoded = try JSONDecoder().decode([Double].self, from: encoded)
+        XCTAssertEqual(decoded[0], 0.1)
+        XCTAssertEqual(decoded[1], 0.9)
     }
 
     func testBucketRangeRoundtrip() throws {
         let original = BucketRange(number1: 0.3333, number2: 0.6667)
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(BucketRange.self, from: data)
-        XCTAssertEqual(decoded.number1, original.number1, accuracy: 0.0001)
-        XCTAssertEqual(decoded.number2, original.number2, accuracy: 0.0001)
+        XCTAssertEqual(decoded.number1, original.number1)
+        XCTAssertEqual(decoded.number2, original.number2)
     }
 }

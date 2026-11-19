@@ -206,13 +206,18 @@ import Foundation
     // UserContext is created from evalData.
     // attributeOverrides are merged on top of base attributes so they take
     // effect in both experiment evaluation and sticky bucket hash lookups.
+    // Resolved remote group ids go on last, so their reserved key keeps winning over anything
+    // set for it, overrides included (see `EvaluationData.evaluationAttributes`).
     let effectiveAttributes: JSON
     if let overrides = evalData.attributeOverrides, overrides != JSON() {
       var merged = evalData.attributes.dictionaryValue
       merged.merge(overrides.dictionaryValue) { _, new in new }
+      if let remoteGroupIds = evalData.remoteGroupIds {
+        merged[Constants.remoteGroupIdsAttribute] = JSON(remoteGroupIds)
+      }
       effectiveAttributes = JSON(merged)
     } else {
-      effectiveAttributes = evalData.attributes
+      effectiveAttributes = evalData.evaluationAttributes
     }
 
     let userContext = UserContext(
