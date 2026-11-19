@@ -387,7 +387,9 @@ class OfflineSavedGroupsTests: XCTestCase {
             backgroundSync: false
         )
         .setRefreshHandler(refreshHandler: { _ in loaded.fulfill() })
-        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData))
+        // A permanent HTTP failure: a retryable one holds the refresh callback for the whole
+        // backoff. What these tests care about is the cache, not the retry schedule.
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404)))
         .initializer()
         wait(for: [loaded], timeout: 5)
         return sdk
