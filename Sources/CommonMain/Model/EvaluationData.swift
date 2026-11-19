@@ -59,6 +59,13 @@ import Foundation
 
   public var forcedFeatureValues: JSON? = nil
 
+  /// Attribute values that take precedence over `attributes` during evaluation.
+  ///
+  /// Merged on top of `attributes` when an `EvalContext` is built, so overrides apply to targeting
+  /// conditions, experiment hashing and sticky bucket lookups alike. `attributes` itself is left
+  /// untouched, which is what lets overrides be lifted again by setting an empty map.
+  public var attributeOverrides: JSON? = nil
+
   /// The ids of the remote saved groups the user is in, resolved by the app. `nil` means unresolved,
   /// which is not the same as no groups: see `GrowthBookSDK.setRemoteGroupIds(_:)`.
   public var remoteGroupIds: [String]? = nil
@@ -74,7 +81,9 @@ import Foundation
     contextualBandits: JSON? = nil,
     url: String? = nil,
     forcedFeatureValues: JSON? = nil,
+    attributeOverrides: JSON? = nil,
     remoteGroupIds: [String]? = nil) {
+      self.attributeOverrides = attributeOverrides
       self.streamingHost = streamingHost
       self.attributes = attributes
       self.forcedVariations = forcedVariations
