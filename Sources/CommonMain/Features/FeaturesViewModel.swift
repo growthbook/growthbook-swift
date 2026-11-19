@@ -71,10 +71,17 @@ class FeaturesViewModel: @unchecked Sendable {
         }
         streamingUpdate.connect()
         
-        streamingUpdate.onDissconnect { [weak streamingUpdate] _, shouldReconnect, _ in
-            if let shouldReconnect = shouldReconnect, shouldReconnect {
-                streamingUpdate?.connect()
-            }
+        // The handler owns reconnecting, so there is nothing to do while it still intends to come
+        // back. Once it gives up, streaming is over for this instance and nothing else reports it,
+        // which would otherwise leave features silently frozen — so log that much. A cancelled task
+        // is our own `disconnect()` above (or in deinit) and is not a failure.
+        streamingUpdate.onDisconnect { statusCode, willReconnect, error in
+            guard willReconnect != true else { return }
+            let cancelled = error?.domain == NSURLErrorDomain && error?.code == NSURLErrorCancelled
+            guard !cancelled else { return }
+
+            let reason = error?.localizedDescription ?? statusCode.map { "HTTP \($0)" } ?? "unknown reason"
+            logger.error("Streaming stopped and will not reconnect: \(reason)")
         }
     }
     
@@ -88,7 +95,12 @@ class FeaturesViewModel: @unchecked Sendable {
         // Check for cache data
         if let data = manager.getContent(fileName: Constants.featureCache) {
             let decoder = JSONDecoder()
-            if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
+            // The network and preload paths cache features already decrypted, so plain JSON comes
+            // first even with an encryption key; an encrypted string is still read for older caches.
+            if let features = try? decoder.decode(Features.self, from: data) {
+                // Call Success Delegate with mention of data available but its not remote
+                delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
+            } else if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
                 let crypto: CryptoProtocol = Crypto()
                 if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
                     delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
@@ -98,9 +110,6 @@ class FeaturesViewModel: @unchecked Sendable {
                     if logging { logger.error("Failed get features from cached encrypted features") }
                     return error
                 }
-            } else if let features = try? decoder.decode(Features.self, from: data) {
-                // Call Success Delegate with mention of data available but its not remote
-                delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
             } else {
                 let error = SDKError.failedParsedData
                 delegate?.featuresFetchFailed(error: error, isRemote: isRemote)

@@ -177,8 +177,11 @@ public class Utils {
         // Remove build info and leading `v` if any
         // Split version into parts (both core version numbers and pre-release tags)
         // "v1.2.3-rc.1+build123" -> ["1","2","3","rc","1"]
-        let stripped = source.replacingOccurrences(of: "(^v|\\+.*$)", with: "", options: .regularExpression)
-        var partArray = stripped.components(separatedBy: CharacterSet(charactersIn: ".-"))
+        // Build metadata starts at the first `+`. No regex here: `\+.*$` is quadratic on many `+`s then a newline.
+        var scalars = Substring(source).unicodeScalars
+        if scalars.first == "v" { scalars = scalars.dropFirst() }
+        if let buildIndex = scalars.firstIndex(of: "+") { scalars = scalars[..<buildIndex] }
+        var partArray = String(scalars).components(separatedBy: CharacterSet(charactersIn: ".-"))
 
         // If it's SemVer without a pre-release, add `~` to the end
         // ["1","0","0"] -> ["1","0","0","~"]

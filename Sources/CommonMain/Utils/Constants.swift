@@ -10,6 +10,10 @@ public enum Constants {
     public static let savedGroupsCache = "SavedGroupsCache"
 
     public static let contextualBanditsCache = "ContextualBanditsCache"
+
+    /// Attribute holding the ids of the remote saved groups the user is in. Internal attributes start
+    /// with `__gb_`, matching GrowthBook's back end.
+    public static let remoteGroupIdsAttribute = "__gb_remoteGroupIds"
 }
 
 /// Type Alias for Feature in GrowthBook
