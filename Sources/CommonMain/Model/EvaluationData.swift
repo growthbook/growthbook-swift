@@ -59,6 +59,10 @@ import Foundation
 
   public var forcedFeatureValues: JSON? = nil
 
+  /// Attribute values that override the base attributes during evaluation.
+  /// Merged on top of `attributes` when building an EvalContext.
+  public var attributeOverrides: JSON? = nil
+
   /// The ids of the remote saved groups the user is in, resolved by the app. `nil` means unresolved,
   /// which is not the same as no groups: see `GrowthBookSDK.setRemoteGroupIds(_:)`.
   public var remoteGroupIds: [String]? = nil
@@ -74,6 +78,7 @@ import Foundation
     contextualBandits: JSON? = nil,
     url: String? = nil,
     forcedFeatureValues: JSON? = nil,
+    attributeOverrides: JSON? = nil,
     remoteGroupIds: [String]? = nil) {
       self.streamingHost = streamingHost
       self.attributes = attributes
@@ -87,6 +92,7 @@ import Foundation
       self.contextualBandits = contextualBandits
       self.url = url
       self.forcedFeatureValues = forcedFeatureValues
+      self.attributeOverrides = attributeOverrides
       self.remoteGroupIds = remoteGroupIds
     }
 
