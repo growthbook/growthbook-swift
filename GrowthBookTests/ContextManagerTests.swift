@@ -409,5 +409,19 @@ class ContextManagerTests: XCTestCase {
         }
         XCTAssertEqual(contextManager.getEvalContext().userContext.attributes["name"].stringValue, "Test User")
     }
+
+    /// Overrides and resolved remote group ids are both layered on at context build; neither may
+    /// drop the other, and the reserved key stays with the resolved ids.
+    func testAttributeOverridesComposeWithRemoteGroupIds() {
+        contextManager.updateEvalData { data in
+            data.remoteGroupIds = ["grp_vip"]
+            data.attributeOverrides = JSON(["name": "Overridden", Constants.remoteGroupIdsAttribute: ["grp_fake"]])
+        }
+
+        let attributes = contextManager.getEvalContext().userContext.attributes
+
+        XCTAssertEqual(attributes["name"].stringValue, "Overridden")
+        XCTAssertEqual(attributes[Constants.remoteGroupIdsAttribute].arrayValue.map(\.stringValue), ["grp_vip"])
+    }
 }
 
