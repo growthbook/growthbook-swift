@@ -688,6 +688,76 @@ class ContextualBanditTests: XCTestCase {
         manager.clearCache()
     }
 
+    /// A later launch reads the features a preload cached, and must get its bandits with them.
+    func testPreloadedBanditsSurviveCacheRoundTrip() {
+        let clientKey = "bandit-preload-cache-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(payload(banditVersion: 3, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0]).utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: nil))
+        .initializer()
+
+        let refreshed = XCTestExpectation(description: "cold start")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        let result = sdk.evalFeature(id: "my-feature")
+        XCTAssertEqual(result.experimentResult?.leafId, 2, "Preloaded bandits must be restored from the cache")
+        XCTAssertEqual(result.experimentResult?.banditVersion, 3)
+    }
+
+    /// A preload whose features don't load leaves the session to the first fetch, which must
+    /// apply its own bandits rather than keep the preload's.
+    func testStableSessionPreloadWithoutFeaturesTakesBanditsFromTheFirstFetch() {
+        let clientKey = "bandit-stable-no-features-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        // Empty features are invalid under stableSession, so the SDK falls back to the network
+        let preload = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [1.0, 0.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""features": {}, "unused": {"#)
+        let refreshed = XCTestExpectation(description: "first fetch")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(preload.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0]),
+            error: nil
+        ))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        let result = sdk.evalFeature(id: "my-feature")
+        XCTAssertEqual(result.experimentResult?.banditVersion, 2)
+        XCTAssertEqual(result.value?.stringValue, "treatment")
+    }
+
     // MARK: - Sticky bucket identifier attributes
 
     /// The identifier attributes drive which assignment documents are fetched from the sticky bucket

@@ -11,12 +11,16 @@ protocol FeaturesFlowDelegate: AnyObject {
     func contextualBanditsFetchedSuccessfully(contextualBandits: JSON, isRemote: Bool)
     /// A payload arrived that carries no bandit definitions at all — neither plain nor encrypted.
     func contextualBanditsCleared(isRemote: Bool)
+    /// A payload arrived that carries no saved groups at all — neither plain nor encrypted.
+    func savedGroupsCleared(isRemote: Bool)
     func featuresUpdateIsComplete(error: SDKError?, isRemote: Bool)
 }
 
 extension FeaturesFlowDelegate {
     /// Default no-op: only GrowthBookSDK owns bandit state.
     func contextualBanditsCleared(isRemote: Bool) {}
+    /// Default no-op: only GrowthBookSDK owns saved-group state.
+    func savedGroupsCleared(isRemote: Bool) {}
 }
 
 /// View Model for Features
@@ -123,7 +127,8 @@ class FeaturesViewModel {
             if logging { logger.info("Cache directory is empty. Nothing to fetch.") }
         }
 
-        if let savedGroupsData = manager.getContent(fileName: Constants.savedGroupsCache) {
+        if let savedGroupsData = manager.getContent(fileName: Constants.savedGroupsCache),
+           !savedGroupsData.isEmpty {
             if let encryptionKey, !encryptionKey.isEmpty {
                 if let encryptedString = String(data: savedGroupsData, encoding: .utf8),
                    let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
@@ -150,14 +155,16 @@ class FeaturesViewModel {
     
     
     /// Fetch Features
-    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil) {
+    /// - Parameter force: fetch even while the cached features are fresh. Remote-eval results
+    ///   depend on the request's attributes and forced values, so a change to those must refetch.
+    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil, force: Bool = false) {
         // Check for cache data
         fetchCachedFeatures(logging: true)
         guard let apiUrl else {
             delegate?.featuresUpdateIsComplete(error: .invalidAPIURL, isRemote: false)
             return
         }
-        guard isCacheExpired() else {
+        guard force || isCacheExpired() else {
             delegate?.featuresUpdateIsComplete(error: nil, isRemote: true)
             return
         }
@@ -267,6 +274,11 @@ class FeaturesViewModel {
                     manager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsData)
                 }
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: true)
+            } else {
+                // The payload carries no saved groups. Clear them like the bandits below, so a later
+                // launch doesn't pair these features with an earlier payload's groups.
+                manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+                delegate?.savedGroupsCleared(isRemote: true)
             }
 
             if let encryptedContextualBandits = jsonPetitions.encryptedContextualBandits, !encryptedContextualBandits.isEmpty, let encryptionKey = encryptionKey, !encryptionKey.isEmpty {

@@ -236,6 +236,51 @@ class OfflineSavedGroupsTests: XCTestCase {
                        "the encrypted saved groups must be cached in the form the cache is read back in")
     }
 
+    // MARK: - Payloads without saved groups clear the cached ones
+
+    /// A preload without saved groups must not leave an earlier payload's groups in the cache for
+    /// the next cold start to pair with these features.
+    func testPreloadWithoutSavedGroupsClearsCachedGroups() {
+        let clientKey = "offline-sg-preload-clears"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = makeSDK(payload: inGroupPayload(), userId: "user-vip", clientKey: clientKey)
+        _ = makeSDK(payload: #"{"features":{"my-feature":{"defaultValue":"off"}}}"#, userId: "user-vip", clientKey: clientKey)
+        let coldStart = makeCachedSDK(clientKey: clientKey, encryptionKey: nil)
+
+        XCTAssertNil(coldStart.getGBContext().savedGroups)
+    }
+
+    /// A fetched payload without saved groups drops them now and from the cache.
+    func testFetchedPayloadWithoutSavedGroupsClearsThem() {
+        let clientKey = "offline-sg-fetch-clears"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = makeSDK(payload: inGroupPayload(), userId: "user-vip", clientKey: clientKey)
+        let loaded = expectation(description: "fetch")
+        loaded.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in loaded.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: #"{"features":{"my-feature":{"defaultValue":"off"}}}"#, error: nil))
+        .initializer()
+        wait(for: [loaded], timeout: 5)
+
+        XCTAssertNil(sdk.getGBContext().savedGroups)
+        XCTAssertNil(makeCachedSDK(clientKey: clientKey, encryptionKey: nil).getGBContext().savedGroups)
+    }
+
     // MARK: - stableSession
 
     /// Under stableSession a refresh must not replace the session's saved groups any more than

@@ -113,10 +113,7 @@ class SavedGroupReferencesRemoteSpecTests: XCTestCase {
             attributes: ["account_id": "a1"],
             trackingCallback: { _, _ in },
             backgroundSync: false,
-            remoteEval: true,
-            // fetchFeatures skips the request while the cache is fresh, and the initial remote-eval
-            // fetch would otherwise make it fresh before setRemoteGroupIds refreshes
-            ttlSeconds: 0
+            remoteEval: true
         )
         .setNetworkDispatcher(networkDispatcher: client)
         .initializer()
@@ -124,6 +121,32 @@ class SavedGroupReferencesRemoteSpecTests: XCTestCase {
         sdk.setRemoteGroupIds(["grp_vip"])
 
         wait(for: [posted], timeout: 5)
+    }
+
+    /// A setter refetches even while the cached results are fresh; the periodic refresh doesn't.
+    func testSettersRefetchRemoteEvalWhileTheCacheIsFresh() {
+        let clientKey = "sdk-remote-eval-fresh-cache"
+        CachingManager(apiKey: clientKey).clearCache()
+        defer { CachingManager(apiKey: clientKey).clearCache() }
+        let client = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil as Error?)
+        let sdk = GrowthBookBuilder(
+            apiHost: "https://host.com",
+            clientKey: clientKey,
+            attributes: ["id": "u1"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            remoteEval: true
+        )
+        .setNetworkDispatcher(networkDispatcher: client)
+        .initializer()
+        XCTAssertEqual(client.callCount, 1)
+
+        sdk.refreshCache()
+        XCTAssertEqual(client.callCount, 1, "the periodic refresh honors the cache TTL")
+
+        sdk.setForcedVariations(forcedVariations: ["exp": 1])
+        sdk.setRemoteGroupIds(["grp_vip"])
+        XCTAssertEqual(client.callCount, 3)
     }
 
     /// The flag is cached on `savedGroups` changes, so every read doesn't rescan the payload
