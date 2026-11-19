@@ -6,7 +6,7 @@ enum SSEConnectionStatus {
     case disconnected
 }
 
-class SSEHandler: NSObject, URLSessionDataDelegate {
+class SSEHandler: NSObject, URLSessionDataDelegate, @unchecked Sendable {
     static let DefaultRetryTime = 1000
     public let url: URL
     public var lastEventId: String?
@@ -16,7 +16,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
 
     private var onConnect: (() -> Void)?
     private var onDisconnect: ((Int?, Bool?, NSError?) -> Void)?
-    private var eventListeners: [String: (_ id: String?, _ event: String?, _ data: String?) -> Void] = [:]
+    private var eventListeners: [String: @Sendable (_ id: String?, _ event: String?, _ data: String?) -> Void] = [:]
     /// Internal rather than private so a test can deliver data without opening a connection:
     /// `connect()` is what creates this, and reaching it for real would mean a unit test dialling
     /// the configured host. Same reason `handleStreamCompletion` is internal.
@@ -108,7 +108,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     }
 
     public func addEventListener(event: String,
-                                 handler: @escaping ((_ id: String?, _ event: String?, _ data: String?) -> ())) {
+                                 handler: @escaping @Sendable (_ id: String?, _ event: String?, _ data: String?) -> Void) {
         eventListeners[event] = handler
     }
 
