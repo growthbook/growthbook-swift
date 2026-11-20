@@ -758,6 +758,42 @@ class ContextualBanditTests: XCTestCase {
         XCTAssertEqual(result.value?.stringValue, "treatment")
     }
 
+    /// Under stableSession, a session whose first payload has no bandits keeps having none: a later
+    /// payload's bandits would re-bucket users mid-session.
+    func testStableSessionWithoutBanditsDoesNotApplyLaterBandits() {
+        let clientKey = "bandit-stable-none-first-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        let withBandits = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+        let withoutBandits = #"{"features":{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","key":"e2e-experiment","contextualBanditRef":"bandit-1","contextualVariations":["control","treatment"]}]}}}"#
+        let client = MockNetworkClient(successResponse: withoutBandits, error: nil)
+        let firstFetch = XCTestExpectation(description: "first fetch")
+        var onRefresh: () -> Void = { firstFetch.fulfill() }
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in onRefresh() })
+        .setNetworkDispatcher(networkDispatcher: client)
+        .initializer()
+        wait(for: [firstFetch], timeout: 2.0)
+
+        let refreshed = XCTestExpectation(description: "refresh")
+        onRefresh = { refreshed.fulfill() }
+        client.successResponse = withBandits
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertNil(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion)
+    }
+
     // MARK: - Sticky bucket identifier attributes
 
     /// The identifier attributes drive which assignment documents are fetched from the sticky bucket

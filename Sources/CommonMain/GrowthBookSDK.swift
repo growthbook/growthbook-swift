@@ -328,6 +328,10 @@ protocol GrowthBookProtocol: AnyObject {
         // the features below
         var savedGroupsCacheContent: Data? = nil
         var contextualBanditsCacheContent: Data? = nil
+        // Whether the payload carries each section at all. One that is present but can't be
+        // decrypted leaves its cache as it is rather than clearing it.
+        var payloadHasSavedGroups = false
+        var payloadHasContextualBandits = false
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
@@ -345,6 +349,10 @@ protocol GrowthBookProtocol: AnyObject {
                     from: featuresModel,
                     encryptionKey: growthBookBuilderModel.encryptionKey
                 )
+                payloadHasSavedGroups = featuresModel.savedGroups != nil
+                    || !(featuresModel.encryptedSavedGroups ?? "").isEmpty
+                payloadHasContextualBandits = featuresModel.contextualBandits != nil
+                    || !(featuresModel.encryptedContextualBandits ?? "").isEmpty
                 if let contextualBandits = initialContextualBandits {
                     if let encrypted = featuresModel.encryptedContextualBandits, !encrypted.isEmpty {
                         contextualBanditsCacheContent = encrypted.data(using: .utf8)
@@ -429,9 +437,18 @@ protocol GrowthBookProtocol: AnyObject {
             // when the payload has none: a later launch that reads the features from cache would
             // otherwise evaluate them with an earlier payload's groups and bandits, or without
             // them. Stored as the network path stores them, which is the form
-            // fetchCachedFeatures() reads back.
-            cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsCacheContent ?? Data())
-            cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: contextualBanditsCacheContent ?? Data())
+            // fetchCachedFeatures() reads back. A section that failed to decrypt is left alone, as
+            // on the network path.
+            if let savedGroupsCacheContent {
+                cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsCacheContent)
+            } else if !payloadHasSavedGroups {
+                cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+            }
+            if let contextualBanditsCacheContent {
+                cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: contextualBanditsCacheContent)
+            } else if !payloadHasContextualBandits {
+                cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+            }
         }
 
         // Pass the parsed features when the caller supplied a valid, non-empty payload,
@@ -1004,11 +1021,16 @@ protocol GrowthBookProtocol: AnyObject {
                 return
             }
 
-            guard contextManager.getEvaluationData().contextualBandits != nil else { return }
+            if contextManager.getEvaluationData().contextualBandits != nil {
+                logger.info("Contextual bandit definitions are gone from the payload — rules fall back to aggregate weights")
+                contextManager.updateEvalData { data in
+                    data.contextualBandits = nil
+                }
+            }
 
-            logger.info("Contextual bandit definitions are gone from the payload — rules fall back to aggregate weights")
-            contextManager.updateEvalData { data in
-                data.contextualBandits = nil
+            // A session whose payload has no bandits keeps having none
+            if stableSession && sessionEstablished {
+                banditsEstablished = true
             }
         }
     }

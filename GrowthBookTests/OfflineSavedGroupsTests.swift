@@ -281,6 +281,24 @@ class OfflineSavedGroupsTests: XCTestCase {
         XCTAssertNil(makeCachedSDK(clientKey: clientKey, encryptionKey: nil).getGBContext().savedGroups)
     }
 
+    /// Preloaded encrypted groups that can't be decrypted leave the cached groups alone, as on
+    /// the network path; clearing them would make every `$notInGroup` match after a cold start.
+    func testPreloadWithUnreadableEncryptedSavedGroupsKeepsCachedGroups() throws {
+        let clientKey = "offline-sg-preload-undecryptable"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = makeSDK(payload: notInGroupPayload(), userId: "user-vip", clientKey: clientKey)
+        // Same features with the groups encrypted, and this SDK has no key
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let groups = try encrypt(#"{"vips":["user-vip"]}"#, key: encryptionKey)
+        _ = makeSDK(payload: #"{"features": \#(features), "encryptedSavedGroups": "\#(groups)"}"#, userId: "user-vip", clientKey: clientKey)
+        let coldStart = makeCachedSDK(clientKey: clientKey, encryptionKey: nil)
+
+        XCTAssertEqual(coldStart.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
     /// Encrypted groups that can't be opened must not erase the current groups.
     func testUnreadableEncryptedSavedGroupsKeepTheCurrentGroups() throws {
         let clientKey = "offline-sg-encrypted-no-key"
