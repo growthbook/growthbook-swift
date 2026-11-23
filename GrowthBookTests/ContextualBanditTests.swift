@@ -848,6 +848,40 @@ class ContextualBanditTests: XCTestCase {
         XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 4)
     }
 
+    /// An empty bandits cache from an earlier payload must not lock the session without bandits
+    /// while it waits for a fetch to replace bandits the preload couldn't decrypt.
+    func testStableSessionUnreadablePreloadIgnoresAnEmptyCachedBandits() {
+        let clientKey = "bandit-stable-unreadable-empty-cache-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+
+        let preload = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [1.0, 0.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""encryptedContextualBandits": "not.readable", "features": {"#)
+        let refreshed = XCTestExpectation(description: "refresh")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(preload.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0]),
+            error: nil
+        ))
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 2)
+    }
+
     // MARK: - Sticky bucket identifier attributes
 
     /// The identifier attributes drive which assignment documents are fetched from the sticky bucket

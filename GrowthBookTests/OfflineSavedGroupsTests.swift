@@ -423,6 +423,37 @@ class OfflineSavedGroupsTests: XCTestCase {
         XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
     }
 
+    /// An empty groups cache from an earlier payload must not lock the session without groups
+    /// while it waits for a fetch to replace groups the preload couldn't decrypt.
+    func testStableSessionUnreadablePreloadIgnoresAnEmptyCachedGroups() {
+        let clientKey = "offline-sg-stable-unreadable-empty-cache"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let refreshed = expectation(description: "refresh")
+        refreshed.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            features: Data(#"{"features": \#(features), "encryptedSavedGroups": "not.readable"}"#.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in refreshed.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: notInGroupPayload(), error: nil))
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 5)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
     // MARK: - stableSession
 
     /// Under stableSession a refresh must not replace the session's saved groups any more than

@@ -544,6 +544,11 @@ protocol GrowthBookProtocol: AnyObject {
     /// the same reason as `banditsEstablished`: saved groups decide who a rule targets, so under
     /// stableSession replacing them mid-session would change results just as new features would.
     private var savedGroupsEstablished: Bool = false
+    /// True while a stableSession's preloaded saved groups (or bandits) couldn't be decrypted, so
+    /// the session waits for a fetched payload to supply them. A cache read meanwhile would apply an
+    /// earlier payload's section, or lock an empty one, to the preloaded features.
+    private var savedGroupsAwaitRemote: Bool = false
+    private var banditsAwaitRemote: Bool = false
 
     /// Delivers what plugins have buffered, and waits for it to leave the device.
     ///
@@ -629,6 +634,8 @@ protocol GrowthBookProtocol: AnyObject {
         if contextManager.getGlobalConfig().stableSession, features != nil {
             savedGroupsEstablished = !preloadedSavedGroupsUnreadable
             banditsEstablished = !preloadedContextualBanditsUnreadable
+            savedGroupsAwaitRemote = preloadedSavedGroupsUnreadable
+            banditsAwaitRemote = preloadedContextualBanditsUnreadable
         }
 
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, preloadedFeatures: features)
@@ -954,6 +961,11 @@ protocol GrowthBookProtocol: AnyObject {
                 logger.debug("stableSession: saved groups not applied — session saved groups already established")
                 return
             }
+            if !isRemote && savedGroupsAwaitRemote {
+                logger.debug("stableSession: cached saved groups not applied — waiting for a fetched payload")
+                return
+            }
+            savedGroupsAwaitRemote = false
 
             self.contextManager.updateEvalData { data in
                 data.savedGroups = savedGroups
@@ -976,6 +988,11 @@ protocol GrowthBookProtocol: AnyObject {
                 logger.debug("stableSession: saved groups removed upstream — cleared from cache for next session, still applied now")
                 return
             }
+            if !isRemote && savedGroupsAwaitRemote {
+                logger.debug("stableSession: cached saved groups not applied — waiting for a fetched payload")
+                return
+            }
+            savedGroupsAwaitRemote = false
 
             if contextManager.getEvaluationData().savedGroups != nil {
                 contextManager.updateEvalData { data in
@@ -1005,6 +1022,11 @@ protocol GrowthBookProtocol: AnyObject {
                 }
                 return
             }
+            if !isRemote && banditsAwaitRemote {
+                logger.debug("stableSession: cached contextual bandits not applied — waiting for a fetched payload")
+                return
+            }
+            banditsAwaitRemote = false
 
             self.contextManager.updateEvalData { data in
                 data.contextualBandits = contextualBandits
@@ -1026,6 +1048,11 @@ protocol GrowthBookProtocol: AnyObject {
                 logger.info("stableSession: contextual bandits removed upstream — cleared from cache for next session, still applied now")
                 return
             }
+            if !isRemote && banditsAwaitRemote {
+                logger.debug("stableSession: cached contextual bandits not applied — waiting for a fetched payload")
+                return
+            }
+            banditsAwaitRemote = false
 
             if contextManager.getEvaluationData().contextualBandits != nil {
                 logger.info("Contextual bandit definitions are gone from the payload — rules fall back to aggregate weights")
