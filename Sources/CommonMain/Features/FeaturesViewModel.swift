@@ -135,10 +135,15 @@ class FeaturesViewModel {
         }
 
         // Saved groups and bandits are cached as plain JSON when the payload had them unencrypted,
-        // even with an encryption key, so plain JSON comes first here as for the features.
-        if let savedGroupsData = manager.getContent(fileName: Constants.savedGroupsCache),
-           !savedGroupsData.isEmpty {
-            if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData) {
+        // even with an encryption key, so plain JSON comes first here as for the features. Only a
+        // JSON object is accepted: the encrypted form isn't JSON, and a scalar from a corrupt file
+        // would make every `$notInGroup` match. An empty file means the payload had none, which is
+        // reported like a payload without them so stableSession locks that in.
+        if let savedGroupsData = manager.getContent(fileName: Constants.savedGroupsCache) {
+            if savedGroupsData.isEmpty {
+                delegate?.savedGroupsCleared(isRemote: isRemote)
+            } else if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData),
+                      savedGroups.type == .dictionary {
                 delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
             } else if let encryptionKey, !encryptionKey.isEmpty,
                       let encryptedString = String(data: savedGroupsData, encoding: .utf8),
@@ -147,9 +152,11 @@ class FeaturesViewModel {
             }
         }
 
-        if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache),
-           !contextualBanditsData.isEmpty {
-            if let contextualBandits = try? JSONDecoder().decode(JSON.self, from: contextualBanditsData) {
+        if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache) {
+            if contextualBanditsData.isEmpty {
+                delegate?.contextualBanditsCleared(isRemote: isRemote)
+            } else if let contextualBandits = try? JSONDecoder().decode(JSON.self, from: contextualBanditsData),
+                      contextualBandits.type == .dictionary {
                 delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
             } else if let encryptionKey, !encryptionKey.isEmpty,
                       let encryptedString = String(data: contextualBanditsData, encoding: .utf8),
@@ -165,8 +172,11 @@ class FeaturesViewModel {
     /// - Parameter force: fetch even while the cached features are fresh. Remote-eval results
     ///   depend on the request's attributes and forced values, so a change to those must refetch.
     func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil, force: Bool = false) {
-        // Check for cache data
-        fetchCachedFeatures(logging: true)
+        // Check for cache data. A forced fetch skips it: the in-memory state is already current,
+        // and the reply replaces it.
+        if !force {
+            fetchCachedFeatures(logging: true)
+        }
         guard let apiUrl else {
             delegate?.featuresUpdateIsComplete(error: .invalidAPIURL, isRemote: false)
             return
@@ -183,21 +193,21 @@ class FeaturesViewModel {
                 request = latestRemoteEvalRequest
             }
             dataSource.fetchRemoteEval(apiUrl: apiUrl, params: payload) { [request] result in
-                self.performLocked {
-                    // Replies can arrive out of order; only the newest request's inputs are current
-                    guard request == self.latestRemoteEvalRequest else {
-                        self.delegate?.featuresUpdateIsComplete(error: nil, isRemote: true)
-                        return
-                    }
-                    switch result {
-                    case .success(let data):
-                        self.prepareFeaturesData(data: data)
-                    case .failure(let error):
-                        logger.error("Failed get features: \(error.localizedDescription)")
-                        let error: SDKError = .failedToLoadData
-                        self.delegate?.featuresFetchFailed(error: error, isRemote: true)
-                        self.delegate?.featuresUpdateIsComplete(error: error, isRemote: true)
-                    }
+                // Replies can arrive out of order; only the newest request's inputs are current.
+                // Only the check runs under the lock, so evaluations on other threads don't wait
+                // for the reply to be decoded and cached. A superseded reply is dropped silently:
+                // reporting it would tell refreshHandler about a refresh that applied nothing.
+                var isCurrent = false
+                self.performLocked { isCurrent = request == self.latestRemoteEvalRequest }
+                guard isCurrent else { return }
+                switch result {
+                case .success(let data):
+                    self.prepareFeaturesData(data: data)
+                case .failure(let error):
+                    logger.error("Failed get features: \(error.localizedDescription)")
+                    let error: SDKError = .failedToLoadData
+                    self.delegate?.featuresFetchFailed(error: error, isRemote: true)
+                    self.delegate?.featuresUpdateIsComplete(error: error, isRemote: true)
                 }
             }
         } else {
@@ -292,8 +302,8 @@ class FeaturesViewModel {
                     let error: SDKError = .failedEncryptedSavedGroups
                     delegate?.savedGroupsFetchFailed(error: .failedEncryptedSavedGroups, isRemote: true)
                     occurredError = error
+                    // No return: the features are already applied, so the bandits still need theirs
                     logger.error("Failed get saved groups from encrypted saved groups")
-                    return
                 }
             } else if let savedGroups = jsonPetitions.savedGroups {
                 if let savedGroupsData = try? JSONEncoder().encode(savedGroups) {

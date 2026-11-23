@@ -328,10 +328,10 @@ protocol GrowthBookProtocol: AnyObject {
         // the features below
         var savedGroupsCacheContent: Data? = nil
         var contextualBanditsCacheContent: Data? = nil
-        // Whether the payload carries each section at all. One that is present but can't be
-        // decrypted leaves its cache as it is rather than clearing it.
-        var payloadHasSavedGroups = false
-        var payloadHasContextualBandits = false
+        // Whether the payload carries a section that couldn't be decrypted. Its cache is left as it
+        // is rather than cleared, and stableSession doesn't lock the session without it.
+        var savedGroupsUnreadable = false
+        var contextualBanditsUnreadable = false
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
@@ -349,10 +349,10 @@ protocol GrowthBookProtocol: AnyObject {
                     from: featuresModel,
                     encryptionKey: growthBookBuilderModel.encryptionKey
                 )
-                payloadHasSavedGroups = featuresModel.savedGroups != nil
-                    || !(featuresModel.encryptedSavedGroups ?? "").isEmpty
-                payloadHasContextualBandits = featuresModel.contextualBandits != nil
-                    || !(featuresModel.encryptedContextualBandits ?? "").isEmpty
+                savedGroupsUnreadable = initialSavedGroups == nil
+                    && !(featuresModel.encryptedSavedGroups ?? "").isEmpty
+                contextualBanditsUnreadable = initialContextualBandits == nil
+                    && !(featuresModel.encryptedContextualBandits ?? "").isEmpty
                 if let contextualBandits = initialContextualBandits {
                     if let encrypted = featuresModel.encryptedContextualBandits, !encrypted.isEmpty {
                         contextualBanditsCacheContent = encrypted.data(using: .utf8)
@@ -438,15 +438,15 @@ protocol GrowthBookProtocol: AnyObject {
             // otherwise evaluate them with an earlier payload's groups and bandits, or without
             // them. Stored as the network path stores them, which is the form
             // fetchCachedFeatures() reads back. A section that failed to decrypt is left alone, as
-            // on the network path.
+            // on the network path; one that failed to encode is cleared.
             if let savedGroupsCacheContent {
                 cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsCacheContent)
-            } else if !payloadHasSavedGroups {
+            } else if !savedGroupsUnreadable {
                 cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
             }
             if let contextualBanditsCacheContent {
                 cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: contextualBanditsCacheContent)
-            } else if !payloadHasContextualBandits {
+            } else if !contextualBanditsUnreadable {
                 cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
             }
         }
@@ -455,7 +455,9 @@ protocol GrowthBookProtocol: AnyObject {
         // so GrowthBookSDK.init() skips the automatic refreshCache() call.
         // nil means "no payload provided (or invalid/empty) — fall back to cache/network."
         let preloadedFeatures: Features? = hasPreloadedPayload ? initialFeatures : nil
-        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds,
+                             preloadedSavedGroupsUnreadable: savedGroupsUnreadable,
+                             preloadedContextualBanditsUnreadable: contextualBanditsUnreadable)
     }
 
     /// Extracts the `contextualBandits` section from a preloaded (offline-mode) payload, decrypting
@@ -607,7 +609,9 @@ protocol GrowthBookProtocol: AnyObject {
          features: Features? = nil,
          savedGroups: JSON? = nil,
          cachingManager: CachingLayer,
-         ttlSeconds: Int) {
+         ttlSeconds: Int,
+         preloadedSavedGroupsUnreadable: Bool = false,
+         preloadedContextualBanditsUnreadable: Bool = false) {
         self.contextManager = contextManager
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
@@ -618,11 +622,13 @@ protocol GrowthBookProtocol: AnyObject {
 
         // Saved groups and bandits lock with the features they arrived with: only when the
         // features were preloaded. A payload whose features didn't load leaves all three to the
-        // first fetch. Set before featureVM is constructed, as its init can already deliver
-        // callbacks. Safe to set without withLock: the object has not yet escaped to other threads.
+        // first fetch, and a section that couldn't be decrypted is left to it too, rather than
+        // locking the session without it. Set before featureVM is constructed, as its init can
+        // already deliver callbacks. Safe to set without withLock: the object has not yet escaped
+        // to other threads.
         if contextManager.getGlobalConfig().stableSession, features != nil {
-            savedGroupsEstablished = true
-            banditsEstablished = true
+            savedGroupsEstablished = !preloadedSavedGroupsUnreadable
+            banditsEstablished = !preloadedContextualBanditsUnreadable
         }
 
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, preloadedFeatures: features)
@@ -1038,6 +1044,9 @@ protocol GrowthBookProtocol: AnyObject {
     /// If remote eval is enabled, send needed data to backend to proceed remote evaluation.
     /// Always fetches, even while the cached results are fresh: they were evaluated for the inputs
     /// at the time, which the setters that call this have just changed.
+    ///
+    /// Under stableSession nothing is fetched once the session's features are established, since
+    /// the result could not be applied: the setters then don't change remote-eval results.
     @objc public func refreshForRemoteEval() {
         fetchRemoteEval(force: true)
     }
@@ -1048,6 +1057,10 @@ protocol GrowthBookProtocol: AnyObject {
             let globalConfig = contextManager.getGlobalConfig()
             let evalData = contextManager.getEvaluationData()
             if !globalConfig.remoteEval { return }
+            if force && globalConfig.stableSession && sessionEstablished {
+                logger.debug("stableSession: remote evaluation not refreshed — session features already established")
+                return
+            }
             let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
             let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
@@ -1134,7 +1147,8 @@ protocol GrowthBookProtocol: AnyObject {
     /// Sets the remote saved groups the user is in. A remote saved group keeps its members outside
     /// the payload, so the app resolves the user's groups (for example from its back end) and passes
     /// their ids here. Conditions read them as the `__gb_remoteGroupIds` attribute, over any value
-    /// the attributes set for it. In remote-eval mode this triggers a fresh remote evaluation.
+    /// the attributes set for it. In remote-eval mode this triggers a fresh remote evaluation,
+    /// except under stableSession once the session is established (see `refreshForRemoteEval`).
     ///
     /// Pass nil while the groups are unresolved: rules that use remote groups then fail, including
     /// "not in group". Don't pass an empty array for that — it means "in no group", so "not in

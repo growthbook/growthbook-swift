@@ -794,6 +794,60 @@ class ContextualBanditTests: XCTestCase {
         XCTAssertNil(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion)
     }
 
+    /// Under stableSession, a session restored from cached features whose cached bandits are
+    /// empty keeps having none.
+    func testStableSessionCachedEmptyBanditsLockTheSession() throws {
+        let clientKey = "bandit-stable-empty-cache-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        let withBandits = payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+        let model = try JSONDecoder().decode(FeaturesDataModel.self, from: Data(withBandits.utf8))
+        manager.saveContent(fileName: Constants.featureCache, content: try JSONEncoder().encode(model.features))
+        manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+
+        let refreshed = XCTestExpectation(description: "first fetch")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: withBandits, error: nil))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertNil(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion)
+    }
+
+    /// Encrypted saved groups that can't be read don't stop the payload's bandits from applying.
+    func testUnreadableSavedGroupsDoNotSkipTheBandits() {
+        let clientKey = "bandit-unreadable-groups-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        let response = payload(banditVersion: 4, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""encryptedSavedGroups": "not.readable", "features": {"#)
+
+        let refreshed = XCTestExpectation(description: "fetch")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: response, error: nil))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 4)
+    }
+
     // MARK: - Sticky bucket identifier attributes
 
     /// The identifier attributes drive which assignment documents are fetched from the sticky bucket

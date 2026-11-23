@@ -171,11 +171,63 @@ class SavedGroupReferencesRemoteSpecTests: XCTestCase {
         XCTAssertEqual(client.held.count, 3)
 
         let reply = { (value: String) in Data(#"{"features":{"flag":{"defaultValue":"\#(value)"}}}"#.utf8) }
-        client.held[2](reply("new"))
-        client.held[1](reply("old"))
-        client.held[0](reply("initial"))
+        client.held[2].success(reply("new"))
+        client.held[1].success(reply("old"))
+        client.held[0].success(reply("initial"))
 
         XCTAssertEqual(sdk.evalFeature(id: "flag").value?.stringValue, "new")
+    }
+
+    /// A dropped stale reply doesn't report a refresh: it would mask the newer request's failure.
+    func testDroppedRemoteEvalReplyDoesNotReportARefresh() {
+        let clientKey = "sdk-remote-eval-stale-report"
+        CachingManager(apiKey: clientKey).clearCache()
+        defer { CachingManager(apiKey: clientKey).clearCache() }
+        let client = HeldPostClient(successResponse: nil, error: nil as Error?)
+        var reported: [SDKError?] = []
+        let sdk = GrowthBookBuilder(
+            apiHost: "https://host.com",
+            clientKey: clientKey,
+            attributes: ["id": "u1"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            remoteEval: true
+        )
+        .setRefreshHandler(refreshHandler: { reported.append($0) })
+        .setNetworkDispatcher(networkDispatcher: client)
+        .initializer()
+
+        sdk.setRemoteGroupIds(["grp_new"])
+        client.held[1].failure(SDKError.failedToLoadData)
+        client.held[0].success(Data(#"{"features":{"flag":{"defaultValue":"old"}}}"#.utf8))
+
+        XCTAssertEqual(reported.count, 1)
+        XCTAssertNotNil(reported.first ?? nil)
+        XCTAssertNil(sdk.evalFeature(id: "flag").value?.string)
+    }
+
+    /// Under stableSession, setters don't refetch once the session is established: the result
+    /// couldn't be applied.
+    func testStableSessionSettersDoNotRefetchRemoteEval() {
+        let clientKey = "sdk-remote-eval-stable"
+        CachingManager(apiKey: clientKey).clearCache()
+        defer { CachingManager(apiKey: clientKey).clearCache() }
+        let client = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil as Error?)
+        let sdk = GrowthBookBuilder(
+            apiHost: "https://host.com",
+            clientKey: clientKey,
+            attributes: ["id": "u1"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            remoteEval: true
+        )
+        .setStableSession(true)
+        .setNetworkDispatcher(networkDispatcher: client)
+        .initializer()
+        XCTAssertEqual(client.callCount, 1)
+
+        sdk.setRemoteGroupIds(["grp_vip"])
+        XCTAssertEqual(client.callCount, 1)
     }
 
     /// The flag is cached on `savedGroups` changes, so every read doesn't rescan the payload
@@ -269,10 +321,10 @@ class SavedGroupReferencesRemoteSpecTests: XCTestCase {
 
 /// Holds each remote-eval reply until the test sends it, so replies can arrive out of order.
 private class HeldPostClient: MockNetworkClient {
-    var held: [(Data) -> Void] = []
+    var held: [(success: (Data) -> Void, failure: (any Error) -> Void)] = []
 
     override func consumePOSTRequest(url: String, params: [String: Any], successResult: @escaping (Data) -> Void, errorResult: @escaping (any Error) -> Void) {
-        held.append(successResult)
+        held.append((successResult, errorResult))
     }
 }
 

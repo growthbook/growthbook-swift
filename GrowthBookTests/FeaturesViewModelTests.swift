@@ -178,6 +178,40 @@ class FeaturesViewModelTests: XCTestCase, FeaturesFlowDelegate {
         XCTAssertEqual(capture.contextualBandits?["bandit-1"]["banditVersion"].intValue, 1)
     }
 
+    /// A cache file holding a JSON scalar isn't applied as saved groups or bandits.
+    func testCacheReadIgnoresNonObjectSavedGroupsAndBandits() throws {
+        cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: Data(#""abc""#.utf8))
+        cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: Data("0".utf8))
+
+        let capture = CacheReadCapture()
+        _ = FeaturesViewModel(
+            delegate: capture,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData)),
+            cachingManager: cachingManager,
+            ttlSeconds: ttlSeconds
+        )
+
+        XCTAssertNil(capture.savedGroups)
+        XCTAssertNil(capture.contextualBandits)
+    }
+
+    /// A forced fetch doesn't re-read the caches: the in-memory state is already current.
+    func testForcedFetchSkipsTheCacheRead() throws {
+        cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: Data(#"{"vips":["user-vip"]}"#.utf8))
+        let capture = CacheReadCapture()
+        let viewModel = FeaturesViewModel(
+            delegate: capture,
+            dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData)),
+            cachingManager: cachingManager,
+            ttlSeconds: ttlSeconds
+        )
+        capture.savedGroups = nil
+
+        viewModel.fetchFeatures(apiUrl: nil, force: true)
+
+        XCTAssertNil(capture.savedGroups)
+    }
+
     func test304NotModifiedTreatedAsSuccess() throws {
         // First fetch to populate cache
         let viewModel = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil)), cachingManager: cachingManager, ttlSeconds: ttlSeconds)
