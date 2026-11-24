@@ -100,6 +100,9 @@ class FeaturesViewModel {
         sseHandler?.disconnect()
     }
 
+    /// Reads the cache. `isRemote` is passed to the features callbacks only: saved groups and
+    /// bandits are always reported as cached, even after a 304 or failed fetch, so stableSession's
+    /// guards for cached sections apply.
     @discardableResult
     private func fetchCachedFeatures(logging: Bool = false, isRemote: Bool = false) -> SDKError? {
         var occurredError: SDKError? = nil
@@ -141,27 +144,27 @@ class FeaturesViewModel {
         // reported like a payload without them so stableSession locks that in.
         if let savedGroupsData = manager.getContent(fileName: Constants.savedGroupsCache) {
             if savedGroupsData.isEmpty {
-                delegate?.savedGroupsCleared(isRemote: isRemote)
+                delegate?.savedGroupsCleared(isRemote: false)
             } else if let savedGroups = try? JSONDecoder().decode(JSON.self, from: savedGroupsData),
                       savedGroups.type == .dictionary {
-                delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
+                delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: false)
             } else if let encryptionKey, !encryptionKey.isEmpty,
                       let encryptedString = String(data: savedGroupsData, encoding: .utf8),
                       let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: isRemote)
+                delegate?.savedGroupsFetchedSuccessfully(savedGroups: savedGroups, isRemote: false)
             }
         }
 
         if let contextualBanditsData = manager.getContent(fileName: Constants.contextualBanditsCache) {
             if contextualBanditsData.isEmpty {
-                delegate?.contextualBanditsCleared(isRemote: isRemote)
+                delegate?.contextualBanditsCleared(isRemote: false)
             } else if let contextualBandits = try? JSONDecoder().decode(JSON.self, from: contextualBanditsData),
                       contextualBandits.type == .dictionary {
-                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
+                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: false)
             } else if let encryptionKey, !encryptionKey.isEmpty,
                       let encryptedString = String(data: contextualBanditsData, encoding: .utf8),
                       let contextualBandits = Crypto().getContextualBanditsFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: isRemote)
+                delegate?.contextualBanditsFetchedSuccessfully(contextualBandits: contextualBandits, isRemote: false)
             }
         }
         return occurredError

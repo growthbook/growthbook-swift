@@ -882,6 +882,44 @@ class ContextualBanditTests: XCTestCase {
         XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 2)
     }
 
+    /// A failed refresh re-reads the cache; that read must not close bandits left open by an
+    /// unreadable preload either, or the next payload's bandits are ignored.
+    func testStableSessionUnreadablePreloadIgnoresTheCachedBanditsAfterAFailedRefresh() {
+        let clientKey = "bandit-stable-unreadable-failed-refresh-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+
+        let preload = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [1.0, 0.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""encryptedContextualBandits": "not.readable", "features": {"#)
+        let network = MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData)
+        var refreshed = XCTestExpectation(description: "failed refresh")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(preload.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: network)
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        network.error = nil
+        network.successResponse = payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+        refreshed = XCTestExpectation(description: "refresh")
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 2)
+    }
+
     // MARK: - Sticky bucket identifier attributes
 
     /// The identifier attributes drive which assignment documents are fetched from the sticky bucket

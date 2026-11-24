@@ -454,6 +454,80 @@ class OfflineSavedGroupsTests: XCTestCase {
         XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
     }
 
+    /// A failed refresh re-reads the cache; that read must not close a section left open by an
+    /// unreadable preload either, or the next payload's groups are ignored.
+    func testStableSessionUnreadablePreloadIgnoresTheCacheAfterAFailedRefresh() {
+        let clientKey = "offline-sg-stable-unreadable-failed-refresh"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let network = MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData)
+        var refreshed = expectation(description: "failed refresh")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            features: Data(#"{"features": \#(features), "encryptedSavedGroups": "not.readable"}"#.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in refreshed.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: network)
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 5)
+
+        network.error = nil
+        network.successResponse = notInGroupPayload()
+        refreshed = expectation(description: "refresh")
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 5)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
+    /// Groups the app supplies through `Context` stay when a payload or cache has none.
+    func testContextSavedGroupsSurviveAPayloadWithoutGroups() throws {
+        let clientKey = "offline-sg-context-groups"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        let model = try JSONDecoder().decode(FeaturesDataModel.self, from: Data(notInGroupPayload().utf8))
+        manager.saveContent(fileName: Constants.featureCache, content: try JSONEncoder().encode(model.features))
+        manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+
+        let context = Context(
+            apiHost: testApiHost,
+            streamingHost: nil,
+            clientKey: clientKey,
+            encryptionKey: nil,
+            isEnabled: true,
+            attributes: JSON(["id": "user-vip"]),
+            forcedVariations: nil,
+            isQaMode: false,
+            trackingClosure: { _, _ in },
+            savedGroups: JSON(["vips": ["user-vip"]])
+        )
+        let loaded = expectation(description: "refresh")
+        loaded.assertForOverFulfill = false
+        let sdk = GrowthBookSDK(
+            context: context,
+            refreshHandler: { _ in loaded.fulfill() },
+            networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData),
+            cachingManager: manager,
+            ttlSeconds: 0
+        )
+        wait(for: [loaded], timeout: 5)
+
+        XCTAssertEqual(sdk.getGBContext().savedGroups, JSON(["vips": ["user-vip"]]))
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
     // MARK: - stableSession
 
     /// Under stableSession a refresh must not replace the session's saved groups any more than

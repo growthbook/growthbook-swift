@@ -523,7 +523,9 @@ protocol GrowthBookProtocol: AnyObject {
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
     private var attributeOverrides: JSON = JSON()
-    private var savedGroupsValues: JSON?
+    /// Saved groups the app supplied through `Context`. Used when a payload has none, so they
+    /// aren't dropped (JS also keeps its saved groups when a payload has none).
+    private var appSavedGroups: JSON?
     private var evalContext: EvalContext? = nil
     private var ttlSeconds: Int
     var cachingManager: CachingLayer
@@ -616,11 +618,12 @@ protocol GrowthBookProtocol: AnyObject {
          cachingManager: CachingLayer,
          ttlSeconds: Int,
          preloadedSavedGroupsUnreadable: Bool = false,
-         preloadedContextualBanditsUnreadable: Bool = false) {
+         preloadedContextualBanditsUnreadable: Bool = false,
+         appSavedGroups: JSON? = nil) {
         self.contextManager = contextManager
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
-        self.savedGroupsValues = savedGroups
+        self.appSavedGroups = appSavedGroups
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
         super.init()
@@ -735,7 +738,8 @@ protocol GrowthBookProtocol: AnyObject {
             features: features,
             savedGroups: savedGroups,
             cachingManager: cachingManager,
-            ttlSeconds: ttlSeconds
+            ttlSeconds: ttlSeconds,
+            appSavedGroups: savedGroups ?? context.savedGroups
         )
     }
 
@@ -994,9 +998,10 @@ protocol GrowthBookProtocol: AnyObject {
             }
             savedGroupsAwaitRemote = false
 
-            if contextManager.getEvaluationData().savedGroups != nil {
+            // Fall back to the app's own groups rather than dropping them
+            if contextManager.getEvaluationData().savedGroups != appSavedGroups {
                 contextManager.updateEvalData { data in
-                    data.savedGroups = nil
+                    data.savedGroups = appSavedGroups
                 }
             }
 
