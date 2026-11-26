@@ -55,15 +55,41 @@ class FeaturesViewModel {
     }
     
     
+    private struct CachedFeaturesEnvelope: Codable {
+        let features: Features
+        let cachedAt: TimeInterval
+    }
+
     private func isCacheExpired() -> Bool {
-        guard let expiresAt = expiresAt else {
-            return true
+        if expiresAt == nil,
+           let data = manager.getContent(fileName: Constants.featureCache),
+           let envelope = try? JSONDecoder().decode(CachedFeaturesEnvelope.self, from: data) {
+            expiresAt = envelope.cachedAt + Double(ttlSeconds)
         }
+        guard let expiresAt else { return true }
         return Date().timeIntervalSince1970 >= expiresAt
     }
-    
+
+    private func saveFeatures(_ features: Features) {
+        let now = Date().timeIntervalSince1970
+        expiresAt = now + Double(ttlSeconds)
+        let envelope = CachedFeaturesEnvelope(features: features, cachedAt: now)
+        if let data = try? JSONEncoder().encode(envelope) {
+            manager.saveContent(fileName: Constants.featureCache, content: data)
+        }
+    }
+
     private func refreshExpiresAt() {
-        expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
+        guard let data = manager.getContent(fileName: Constants.featureCache) else { return }
+        let features: Features
+        if let envelope = try? JSONDecoder().decode(CachedFeaturesEnvelope.self, from: data) {
+            features = envelope.features
+        } else if let plain = try? JSONDecoder().decode(Features.self, from: data) {
+            features = plain
+        } else {
+            return
+        }
+        saveFeatures(features)
     }
     
     func connectBackgroundSync(sseUrl: String) {
@@ -111,7 +137,11 @@ class FeaturesViewModel {
             let decoder = JSONDecoder()
             // The network and preload paths cache features already decrypted, so plain JSON comes
             // first even with an encryption key; an encrypted string is still read for older caches.
-            if let features = try? decoder.decode(Features.self, from: data) {
+            // The envelope (features + cachedAt) is the current format and must be tried before a
+            // bare `Features` dict, which is the format of caches written before it.
+            if let envelope = try? decoder.decode(CachedFeaturesEnvelope.self, from: data) {
+                delegate?.featuresFetchedSuccessfully(features: envelope.features, isRemote: isRemote)
+            } else if let features = try? decoder.decode(Features.self, from: data) {
                 // Call Success Delegate with mention of data available but its not remote
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: isRemote)
             } else if let encryptedString = String(data: data, encoding: .utf8), let encryptionKey, !encryptionKey.isEmpty {
@@ -171,6 +201,11 @@ class FeaturesViewModel {
     }
     
     
+    private static let initialRetryDelay: TimeInterval = 1.0
+    private static let maxRetryDelay: TimeInterval = 60.0
+    // Internal so tests can set to 0 to skip retry delays
+    var maxRetryAttempts: Int = 5
+
     /// Fetch Features
     /// - Parameter force: fetch even while the cached features are fresh. Remote-eval results
     ///   depend on the request's attributes and forced values, so a change to those must refetch.
@@ -214,18 +249,71 @@ class FeaturesViewModel {
                 }
             }
         } else {
-            dataSource.fetchFeatures(apiUrl: apiUrl) { result in
-                switch result {
-                case .success(let data):
-                    self.prepareFeaturesData(data: data)
-                case .failure(let error):
-                    if (error as NSError).code == 304 {
-                        self.refreshExpiresAt()
-                        let fetchCachedFeaturesError = self.fetchCachedFeatures(isRemote: true)
-                        self.delegate?.featuresUpdateIsComplete(error: fetchCachedFeaturesError, isRemote: true)
-                        return
+            doFetchFeatures(apiUrl: apiUrl, attempt: 0, delay: Self.initialRetryDelay)
+        }
+    }
+
+    /// Whether repeating a failed fetch has any chance of succeeding.
+    ///
+    /// Retrying a permanent answer only delays the refresh callback — five attempts with the
+    /// backoff below take about half a minute — while telling the host nothing new. An expired key
+    /// or a wrong client key is not going to fix itself, so those fail immediately; congestion,
+    /// dropped connections and server-side hiccups are what the backoff exists for.
+    ///
+    /// Internal so tests can enumerate the classification without driving the network.
+    static func isRetryable(_ error: Error) -> Bool {
+        let error = error as NSError
+
+        switch error.domain {
+        case Constants.httpErrorDomain:
+            // 408 Request Timeout and 429 Too Many Requests explicitly invite a later attempt, and
+            // these 5xx mean "not now". Everything else in 4xx — 400, 401, 403, 404 — is a
+            // configuration or authentication problem that repeating cannot change.
+            return [408, 429, 500, 502, 503, 504].contains(error.code)
+
+        case NSURLErrorDomain:
+            // Transport failures never reached an answer, so they are retryable unless the request
+            // was impossible to make or was stopped on purpose.
+            switch error.code {
+            case NSURLErrorCancelled,
+                 NSURLErrorBadURL,
+                 NSURLErrorUnsupportedURL,
+                 NSURLErrorUserAuthenticationRequired,
+                 NSURLErrorClientCertificateRejected,
+                 NSURLErrorServerCertificateUntrusted,
+                 NSURLErrorAppTransportSecurityRequiresSecureConnection:
+                return false
+            default:
+                return true
+            }
+
+        default:
+            // Unknown failure shapes keep the previous behaviour rather than silently going quiet.
+            return true
+        }
+    }
+
+    private func doFetchFeatures(apiUrl: String, attempt: Int, delay: TimeInterval) {
+        dataSource.fetchFeatures(apiUrl: apiUrl) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let data):
+                self.prepareFeaturesData(data: data)
+            case .failure(let error):
+                if (error as NSError).code == 304 {
+                    self.refreshExpiresAt()
+                    let cachedError = self.fetchCachedFeatures(isRemote: true)
+                    self.delegate?.featuresUpdateIsComplete(error: cachedError, isRemote: true)
+                    return
+                }
+                if attempt < maxRetryAttempts, Self.isRetryable(error) {
+                    logger.info("GrowthBook: fetch failed, retrying in \(Int(delay))s (attempt \(attempt + 1)/\(maxRetryAttempts))")
+                    DispatchQueue.global().asyncAfter(deadline: .now() + delay) { [weak self] in
+                        self?.doFetchFeatures(apiUrl: apiUrl, attempt: attempt + 1, delay: min(delay * 2, Self.maxRetryDelay))
                     }
-                    logger.info("Failed to get features from remote: \(error.localizedDescription)")
+                } else {
+                    let cause = Self.isRetryable(error) ? "after \(maxRetryAttempts) retries" : "without retrying, the failure is permanent"
+                    logger.info("Failed to get features from remote \(cause): \(error.localizedDescription)")
                     let sdkError: SDKError = .failedToFetchData(error)
                     self.delegate?.featuresFetchFailed(error: sdkError, isRemote: true)
                     self.fetchCachedFeatures(isRemote: true)
@@ -254,12 +342,7 @@ class FeaturesViewModel {
                 if let encryptionKey = encryptionKey, !encryptionKey.isEmpty {
                     let crypto: CryptoProtocol = Crypto()
                     if let features = crypto.getFeaturesFromEncryptedFeatures(encryptedString: encryptedString, encryptionKey: encryptionKey) {
-                        if let featureData = try? JSONEncoder().encode(features) {
-                            manager.saveContent(fileName: Constants.featureCache, content: featureData)
-                            refreshExpiresAt()
-                        } else {
-                            logger.error("Failed encode features")
-                        }
+                        saveFeatures(features)
                         delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
                     } else {
                         let error: SDKError = .failedEncryptedFeatures
@@ -276,10 +359,7 @@ class FeaturesViewModel {
                     return
                 }
             } else if let features = jsonPetitions.features {
-                if let featureData = try? JSONEncoder().encode(features) {
-                    manager.saveContent(fileName: Constants.featureCache, content: featureData)
-                    refreshExpiresAt()
-                }
+                saveFeatures(features)
                 delegate?.featuresFetchedSuccessfully(features: features, isRemote: true)
             } else {
                 let error: SDKError = .failedMissingKey

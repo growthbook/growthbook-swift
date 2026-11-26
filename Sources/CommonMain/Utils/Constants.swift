@@ -11,6 +11,10 @@ public enum Constants {
 
     public static let contextualBanditsCache = "ContextualBanditsCache"
 
+    /// Error domain the network layer uses when it turns an HTTP status into an `NSError`, so the
+    /// status can be read back from `NSError.code`.
+    static let httpErrorDomain = "HTTPError"
+
     /// Attribute holding the ids of the remote saved groups the user is in. Internal attributes start
     /// with `__gb_`, matching GrowthBook's back end.
     public static let remoteGroupIdsAttribute = "__gb_remoteGroupIds"

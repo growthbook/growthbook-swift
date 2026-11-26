@@ -464,7 +464,7 @@ class OfflineSavedGroupsTests: XCTestCase {
         manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
 
         let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
-        let network = MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData)
+        let network = MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */)
         var refreshed = expectation(description: "failed refresh")
         let sdk = GrowthBookBuilder(
             apiHost: testApiHost,
@@ -518,7 +518,7 @@ class OfflineSavedGroupsTests: XCTestCase {
         let sdk = GrowthBookSDK(
             context: context,
             refreshHandler: { _ in loaded.fulfill() },
-            networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData),
+            networkDispatcher: MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */),
             cachingManager: manager,
             ttlSeconds: 0
         )
@@ -679,7 +679,9 @@ class OfflineSavedGroupsTests: XCTestCase {
             backgroundSync: false
         )
         .setRefreshHandler(refreshHandler: { _ in loaded.fulfill() })
-        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData))
+        // A permanent HTTP failure: a retryable one holds the refresh callback for the whole
+        // backoff. What these tests care about is the cache, not the retry schedule.
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404)))
         .initializer()
         wait(for: [loaded], timeout: 5)
         return sdk

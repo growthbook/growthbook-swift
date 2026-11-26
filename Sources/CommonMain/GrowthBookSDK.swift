@@ -520,7 +520,7 @@ protocol GrowthBookProtocol: AnyObject {
     private var subscriptions: [ExperimentRunCallback] = []
     private var networkDispatcher: NetworkProtocol
     private var contextManager: ContextManager
-    private var featureVM: FeaturesViewModel!
+    var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
     private var attributeOverrides: JSON = JSON()
     /// Saved groups the app supplied through `Context`. Used when a payload has none, so they

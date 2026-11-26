@@ -677,7 +677,13 @@ class ContextualBanditTests: XCTestCase {
             ttlSeconds: 0
         )
         .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { secondRefresh.fulfill() } })
-        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData))
+        // A permanent HTTP failure rather than a generic one: retries are classified now, and a
+        // retryable error would hold the refresh callback for the whole backoff before falling back.
+        // What this test cares about is the cache fallback, not the retry schedule.
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: nil,
+            error: NSError(domain: Constants.httpErrorDomain, code: 404)
+        ))
         .initializer()
         wait(for: [secondRefresh], timeout: 2.0)
 
@@ -715,7 +721,7 @@ class ContextualBanditTests: XCTestCase {
             backgroundSync: false
         )
         .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
-        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData))
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */))
         .initializer()
         wait(for: [refreshed], timeout: 2.0)
 
@@ -893,7 +899,7 @@ class ContextualBanditTests: XCTestCase {
 
         let preload = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [1.0, 0.0])
             .replacingOccurrences(of: #""features": {"#, with: #""encryptedContextualBandits": "not.readable", "features": {"#)
-        let network = MockNetworkClient(successResponse: nil, error: SDKError.failedToLoadData)
+        let network = MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */)
         var refreshed = XCTestExpectation(description: "failed refresh")
         let sdk = GrowthBookBuilder(
             apiHost: testApiHost,
