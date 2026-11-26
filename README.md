@@ -164,6 +164,24 @@ func isOn(feature id: String) -> Bool
 func setEncryptedFeatures(encryptedString: String, encryptionKey: String, subtle: CryptoProtocol? = nil)
 ```
 
+- Attribute overrides take precedence over the attributes set with `setAttributes`, without replacing them. They apply to everything an evaluation reads (targeting conditions, experiment hashing and sticky bucket lookups) and are sent with remote evaluation requests. Useful for QA: evaluating as a different user without disturbing the attributes the app maintains.
+
+```swift
+func setAttributeOverrides(overrides: Any)
+```
+
+```swift
+sdkInstance.setAttributes(attributes: ["id": "user-1", "country": "US"])
+
+sdkInstance.setAttributeOverrides(overrides: ["country": "DE"])
+// Evaluation now sees country = DE, while getGBAttributes() still reports US
+
+sdkInstance.setAttributeOverrides(overrides: [:])
+// Overrides lifted: evaluation is back to the base attributes
+```
+
+  Overrides stay in place when `setAttributes` or `appendAttributes` changes the base attributes, as in the JS SDK. Clear them explicitly with an empty map. When a `StickyBucketService` is configured, changing the attributes or the overrides drops the loaded sticky bucket assignment documents at once and reloads them for the effective values, since the documents are keyed by the attribute values the assignment was made for. Without a service the documents are kept: nothing could reload them, and a document only applies when its key matches the effective attributes.
+
 
 ## Models
 

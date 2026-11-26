@@ -371,4 +371,86 @@ class GrowthBookSDKTests: XCTestCase {
 
         XCTAssertTrue(sdk.isOn(feature: "onboarding"))
     }
+
+    // MARK: - setAttributeOverrides evaluation
+
+    /// Payload whose rule only applies to users in DE, while the SDK's base attributes say US.
+    private var countryGatedPayload: Data {
+        """
+        {"features":{"promo":{"defaultValue":"off","rules":[{"condition":{"country":"DE"},"force":"on"}]}}}
+        """.data(using: .utf8)!
+    }
+
+    func testAttributeOverridesAffectFeatureEvaluation() {
+        let sdk = makeSDK(features: countryGatedPayload)
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "off",
+                       "precondition: the base attributes do not match the rule")
+
+        sdk.setAttributeOverrides(overrides: ["country": "DE"])
+
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "on",
+                       "An override must be visible to targeting conditions")
+    }
+
+    func testAttributeOverridesCanBeLifted() {
+        let sdk = makeSDK(features: countryGatedPayload)
+
+        sdk.setAttributeOverrides(overrides: ["country": "DE"])
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "on")
+
+        sdk.setAttributeOverrides(overrides: [:])
+        XCTAssertEqual(sdk.getFeatureValue(feature: "promo", default: JSON("none")).stringValue, "off",
+                       "An empty override map restores the base attributes")
+    }
+
+    /// Overrides are also the hash input, not just a targeting filter — otherwise a QA override
+    /// would target the experiment but bucket the original user.
+    func testAttributeOverridesAffectExperimentHashing() {
+        let sdk = makeSDK()
+        let experiment = Experiment(key: "exp", variations: [JSON("a"), JSON("b")], hashAttribute: "id", coverage: 1.0)
+
+        XCTAssertEqual(sdk.run(experiment: experiment).valueHash, "user-1")
+
+        sdk.setAttributeOverrides(overrides: ["id": "qa-user"])
+
+        XCTAssertEqual(sdk.run(experiment: experiment).valueHash, "qa-user")
+    }
+
+    /// The overrides are an evaluation-time layer, so what the app set remains readable.
+    func testAttributeOverridesDoNotChangeReportedAttributes() {
+        let sdk = makeSDK(features: countryGatedPayload)
+
+        sdk.setAttributeOverrides(overrides: ["country": "DE"])
+
+        XCTAssertEqual(sdk.getGBAttributes()["country"].stringValue, "US")
+        XCTAssertEqual(sdk.getGBContext().attributes["country"].stringValue, "US")
+    }
+
+    /// Without a `StickyBucketService` nothing could reload the documents the SDK was given, so
+    /// changing the attributes or overrides must keep them. A document only applies when its
+    /// `attribute||value` key matches the effective attributes, so keeping it can't mismatch.
+    func testStickyDocsSurviveAttributeChangesWithoutAService() throws {
+        let doc = StickyAssignmentsDocument(attributeName: "id", attributeValue: "user-1",
+                                            assignments: ["exp__0": "1"])
+        let context = Context(
+            apiHost: apiHost, streamingHost: nil, clientKey: clientKey, encryptionKey: nil,
+            isEnabled: true, attributes: JSON(["id": "user-1"]), forcedVariations: nil,
+            stickyBucketAssignmentDocs: ["id||user-1": doc],
+            isQaMode: false, trackingClosure: { _, _ in }
+        )
+        let sdk = GrowthBookSDK(
+            context: context,
+            networkDispatcher: MockNetworkClient(successResponse: MockResponse().successResponse, error: nil),
+            features: [:],
+            cachingManager: CachingManager(apiKey: clientKey),
+            ttlSeconds: 60
+        )
+
+        sdk.setAttributeOverrides(overrides: ["country": "DE"])
+        sdk.setAttributes(attributes: ["id": "user-1", "plan": "pro"])
+        try sdk.appendAttributes(attributes: ["beta": true])
+
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||user-1"],
+                        "without a service the documents cannot be reloaded, so they must be kept")
+    }
 }

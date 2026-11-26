@@ -522,7 +522,6 @@ protocol GrowthBookProtocol: AnyObject {
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
-    private var attributeOverrides: JSON = JSON()
     /// Saved groups the app supplied through `Context`. Used when a payload has none, so they
     /// aren't dropped (JS also keeps its saved groups when a payload has none).
     private var appSavedGroups: JSON?
@@ -534,6 +533,10 @@ protocol GrowthBookProtocol: AnyObject {
     /// True once the session's initial features have been applied.
     /// Set once and never reset — used as the stableSession latch.
     private var sessionEstablished: Bool = false
+    /// Incremented on every sticky bucket refresh, so a completion that resolves after a newer
+    /// refresh started can recognise itself as stale. Mutated under `lock`, except in `init()`
+    /// where the instance has not escaped to other threads yet.
+    private var stickyRefreshGeneration: Int = 0
     /// True once the session's contextual bandit definitions have been applied.
     ///
     /// Bandits need a latch of their own rather than reusing `sessionEstablished`: on a network
@@ -891,14 +894,19 @@ protocol GrowthBookProtocol: AnyObject {
                 return
             }
 
-            self.contextManager.updateEvalData { data in
-                data.features = features
-            }
-            self.refreshStickyBucketService()
-
-            if stableSession {
-                sessionEstablished = true
-                logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
+            // Apply features only after sticky bucket docs are loaded so that the
+            // first evaluation after a payload update never sees features without docs.
+            // For the default sync StickyBucketService the completion fires immediately
+            // (zero behaviour change); for async services features are delayed until
+            // docs are ready, mirroring Kotlin's onPayloadReady pattern.
+            self.refreshStickyBucketService {
+                self.contextManager.updateEvalData { data in
+                    data.features = features
+                }
+                if stableSession {
+                    self.sessionEstablished = true
+                    logger.info("stableSession: initial features established. Session is now locked — subsequent refreshes will update the cache only and apply on next SDK initialization.")
+                }
             }
         }
     }
@@ -1096,7 +1104,12 @@ protocol GrowthBookProtocol: AnyObject {
             let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
             let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
-            let payload = RemoteEvalParams(attributes: evalData.evaluationAttributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
+            // Send what the SDK itself evaluates against: `getEvalContext()` merges
+            // `attributeOverrides` on top of the base attributes, so taking `evalData.attributes`
+            // here would ask the server to evaluate a user the local evaluator no longer sees.
+            let effectiveAttributes = contextManager.getEvalContext().userContext.attributes
+
+            let payload = RemoteEvalParams(attributes: effectiveAttributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
             featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload, force: force)
         }
     }
@@ -1200,12 +1213,15 @@ protocol GrowthBookProtocol: AnyObject {
         withLock { contextManager.getEvaluationData().remoteGroupIds }
     }
 
-    /// The setAttributes method replaces the Map of user attributes that are used to assign variations
+    /// The setAttributes method replaces the Map of user attributes that are used to assign variations.
+    /// Attribute overrides are kept and still win over these, as in the JS SDK; clear them with
+    /// `setAttributeOverrides(overrides: [:])`.
     /// - Parameter attributes: Any
     @objc public func setAttributes(attributes: Any) {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.attributes = JSON(attributes)
+                self.dropStickyDocsIfReloadable(data)
             }
             self.refreshStickyBucketService()
         }
@@ -1219,20 +1235,37 @@ protocol GrowthBookProtocol: AnyObject {
             let updatedAttributes = try evalData.attributes.merged(with: JSON(attributes))
             contextManager.updateEvalData { data in
                 data.attributes = updatedAttributes
+                dropStickyDocsIfReloadable(data)
             }
             refreshStickyBucketService()
         }
     }
 
-    /// Sets custom attribute values that override the default ones
-    /// - Parameter overrides: Ant
+    /// Drops the loaded sticky bucket documents when the effective attributes change, so a refresh
+    /// in flight never serves the previous user's assignments — but only when a
+    /// `StickyBucketService` is configured to reload them, as the JS SDK only touches them through
+    /// `refreshStickyBuckets()`. Without a service the documents came from the init context and
+    /// could not be recovered; keeping them can't cause a wrong match, since a document is only
+    /// used when its `attribute||value` key matches the current effective attributes.
+    private func dropStickyDocsIfReloadable(_ data: EvaluationData) {
+        guard contextManager.getGlobalConfig().stickyBucketService != nil else { return }
+        data.stickyBucketAssignmentDocs = nil
+    }
+
+    /// Sets attribute values that take precedence over the ones passed to `setAttributes`.
+    ///
+    /// Overrides are layered on top of the base attributes for every evaluation — targeting
+    /// conditions, experiment hashing and sticky bucket lookups all see them — and are sent with
+    /// remote evaluation requests. `attributes` itself is left untouched, so `getGBAttributes()`
+    /// still reports what the app set. Pass an empty map to lift the overrides again.
+    /// - Parameter overrides: Any
     @objc public func setAttributeOverrides(overrides: Any) {
         withLock {
-            self.attributeOverrides = JSON(overrides)
-            let globalConfig = self.contextManager.getGlobalConfig()
-            if globalConfig.stickyBucketService != nil {
-                self.refreshStickyBucketService()
+            self.contextManager.updateEvalData { data in
+                data.attributeOverrides = JSON(overrides)
+                self.dropStickyDocsIfReloadable(data)
             }
+            self.refreshStickyBucketService()
             self.refreshForRemoteEval()
         }
     }
@@ -1269,25 +1302,40 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
-    @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil) {
+    @objc private func refreshStickyBucketService(_ data: FeaturesDataModel? = nil, completion: (() -> Void)? = nil) {
         let globalConfig = contextManager.getGlobalConfig()
-        guard let service = globalConfig.stickyBucketService else { return }
+        guard let service = globalConfig.stickyBucketService else {
+            completion?()
+            return
+        }
 
-        let evalData = contextManager.getEvaluationData()
         let context = contextManager.getEvalContext()
 
+        // A custom service may resolve asynchronously and out of order: a request started for one
+        // user can complete after a request started for the next one. Tag this refresh with a
+        // generation so its completion can tell whether it is still the current one; the documents
+        // it carries belong to the attributes captured above, not to whatever is current now.
+        stickyRefreshGeneration += 1
+        let generation = stickyRefreshGeneration
 
         Utils.refreshStickyBuckets(
             stickyBucketService: service,
             context: context,
-            attributes: evalData.attributes,
+            attributes: context.userContext.attributes,
             data: data
         ) { [weak self] docs in
             guard let self = self else { return }
             self.withLock {
+                // Still invoke this call's own completion — its caller is waiting on it — but let
+                // the newer refresh own the state.
+                guard generation == self.stickyRefreshGeneration else {
+                    completion?()
+                    return
+                }
                 self.contextManager.updateEvalData { data in
                     data.stickyBucketAssignmentDocs = docs
                 }
+                completion?()
             }
         }
     }
