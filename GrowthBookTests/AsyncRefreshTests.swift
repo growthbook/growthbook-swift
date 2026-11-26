@@ -193,6 +193,82 @@ final class AsyncRefreshTests: XCTestCase {
         XCTAssertEqual((failingOutcome.storedError as? SDKError)?.code, .failedToFetchData)
     }
 
+    /// A remote-eval reply for inputs a newer request has replaced is dropped without being applied
+    /// or reported. Its caller must still resume — with the newest request's outcome, once that
+    /// settles — rather than wait forever.
+    func testSupersededEvaluateResumesWithTheNewestOutcome() async throws {
+        sdk_clearCache()
+        let network = DeferredNetworkClient()
+        let sdk = GrowthBookBuilder(
+            apiHost: apiHost,
+            clientKey: clientKey,
+            encryptionKey: nil,
+            attributes: [:],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false,
+            remoteEval: true,
+            ttlSeconds: 0
+        )
+        .setNetworkDispatcher(networkDispatcher: network)
+        .initializer()
+        try await waitForParkedRequests(network, count: 1)
+
+        let olderOutcome = OutcomeBox()
+        let olderCaller = Task {
+            do { try await sdk.evaluate(); olderOutcome.settle(nil) }
+            catch { olderOutcome.settle(error) }
+        }
+        try await waitForParkedRequests(network, count: 2)
+
+        let newerOutcome = OutcomeBox()
+        let newerCaller = Task {
+            do { try await sdk.evaluate(); newerOutcome.settle(nil) }
+            catch { newerOutcome.settle(error) }
+        }
+        try await waitForParkedRequests(network, count: 3)
+
+        // The older reply arrives first but is superseded: its caller waits for the newer one.
+        let payload = MockResponse().successResponse.data(using: .utf8) ?? Data()
+        network.complete(1, with: .success(payload))
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertFalse(olderOutcome.isSettled, "a superseded caller resumed before the newest request settled")
+
+        network.complete(2, with: .failure(SDKError.failedToLoadData))
+        _ = await newerCaller.value
+        _ = await olderCaller.value
+
+        XCTAssertEqual((newerOutcome.storedError as? SDKError)?.code, .failedToLoadData)
+        XCTAssertEqual((olderOutcome.storedError as? SDKError)?.code, .failedToLoadData,
+                       "the superseded caller gets the newest request's outcome")
+    }
+
+    /// Once a stableSession is established, remote evaluation is not refetched; `evaluate()` must
+    /// return rather than wait for a fetch that never starts.
+    func testEvaluateReturnsWithoutFetchingInAnEstablishedStableSession() async throws {
+        sdk_clearCache()
+        let network = MockNetworkClient(successResponse: MockResponse().successResponse, error: nil as Error?)
+        let sdk = GrowthBookBuilder(
+            apiHost: apiHost,
+            clientKey: clientKey,
+            encryptionKey: nil,
+            attributes: [:],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false,
+            remoteEval: true,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setNetworkDispatcher(networkDispatcher: network)
+        .initializer()
+        let callsAfterInit = network.callCount
+
+        try await sdk.evaluate()
+
+        XCTAssertEqual(network.callCount, callsAfterInit, "an established stableSession does not refetch")
+    }
+
     private func waitForParkedRequests(_ network: DeferredNetworkClient, count: Int) async throws {
         for _ in 0..<250 {
             if network.parkedCount >= count { return }
