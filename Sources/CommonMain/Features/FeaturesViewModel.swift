@@ -98,6 +98,13 @@ class FeaturesViewModel {
         }
     }
     
+    /// Replaces the streaming host headers on the live connection, so the next reconnect sends
+    /// them — a rotated token reaches the stream without restarting the SDK. The open connection
+    /// keeps the headers it was made with.
+    func updateStreamingHeaders(_ headers: [String: String]) {
+        sseHandler?.headers = headers
+    }
+
     deinit {
         sseHandler?.disconnect()
     }

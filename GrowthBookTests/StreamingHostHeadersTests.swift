@@ -32,6 +32,38 @@ final class StreamingHostHeadersTests: XCTestCase {
         vm.sseHandler?.disconnect()
     }
 
+    /// A rotated token has to reach the live stream: reconnects reuse the same handler, so updated
+    /// headers that only applied to a future `connectBackgroundSync` would never be sent.
+    func testUpdatedHeadersApplyToTheNextReconnect() {
+        let vm = makeViewModel()
+        vm.connectBackgroundSync(sseUrl: deadURL, headers: ["Authorization": "Bearer old"])
+        let handler = vm.sseHandler
+
+        vm.updateStreamingHeaders(["Authorization": "Bearer new"])
+
+        XCTAssertTrue(vm.sseHandler === handler, "updating headers must not replace the connection")
+        let reconnect = handler?.sessionConfiguration(lastEventId: nil).httpAdditionalHeaders as? [String: String]
+        XCTAssertEqual(reconnect?["Authorization"], "Bearer new",
+                       "the next reconnect must send the updated headers")
+        XCTAssertEqual(reconnect?["Accept"], "text/event-stream", "SDK-managed headers still win")
+
+        handler?.disconnect()
+    }
+
+    /// Reconnects read the headers on the main queue and redirects on the session's queue, while
+    /// the app may replace them from any thread.
+    func testHeadersCanBeReplacedWhileBeingRead() {
+        let handler = SSEHandler(url: URL(string: deadURL)!, headers: ["Authorization": "Bearer 0"])
+        DispatchQueue.concurrentPerform(iterations: 1_000) { i in
+            if i.isMultiple(of: 2) {
+                handler.headers = ["Authorization": "Bearer \(i)"]
+            } else {
+                _ = handler.sessionConfiguration(lastEventId: nil)
+            }
+        }
+        XCTAssertNotNil(handler.headers["Authorization"])
+    }
+
     func testStreamingConnectionWithoutHeadersStaysEmpty() {
         let vm = makeViewModel()
 

@@ -1274,10 +1274,15 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
-    /// Updates streaming host request headers for SSE connections
+    /// Updates streaming host request headers for SSE connections.
+    ///
+    /// Applies to the live stream from its next reconnect — for example after the server closes it
+    /// on an expired token — as well as to any later connection. The open connection keeps the
+    /// headers it was made with.
     @objc public func updateStreamingHostRequestHeaders(_ headers: [String: String]) {
         withLock {
             streamingHostRequestHeaders = headers
+            featureVM.updateStreamingHeaders(headers)
         }
         if let networkClient = networkDispatcher as? CoreNetworkClient {
             networkClient.streamingHostRequestHeaders = headers

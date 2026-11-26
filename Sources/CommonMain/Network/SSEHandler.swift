@@ -11,7 +11,15 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
     public let url: URL
     public var lastEventId: String?
     public var retryTime = SSEHandler.DefaultRetryTime
-    public var headers: [String: String]
+    /// Headers sent with every connection, including reconnects. Can be replaced while connected:
+    /// the next (re)connect uses the new values. Guarded because reconnects read it on the main
+    /// queue, redirects on `operationQueue`, and the app writes it from wherever it rotates a token.
+    public var headers: [String: String] {
+        get { headersLock.lock(); defer { headersLock.unlock() }; return _headers }
+        set { headersLock.lock(); defer { headersLock.unlock() }; _headers = newValue }
+    }
+    private var _headers: [String: String]
+    private let headersLock = NSLock()
     public var connectionStatus: SSEConnectionStatus
 
     private var onConnect: (() -> Void)?
@@ -73,7 +81,7 @@ class SSEHandler: NSObject, URLSessionDataDelegate {
         headers: [String: String] = [:]
     ) {
         self.url = url
-        self.headers = headers
+        self._headers = headers
 
         connectionStatus = SSEConnectionStatus.disconnected
         operationQueue = OperationQueue()
