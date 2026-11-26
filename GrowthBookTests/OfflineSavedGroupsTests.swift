@@ -236,6 +236,298 @@ class OfflineSavedGroupsTests: XCTestCase {
                        "the encrypted saved groups must be cached in the form the cache is read back in")
     }
 
+    // MARK: - Payloads without saved groups clear the cached ones
+
+    /// A preload without saved groups must not leave an earlier payload's groups in the cache for
+    /// the next cold start to pair with these features.
+    func testPreloadWithoutSavedGroupsClearsCachedGroups() {
+        let clientKey = "offline-sg-preload-clears"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = makeSDK(payload: inGroupPayload(), userId: "user-vip", clientKey: clientKey)
+        _ = makeSDK(payload: #"{"features":{"my-feature":{"defaultValue":"off"}}}"#, userId: "user-vip", clientKey: clientKey)
+        let coldStart = makeCachedSDK(clientKey: clientKey, encryptionKey: nil)
+
+        XCTAssertNil(coldStart.getGBContext().savedGroups)
+    }
+
+    /// A fetched payload without saved groups drops them now and from the cache.
+    func testFetchedPayloadWithoutSavedGroupsClearsThem() {
+        let clientKey = "offline-sg-fetch-clears"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = makeSDK(payload: inGroupPayload(), userId: "user-vip", clientKey: clientKey)
+        let loaded = expectation(description: "fetch")
+        loaded.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in loaded.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: #"{"features":{"my-feature":{"defaultValue":"off"}}}"#, error: nil))
+        .initializer()
+        wait(for: [loaded], timeout: 5)
+
+        XCTAssertNil(sdk.getGBContext().savedGroups)
+        XCTAssertNil(makeCachedSDK(clientKey: clientKey, encryptionKey: nil).getGBContext().savedGroups)
+    }
+
+    /// Preloaded encrypted groups that can't be decrypted leave the cached groups alone, as on
+    /// the network path; clearing them would make every `$notInGroup` match after a cold start.
+    func testPreloadWithUnreadableEncryptedSavedGroupsKeepsCachedGroups() throws {
+        let clientKey = "offline-sg-preload-undecryptable"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = makeSDK(payload: notInGroupPayload(), userId: "user-vip", clientKey: clientKey)
+        // Same features with the groups encrypted, and this SDK has no key
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let groups = try encrypt(#"{"vips":["user-vip"]}"#, key: encryptionKey)
+        _ = makeSDK(payload: #"{"features": \#(features), "encryptedSavedGroups": "\#(groups)"}"#, userId: "user-vip", clientKey: clientKey)
+        let coldStart = makeCachedSDK(clientKey: clientKey, encryptionKey: nil)
+
+        XCTAssertEqual(coldStart.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
+    /// Encrypted groups that can't be opened must not erase the current groups.
+    func testUnreadableEncryptedSavedGroupsKeepTheCurrentGroups() throws {
+        let clientKey = "offline-sg-encrypted-no-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        // Plain features with the groups encrypted, and this SDK has no key
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let groups = try encrypt(#"{"vips":["someone-else"]}"#, key: encryptionKey)
+        let refreshed = #"{"features": \#(features), "encryptedSavedGroups": "\#(groups)"}"#
+        let done = expectation(description: "refresh")
+        done.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            features: Data(notInGroupPayload().utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in done.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: refreshed, error: nil))
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [done], timeout: 5)
+
+        XCTAssertEqual(sdk.getGBContext().savedGroups?["vips"].arrayValue.first?.stringValue, "user-vip")
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
+    /// After a preload, a refreshed encrypted payload must still decrypt with the builder's key.
+    func testRefreshAfterEncryptedPreloadDecrypts() throws {
+        let clientKey = "offline-sg-encrypted-refresh"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        let refreshedFeatures = try encrypt(#"{"my-feature":{"defaultValue":"refreshed"}}"#, key: encryptionKey)
+        let refreshed = #"{"features": {}, "encryptedFeatures": "\#(refreshedFeatures)"}"#
+        let done = expectation(description: "refresh")
+        done.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            encryptionKey: encryptionKey,
+            attributes: ["id": "user-vip"],
+            features: Data(try encryptedPayload(includeEmptyFeatures: true).utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in done.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: refreshed, error: nil))
+        .initializer()
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "on")
+        sdk.refreshCache()
+        wait(for: [done], timeout: 5)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "refreshed")
+    }
+
+    /// Under stableSession, a session restored from cached features whose cached groups are empty
+    /// keeps having none: the first fetch's groups must not be applied to the cached features.
+    func testStableSessionCachedEmptyGroupsLockTheSession() throws {
+        let clientKey = "offline-sg-stable-empty-cache"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        let model = try JSONDecoder().decode(FeaturesDataModel.self, from: Data(inGroupPayload().utf8))
+        manager.saveContent(fileName: Constants.featureCache, content: try JSONEncoder().encode(model.features))
+        manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+
+        let loaded = expectation(description: "first fetch")
+        loaded.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            trackingCallback: { _, _ in },
+            refreshHandler: nil,
+            backgroundSync: false
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in loaded.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: inGroupPayload(), error: nil))
+        .initializer()
+        wait(for: [loaded], timeout: 5)
+
+        XCTAssertNil(sdk.getGBContext().savedGroups)
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
+    /// Under stableSession, preloaded groups that can't be decrypted don't lock the session
+    /// without groups; the next payload's groups are applied.
+    func testStableSessionPreloadWithUnreadableGroupsTakesTheNextPayloadsGroups() throws {
+        let clientKey = "offline-sg-stable-unreadable"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        // $notInGroup features with the groups encrypted, and this SDK has no key
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let groups = try encrypt(#"{"vips":["user-vip"]}"#, key: encryptionKey)
+        let refreshed = expectation(description: "refresh")
+        refreshed.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            features: Data(#"{"features": \#(features), "encryptedSavedGroups": "\#(groups)"}"#.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in refreshed.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: notInGroupPayload(), error: nil))
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 5)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
+    /// An empty groups cache from an earlier payload must not lock the session without groups
+    /// while it waits for a fetch to replace groups the preload couldn't decrypt.
+    func testStableSessionUnreadablePreloadIgnoresAnEmptyCachedGroups() {
+        let clientKey = "offline-sg-stable-unreadable-empty-cache"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let refreshed = expectation(description: "refresh")
+        refreshed.assertForOverFulfill = false
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            features: Data(#"{"features": \#(features), "encryptedSavedGroups": "not.readable"}"#.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in refreshed.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: notInGroupPayload(), error: nil))
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 5)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
+    /// A failed refresh re-reads the cache; that read must not close a section left open by an
+    /// unreadable preload either, or the next payload's groups are ignored.
+    func testStableSessionUnreadablePreloadIgnoresTheCacheAfterAFailedRefresh() {
+        let clientKey = "offline-sg-stable-unreadable-failed-refresh"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+
+        let features = #"{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","condition":{"id":{"$notInGroup":"vips"}},"force":"on"}]}}"#
+        let network = MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */)
+        var refreshed = expectation(description: "failed refresh")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-vip"],
+            features: Data(#"{"features": \#(features), "encryptedSavedGroups": "not.readable"}"#.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in refreshed.fulfill() })
+        .setNetworkDispatcher(networkDispatcher: network)
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 5)
+
+        network.error = nil
+        network.successResponse = notInGroupPayload()
+        refreshed = expectation(description: "refresh")
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 5)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
+    /// Groups the app supplies through `Context` stay when a payload or cache has none.
+    func testContextSavedGroupsSurviveAPayloadWithoutGroups() throws {
+        let clientKey = "offline-sg-context-groups"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        let model = try JSONDecoder().decode(FeaturesDataModel.self, from: Data(notInGroupPayload().utf8))
+        manager.saveContent(fileName: Constants.featureCache, content: try JSONEncoder().encode(model.features))
+        manager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+
+        let context = Context(
+            apiHost: testApiHost,
+            streamingHost: nil,
+            clientKey: clientKey,
+            encryptionKey: nil,
+            isEnabled: true,
+            attributes: JSON(["id": "user-vip"]),
+            forcedVariations: nil,
+            isQaMode: false,
+            trackingClosure: { _, _ in },
+            savedGroups: JSON(["vips": ["user-vip"]])
+        )
+        let loaded = expectation(description: "refresh")
+        loaded.assertForOverFulfill = false
+        let sdk = GrowthBookSDK(
+            context: context,
+            refreshHandler: { _ in loaded.fulfill() },
+            networkDispatcher: MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */),
+            cachingManager: manager,
+            ttlSeconds: 0
+        )
+        wait(for: [loaded], timeout: 5)
+
+        XCTAssertEqual(sdk.getGBContext().savedGroups, JSON(["vips": ["user-vip"]]))
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").value?.stringValue, "off")
+    }
+
     // MARK: - stableSession
 
     /// Under stableSession a refresh must not replace the session's saved groups any more than

@@ -694,6 +694,238 @@ class ContextualBanditTests: XCTestCase {
         manager.clearCache()
     }
 
+    /// A later launch reads the features a preload cached, and must get its bandits with them.
+    func testPreloadedBanditsSurviveCacheRoundTrip() {
+        let clientKey = "bandit-preload-cache-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        _ = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(payload(banditVersion: 3, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0]).utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: nil))
+        .initializer()
+
+        let refreshed = XCTestExpectation(description: "cold start")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        let result = sdk.evalFeature(id: "my-feature")
+        XCTAssertEqual(result.experimentResult?.leafId, 2, "Preloaded bandits must be restored from the cache")
+        XCTAssertEqual(result.experimentResult?.banditVersion, 3)
+    }
+
+    /// A preload whose features don't load leaves the session to the first fetch, which must
+    /// apply its own bandits rather than keep the preload's.
+    func testStableSessionPreloadWithoutFeaturesTakesBanditsFromTheFirstFetch() {
+        let clientKey = "bandit-stable-no-features-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        // Empty features are invalid under stableSession, so the SDK falls back to the network
+        let preload = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [1.0, 0.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""features": {}, "unused": {"#)
+        let refreshed = XCTestExpectation(description: "first fetch")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(preload.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0]),
+            error: nil
+        ))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        let result = sdk.evalFeature(id: "my-feature")
+        XCTAssertEqual(result.experimentResult?.banditVersion, 2)
+        XCTAssertEqual(result.value?.stringValue, "treatment")
+    }
+
+    /// Under stableSession, a session whose first payload has no bandits keeps having none: a later
+    /// payload's bandits would re-bucket users mid-session.
+    func testStableSessionWithoutBanditsDoesNotApplyLaterBandits() {
+        let clientKey = "bandit-stable-none-first-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+
+        let withBandits = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+        let withoutBandits = #"{"features":{"my-feature":{"defaultValue":"off","rules":[{"id":"rule-1","key":"e2e-experiment","contextualBanditRef":"bandit-1","contextualVariations":["control","treatment"]}]}}}"#
+        let client = MockNetworkClient(successResponse: withoutBandits, error: nil)
+        let firstFetch = XCTestExpectation(description: "first fetch")
+        var onRefresh: () -> Void = { firstFetch.fulfill() }
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in onRefresh() })
+        .setNetworkDispatcher(networkDispatcher: client)
+        .initializer()
+        wait(for: [firstFetch], timeout: 2.0)
+
+        let refreshed = XCTestExpectation(description: "refresh")
+        onRefresh = { refreshed.fulfill() }
+        client.successResponse = withBandits
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertNil(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion)
+    }
+
+    /// Under stableSession, a session restored from cached features whose cached bandits are
+    /// empty keeps having none.
+    func testStableSessionCachedEmptyBanditsLockTheSession() throws {
+        let clientKey = "bandit-stable-empty-cache-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        let withBandits = payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+        let model = try JSONDecoder().decode(FeaturesDataModel.self, from: Data(withBandits.utf8))
+        manager.saveContent(fileName: Constants.featureCache, content: try JSONEncoder().encode(model.features))
+        manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+
+        let refreshed = XCTestExpectation(description: "first fetch")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: withBandits, error: nil))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertNil(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion)
+    }
+
+    /// Encrypted saved groups that can't be read don't stop the payload's bandits from applying.
+    func testUnreadableSavedGroupsDoNotSkipTheBandits() {
+        let clientKey = "bandit-unreadable-groups-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        let response = payload(banditVersion: 4, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""encryptedSavedGroups": "not.readable", "features": {"#)
+
+        let refreshed = XCTestExpectation(description: "fetch")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            trackingCallback: { _, _ in },
+            backgroundSync: false
+        )
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(successResponse: response, error: nil))
+        .initializer()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 4)
+    }
+
+    /// An empty bandits cache from an earlier payload must not lock the session without bandits
+    /// while it waits for a fetch to replace bandits the preload couldn't decrypt.
+    func testStableSessionUnreadablePreloadIgnoresAnEmptyCachedBandits() {
+        let clientKey = "bandit-stable-unreadable-empty-cache-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+
+        let preload = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [1.0, 0.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""encryptedContextualBandits": "not.readable", "features": {"#)
+        let refreshed = XCTestExpectation(description: "refresh")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(preload.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: MockNetworkClient(
+            successResponse: payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0]),
+            error: nil
+        ))
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 2)
+    }
+
+    /// A failed refresh re-reads the cache; that read must not close bandits left open by an
+    /// unreadable preload either, or the next payload's bandits are ignored.
+    func testStableSessionUnreadablePreloadIgnoresTheCachedBanditsAfterAFailedRefresh() {
+        let clientKey = "bandit-stable-unreadable-failed-refresh-key"
+        let manager = CachingManager(apiKey: clientKey)
+        manager.clearCache()
+        defer { manager.clearCache() }
+        manager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+
+        let preload = payload(banditVersion: 1, usWeights: [1.0, 0.0], caWeights: [1.0, 0.0])
+            .replacingOccurrences(of: #""features": {"#, with: #""encryptedContextualBandits": "not.readable", "features": {"#)
+        let network = MockNetworkClient(successResponse: nil, error: NSError(domain: Constants.httpErrorDomain, code: 404) /* permanent: a retryable failure would hold the callback for the whole backoff */)
+        var refreshed = XCTestExpectation(description: "failed refresh")
+        let sdk = GrowthBookBuilder(
+            apiHost: testApiHost,
+            clientKey: clientKey,
+            attributes: ["id": "user-1", "country": "CA"],
+            features: Data(preload.utf8),
+            trackingCallback: { _, _ in },
+            backgroundSync: false,
+            ttlSeconds: 0
+        )
+        .setStableSession(true)
+        .setRefreshHandler(refreshHandler: { _ in DispatchQueue.main.async { refreshed.fulfill() } })
+        .setNetworkDispatcher(networkDispatcher: network)
+        .initializer()
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        network.error = nil
+        network.successResponse = payload(banditVersion: 2, usWeights: [1.0, 0.0], caWeights: [0.0, 1.0])
+        refreshed = XCTestExpectation(description: "refresh")
+        sdk.refreshCache()
+        wait(for: [refreshed], timeout: 2.0)
+
+        XCTAssertEqual(sdk.evalFeature(id: "my-feature").experimentResult?.banditVersion, 2)
+    }
+
     // MARK: - Sticky bucket identifier attributes
 
     /// The identifier attributes drive which assignment documents are fetched from the sticky bucket

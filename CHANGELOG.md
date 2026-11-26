@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/growthbook/growthbook-swift/compare/2.1.0...2.1.1) (2026-11-25)
+
+
+### Bug Fixes
+
+* keep cached saved groups and bandits in step with features; refetch remote eval on setter changes ([#209](https://github.com/growthbook/growthbook-swift/issues/209)) ([897986f](https://github.com/growthbook/growthbook-swift/commit/897986fa573dd8df377983f496b1edef81d4a43e))
+
 ## [2.1.0](https://github.com/growthbook/growthbook-swift/compare/2.0.2...2.1.0) (2026-11-18)
 
 
