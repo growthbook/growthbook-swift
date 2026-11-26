@@ -8,6 +8,12 @@ public enum Constants {
     public static let featureCache = "FeatureCache"
     
     public static let savedGroupsCache = "SavedGroupsCache"
+
+    public static let contextualBanditsCache = "ContextualBanditsCache"
+
+    /// Attribute holding the ids of the remote saved groups the user is in. Internal attributes start
+    /// with `__gb_`, matching GrowthBook's back end.
+    public static let remoteGroupIdsAttribute = "__gb_remoteGroupIds"
 }
 
 /// Type Alias for Feature in GrowthBook
@@ -42,14 +48,14 @@ public typealias ExperimentRunCallback = (Experiment, ExperimentResult) -> Void
 /// Triple Tuple for GrowthBook Namespaces
 ///
 /// It has ID, StartRange & EndRange
-typealias NameSpace = (String, Float, Float)
+typealias NameSpace = (String, Double, Double)
 
 /// Double Struct for GrowthBook Ranges
 public struct BucketRange: Codable {
-    let number1: Float
-    let number2: Float
+    let number1: Double
+    let number2: Double
     
-    init(number1: Float, number2: Float) {
+    init(number1: Double, number2: Double) {
         self.number1 = number1
         self.number2 = number2
     }
@@ -60,8 +66,8 @@ public struct BucketRange: Codable {
             number1 = 0
             number2 = 0
         } else {
-            self.number1 = values[0].floatValue
-            self.number2 = values[1].floatValue
+            self.number1 = values[0].doubleValue
+            self.number2 = values[1].doubleValue
         }
     }
 
@@ -69,8 +75,8 @@ public struct BucketRange: Codable {
     /// Swift's synthesised Codable would look for keyed fields, so we implement manually.
     public init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
-        number1 = try container.decode(Float.self)
-        number2 = try container.decode(Float.self)
+        number1 = try container.decode(Double.self)
+        number2 = try container.decode(Double.self)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -86,6 +92,7 @@ public enum SDKErrorCode: String {
     case failedMissingKey
     case failedEncryptedFeatures
     case failedEncryptedSavedGroups
+    case failedEncryptedContextualBandits
     case failedParsedEncryptedData
     case failedToFetchData
     case invalidAPIURL
@@ -98,6 +105,7 @@ public enum SDKErrorCode: String {
     static let failedMissingKey = SDKError(code: .failedMissingKey)
     static let failedEncryptedFeatures = SDKError(code: .failedEncryptedFeatures)
     static let failedEncryptedSavedGroups = SDKError(code: .failedEncryptedSavedGroups)
+    static let failedEncryptedContextualBandits = SDKError(code: .failedEncryptedContextualBandits)
     static let failedParsedEncryptedData = SDKError(code: .failedParsedEncryptedData)
     static let failedToFetchData = SDKError(code: .failedToFetchData)
     static let invalidAPIURL = SDKError(code: .invalidAPIURL)
