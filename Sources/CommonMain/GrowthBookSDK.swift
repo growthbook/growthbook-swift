@@ -1221,7 +1221,7 @@ protocol GrowthBookProtocol: AnyObject {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.attributes = JSON(attributes)
-                data.stickyBucketAssignmentDocs = nil
+                self.dropStickyDocsIfReloadable(data)
             }
             self.refreshStickyBucketService()
         }
@@ -1235,19 +1235,35 @@ protocol GrowthBookProtocol: AnyObject {
             let updatedAttributes = try evalData.attributes.merged(with: JSON(attributes))
             contextManager.updateEvalData { data in
                 data.attributes = updatedAttributes
-                data.stickyBucketAssignmentDocs = nil
+                dropStickyDocsIfReloadable(data)
             }
             refreshStickyBucketService()
         }
     }
 
-    /// Sets custom attribute values that override the default ones
+    /// Drops the loaded sticky bucket documents when the effective attributes change, so a refresh
+    /// in flight never serves the previous user's assignments — but only when a
+    /// `StickyBucketService` is configured to reload them, as the JS SDK only touches them through
+    /// `refreshStickyBuckets()`. Without a service the documents came from the init context and
+    /// could not be recovered; keeping them can't cause a wrong match, since a document is only
+    /// used when its `attribute||value` key matches the current effective attributes.
+    private func dropStickyDocsIfReloadable(_ data: EvaluationData) {
+        guard contextManager.getGlobalConfig().stickyBucketService != nil else { return }
+        data.stickyBucketAssignmentDocs = nil
+    }
+
+    /// Sets attribute values that take precedence over the ones passed to `setAttributes`.
+    ///
+    /// Overrides are layered on top of the base attributes for every evaluation — targeting
+    /// conditions, experiment hashing and sticky bucket lookups all see them — and are sent with
+    /// remote evaluation requests. `attributes` itself is left untouched, so `getGBAttributes()`
+    /// still reports what the app set. Pass an empty map to lift the overrides again.
     /// - Parameter overrides: Any
     @objc public func setAttributeOverrides(overrides: Any) {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.attributeOverrides = JSON(overrides)
-                data.stickyBucketAssignmentDocs = nil
+                self.dropStickyDocsIfReloadable(data)
             }
             self.refreshStickyBucketService()
             self.refreshForRemoteEval()

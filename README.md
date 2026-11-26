@@ -180,7 +180,7 @@ sdkInstance.setAttributeOverrides(overrides: [:])
 // Overrides lifted: evaluation is back to the base attributes
 ```
 
-  Overrides stay in place when `setAttributes` or `appendAttributes` changes the base attributes, as in the JS SDK. Clear them explicitly with an empty map. Changing the attributes or the overrides drops the loaded sticky bucket assignment documents at once and reloads them from the `StickyBucketService` for the effective values, since the documents are keyed by the attribute values the assignment was made for.
+  Overrides stay in place when `setAttributes` or `appendAttributes` changes the base attributes, as in the JS SDK. Clear them explicitly with an empty map. When a `StickyBucketService` is configured, changing the attributes or the overrides drops the loaded sticky bucket assignment documents at once and reloads them for the effective values, since the documents are keyed by the attribute values the assignment was made for. Without a service the documents are kept: nothing could reload them, and a document only applies when its key matches the effective attributes.
 
 
 ## Models
