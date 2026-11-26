@@ -1,7 +1,7 @@
 import Network
 import Foundation
 
-final class NetworkRetryHandler {
+final class NetworkRetryHandler: @unchecked Sendable {
     private let monitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "NetworkRetryQueue")
     private var onOnlineCallbacks: [() -> Void] = []
@@ -35,7 +35,7 @@ final class NetworkRetryHandler {
         monitor.start(queue: monitorQueue)
     }
     
-    func retryWhenOnline(_ onOnline: @escaping () -> Void) {
+    func retryWhenOnline(_ onOnline: @escaping @Sendable () -> Void) {
         if isInternetAvailable {
             DispatchQueue.main.async {
                 onOnline()
@@ -45,7 +45,7 @@ final class NetworkRetryHandler {
         }
     }
     
-    private func checkInternetAccess(completion: @escaping (Bool) -> Void) {
+    private func checkInternetAccess(completion: @escaping @Sendable (Bool) -> Void) {
         var request = URLRequest(url: testUrl)
         request.timeoutInterval = 5
         URLSession.shared.dataTask(with: request) { _, response, error in

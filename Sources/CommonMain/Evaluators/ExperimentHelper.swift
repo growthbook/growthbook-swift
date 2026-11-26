@@ -1,6 +1,6 @@
 import Foundation
 
-internal class ExperimentHelper {
+internal class ExperimentHelper: @unchecked Sendable {
     static let shared = ExperimentHelper()
     
     private var trackedExperiments: Set<String> = Set<String>()

@@ -28,7 +28,7 @@ extension FeaturesFlowDelegate {
 }
 
 /// View Model for Features
-class FeaturesViewModel {
+class FeaturesViewModel: @unchecked Sendable {
     weak var delegate: FeaturesFlowDelegate?
     let dataSource: FeaturesDataSource
     var encryptionKey: String?

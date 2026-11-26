@@ -11,7 +11,12 @@ import Foundation
 ///
 /// If initialised with an empty `clientKey` the plugin degrades to no-op behaviour
 /// so it never crashes the host app.
-public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
+///
+/// The `@unchecked Sendable` conformance is earned the same way the rest of the SDK's are: every
+/// mutable property above is read and written only from `queue`, the plugin's own serial queue, and
+/// the rest are immutable after init. The SDK hands events to plugins from whichever thread applied
+/// an update, so the type has to cross threads; the queue is what makes that safe.
+public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin, @unchecked Sendable {
 
     // MARK: - Config
 
@@ -259,7 +264,7 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
         _ = inFlight.wait(timeout: .now() + config.batchTimeout)
     }
 
-    private func post(buffered: [BufferedEvent], completion: (() -> Void)?) {
+    private func post(buffered: [BufferedEvent], completion: (@Sendable () -> Void)?) {
         let key = clientKey
         let events = buffered.map(\.event)
 
@@ -286,7 +291,7 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
 
         // Balanced in `finish`, which every send path calls exactly once.
         inFlight.enter()
-        let finish: (Bool) -> Void = { [weak self, inFlight] succeeded in
+        let finish: @Sendable (Bool) -> Void = { [weak self, inFlight] succeeded in
             if !succeeded { self?.releaseDedupeEntries(dedupeEntries) }
             inFlight.leave()
             completion?()
