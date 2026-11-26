@@ -1213,13 +1213,14 @@ protocol GrowthBookProtocol: AnyObject {
         withLock { contextManager.getEvaluationData().remoteGroupIds }
     }
 
-    /// The setAttributes method replaces the Map of user attributes that are used to assign variations
+    /// The setAttributes method replaces the Map of user attributes that are used to assign variations.
+    /// Attribute overrides are kept and still win over these, as in the JS SDK; clear them with
+    /// `setAttributeOverrides(overrides: [:])`.
     /// - Parameter attributes: Any
     @objc public func setAttributes(attributes: Any) {
         withLock {
             self.contextManager.updateEvalData { data in
                 data.attributes = JSON(attributes)
-                data.attributeOverrides = nil
                 data.stickyBucketAssignmentDocs = nil
             }
             self.refreshStickyBucketService()
@@ -1234,7 +1235,6 @@ protocol GrowthBookProtocol: AnyObject {
             let updatedAttributes = try evalData.attributes.merged(with: JSON(attributes))
             contextManager.updateEvalData { data in
                 data.attributes = updatedAttributes
-                data.attributeOverrides = nil
                 data.stickyBucketAssignmentDocs = nil
             }
             refreshStickyBucketService()

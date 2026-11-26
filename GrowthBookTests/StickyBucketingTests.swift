@@ -220,9 +220,9 @@ class AttributeOverridesTests: XCTestCase {
                         "Sticky doc keyed on override attribute must be fetched and loaded")
     }
 
-    // Verifies that setAttributes clears attributeOverrides so the previous user's
-    // overrides don't bleed into the new user's sticky bucket lookup.
-    func testSetAttributesResetsAttributeOverrides() {
+    // Verifies that setAttributes keeps attributeOverrides, as the JS SDK does: the override still
+    // wins over the new base attributes. Sticky docs are still cleared synchronously and refetched.
+    func testSetAttributesKeepsAttributeOverrides() {
         let service = ManualStickyBucketService()
         let sdk = makeSdk(attributes: ["deviceId": "device-1"], service: service)
         service.flush(docs: [:])
@@ -236,18 +236,38 @@ class AttributeOverridesTests: XCTestCase {
         XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||override-id"],
                         "Precondition: override docs must be loaded")
 
-        // Switch user — must clear overrides so new user doesn't inherit them.
         sdk.setAttributes(attributes: ["id": "new-user"])
-        let newUserDocs = ["id||new-user": StickyAssignmentsDocument(
-            attributeName: "id", attributeValue: "new-user",
-            assignments: ["exp-1__0": "variant"]
-        )]
-        service.flush(docs: newUserDocs)
+        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs,
+                     "Docs must be cleared synchronously while the refresh is in flight")
+        let experiment = Experiment(key: "test-exp", variations: [JSON("control"), JSON("variant")], hashAttribute: "id")
+        XCTAssertEqual(sdk.run(experiment: experiment).valueHash, "override-id",
+                       "The override must still win over the new base attributes")
 
-        XCTAssertNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||override-id"],
-                     "Override docs from previous context must be gone after setAttributes")
-        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||new-user"],
-                        "New user docs must be loaded after setAttributes")
+        service.flush(docs: overrideDocs)
+        XCTAssertNotNil(sdk.getGBContext().stickyBucketAssignmentDocs?["id||override-id"],
+                        "Docs for the overridden id must be reloaded")
+    }
+
+    // Verifies that appendAttributes keeps attributeOverrides too.
+    func testAppendAttributesKeepsAttributeOverrides() throws {
+        let service = ManualStickyBucketService()
+        let sdk = makeSdk(attributes: ["deviceId": "device-only"], service: service)
+        service.flush(docs: [:])
+
+        let experiment = Experiment(
+            key: "test-exp",
+            variations: [JSON("control"), JSON("variant")],
+            hashAttribute: "id",
+            coverage: 1.0
+        )
+
+        sdk.setAttributeOverrides(overrides: ["id": "user-with-override"])
+        service.flush(docs: [:])
+        try sdk.appendAttributes(attributes: ["plan": "pro"])
+        service.flush(docs: [:])
+
+        XCTAssertTrue(sdk.run(experiment: experiment).inExperiment,
+                      "id from attributeOverrides must still apply after appendAttributes")
     }
 
     // Verifies that attributeOverrides are merged into userContext.attributes and
