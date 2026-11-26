@@ -205,7 +205,7 @@ import Foundation
     
     // UserContext is created from evalData
     let userContext = UserContext(
-      attributes: evalData.attributes,
+      attributes: evalData.evaluationAttributes,
       stickyBucketAssignmentDocs: evalData.stickyBucketAssignmentDocs,
       forcedVariations: evalData.forcedVariations,
       forcedFeatureValues: evalData.forcedFeatureValues

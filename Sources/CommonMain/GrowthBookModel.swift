@@ -41,6 +41,8 @@ public struct GrowthBookModel {
     public var forcedFeatureValues: JSON?
     /// Plugins that receive experiment and feature evaluation events.
     public var plugins: [GrowthBookPlugin] = []
+    /// The ids of the remote saved groups the user is in, or nil while unresolved.
+    public var remoteGroupIds: [String]? = nil
 
     /// Initialize GrowthBookModel.
     ///

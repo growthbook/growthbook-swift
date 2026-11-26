@@ -263,6 +263,15 @@ protocol GrowthBookProtocol: AnyObject {
         return self
     }
 
+    /// Sets the remote saved groups the user is in, resolved by the app. See
+    /// `GrowthBookSDK.setRemoteGroupIds(_:)`; leave unset while they are unresolved.
+    /// - Parameter remoteGroupIds: [String]
+    /// - Returns: GrowthBookBuilder
+    @objc public func setRemoteGroupIds(_ remoteGroupIds: [String]) -> GrowthBookBuilder {
+        growthBookBuilderModel.remoteGroupIds = remoteGroupIds
+        return self
+    }
+
     /// Registers a plugin that will receive experiment and feature evaluation events.
     /// - Parameter plugin: Any object conforming to `GrowthBookPlugin`.
     /// - Returns: GrowthBookBuilder
@@ -309,6 +318,20 @@ protocol GrowthBookProtocol: AnyObject {
         // applied independently of hasPreloadedPayload: a payload can legitimately carry bandits
         // while the features themselves come from cache or network.
         var initialContextualBandits: JSON? = nil
+        // Saved groups travel in the same envelope as the features and must reach evaluation:
+        // without them every `$inGroup` resolves against an empty group and, worse, every
+        // `$notInGroup` matches, so a rule meant to exclude a group would apply to everyone.
+        // Applied independently of hasPreloadedPayload — a payload can carry saved groups while
+        // the features themselves come from cache or network.
+        var initialSavedGroups: JSON? = nil
+        // initialSavedGroups and initialContextualBandits as their caches store them, written with
+        // the features below
+        var savedGroupsCacheContent: Data? = nil
+        var contextualBanditsCacheContent: Data? = nil
+        // Whether the payload carries a section that couldn't be decrypted. Its cache is left as it
+        // is rather than cleared, and stableSession doesn't lock the session without it.
+        var savedGroupsUnreadable = false
+        var contextualBanditsUnreadable = false
 
         if let featuresData = growthBookBuilderModel.features {
             let decoder = JSONDecoder()
@@ -322,23 +345,45 @@ protocol GrowthBookProtocol: AnyObject {
                     from: featuresModel,
                     encryptionKey: growthBookBuilderModel.encryptionKey
                 )
-                if let features = featuresModel.features {
-                    initialFeatures = features
-                    hasPreloadedPayload = true
-                } else if let encryptedString = featuresModel.encryptedFeatures,
-                          let encryptionKey = growthBookBuilderModel.encryptionKey,
-                          !encryptionKey.isEmpty {
-                    // Preloaded payload uses encryptedFeatures — decrypt inline so
-                    // the SDK can serve features immediately without a network round-trip.
-                    let crypto = Crypto()
-                    if let features = crypto.getFeaturesFromEncryptedFeatures(
+                initialSavedGroups = parsePreloadedSavedGroups(
+                    from: featuresModel,
+                    encryptionKey: growthBookBuilderModel.encryptionKey
+                )
+                savedGroupsUnreadable = initialSavedGroups == nil
+                    && !(featuresModel.encryptedSavedGroups ?? "").isEmpty
+                contextualBanditsUnreadable = initialContextualBandits == nil
+                    && !(featuresModel.encryptedContextualBandits ?? "").isEmpty
+                if let contextualBandits = initialContextualBandits {
+                    if let encrypted = featuresModel.encryptedContextualBandits, !encrypted.isEmpty {
+                        contextualBanditsCacheContent = encrypted.data(using: .utf8)
+                    } else {
+                        contextualBanditsCacheContent = try? JSONEncoder().encode(contextualBandits)
+                    }
+                }
+                if let savedGroups = initialSavedGroups {
+                    // The encrypted string for an encrypted payload, JSON otherwise
+                    if let encrypted = featuresModel.encryptedSavedGroups, !encrypted.isEmpty {
+                        savedGroupsCacheContent = encrypted.data(using: .utf8)
+                    } else {
+                        savedGroupsCacheContent = try? JSONEncoder().encode(savedGroups)
+                    }
+                }
+                // encryptedFeatures wins, as on the network path: an encrypted API payload also
+                // carries an empty `features` object, which would otherwise load no features.
+                if let encryptedString = featuresModel.encryptedFeatures, !encryptedString.isEmpty {
+                    // Decrypt inline so the SDK can serve features without a network round-trip
+                    if let encryptionKey = growthBookBuilderModel.encryptionKey, !encryptionKey.isEmpty,
+                       let features = Crypto().getFeaturesFromEncryptedFeatures(
                         encryptedString: encryptedString,
                         encryptionKey: encryptionKey
-                    ) {
+                       ) {
                         initialFeatures = features
                         hasPreloadedPayload = true
                     }
-                    // decrypt failed → hasPreloadedPayload stays false → fallback fetch fires
+                    // No key or decrypt failed → hasPreloadedPayload stays false → fallback fetch fires
+                } else if let features = featuresModel.features {
+                    initialFeatures = features
+                    hasPreloadedPayload = true
                 }
             } else if let features = try? decoder.decode(Features.self, from: featuresData) {
                 // Fallback: try to decode directly as Features dictionary
@@ -365,10 +410,11 @@ protocol GrowthBookProtocol: AnyObject {
             stickyBucketAssignmentDocs: nil,
             stickyBucketIdentifierAttributes: nil,
             features: initialFeatures,
-            savedGroups: nil,
+            savedGroups: initialSavedGroups,
             contextualBandits: initialContextualBandits,
             url: nil,
-            forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues
+            forcedFeatureValues: growthBookBuilderModel.forcedFeatureValues,
+            remoteGroupIds: growthBookBuilderModel.remoteGroupIds
         )
 
         let contextManager = ContextManager(globalConfig: globalConfig, evalData: evaluationData)
@@ -387,13 +433,31 @@ protocol GrowthBookProtocol: AnyObject {
         if hasPreloadedPayload && !initialFeatures.isEmpty,
            let featureData = try? JSONEncoder().encode(initialFeatures) {
             cachingManager.saveContent(fileName: Constants.featureCache, content: featureData)
+            // Cache the saved groups and bandits with the features they belong to, or clear them
+            // when the payload has none: a later launch that reads the features from cache would
+            // otherwise evaluate them with an earlier payload's groups and bandits, or without
+            // them. Stored as the network path stores them, which is the form
+            // fetchCachedFeatures() reads back. A section that failed to decrypt is left alone, as
+            // on the network path; one that failed to encode is cleared.
+            if let savedGroupsCacheContent {
+                cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: savedGroupsCacheContent)
+            } else if !savedGroupsUnreadable {
+                cachingManager.saveContent(fileName: Constants.savedGroupsCache, content: Data())
+            }
+            if let contextualBanditsCacheContent {
+                cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: contextualBanditsCacheContent)
+            } else if !contextualBanditsUnreadable {
+                cachingManager.saveContent(fileName: Constants.contextualBanditsCache, content: Data())
+            }
         }
 
         // Pass the parsed features when the caller supplied a valid, non-empty payload,
         // so GrowthBookSDK.init() skips the automatic refreshCache() call.
         // nil means "no payload provided (or invalid/empty) — fall back to cache/network."
         let preloadedFeatures: Features? = hasPreloadedPayload ? initialFeatures : nil
-        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds)
+        return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds,
+                             preloadedSavedGroupsUnreadable: savedGroupsUnreadable,
+                             preloadedContextualBanditsUnreadable: contextualBanditsUnreadable)
     }
 
     /// Extracts the `contextualBandits` section from a preloaded (offline-mode) payload, decrypting
@@ -420,6 +484,32 @@ protocol GrowthBookProtocol: AnyObject {
         }
         return model.contextualBandits
     }
+
+    /// Extracts the `savedGroups` section from a preloaded (offline-mode) payload, decrypting it
+    /// first when the payload uses `encryptedSavedGroups`.
+    ///
+    /// Returns `nil` when the payload carries no saved groups or when decryption fails. Note that
+    /// `nil` is not a neutral outcome for evaluation: conditions using `$notInGroup` will match
+    /// every user, so a decryption failure is logged as an error rather than passed over silently.
+    private func parsePreloadedSavedGroups(from model: FeaturesDataModel, encryptionKey: String?) -> JSON? {
+        if let encryptedSavedGroups = model.encryptedSavedGroups, !encryptedSavedGroups.isEmpty {
+            guard let encryptionKey, !encryptionKey.isEmpty else {
+                logger.error("Preloaded payload has encryptedSavedGroups but no encryption key was provided. " +
+                             "Saved group conditions will not evaluate correctly.")
+                return nil
+            }
+            guard let savedGroups = Crypto().getSavedGroupsFromEncryptedFeatures(
+                encryptedString: encryptedSavedGroups,
+                encryptionKey: encryptionKey
+            ) else {
+                logger.error("Failed to decrypt saved groups from preloaded payload. " +
+                             "Saved group conditions will not evaluate correctly.")
+                return nil
+            }
+            return savedGroups
+        }
+        return model.savedGroups
+    }
 }
 
 /// The main export of the libraries is a simple GrowthBook wrapper class that takes a Context object in the constructor.
@@ -433,7 +523,9 @@ protocol GrowthBookProtocol: AnyObject {
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
     private var attributeOverrides: JSON = JSON()
-    private var savedGroupsValues: JSON?
+    /// Saved groups the app supplied through `Context`. Used when a payload has none, so they
+    /// aren't dropped (JS also keeps its saved groups when a payload has none).
+    private var appSavedGroups: JSON?
     private var evalContext: EvalContext? = nil
     private var ttlSeconds: Int
     var cachingManager: CachingLayer
@@ -450,6 +542,15 @@ protocol GrowthBookProtocol: AnyObject {
     /// is bucketed into, so under stableSession they must be frozen for the session just like the
     /// features are.
     private var banditsEstablished: Bool = false
+    /// True once the session's saved groups are locked with its features. A latch of its own for
+    /// the same reason as `banditsEstablished`: saved groups decide who a rule targets, so under
+    /// stableSession replacing them mid-session would change results just as new features would.
+    private var savedGroupsEstablished: Bool = false
+    /// True while a stableSession's preloaded saved groups (or bandits) couldn't be decrypted, so
+    /// the session waits for a fetched payload to supply them. A cache read meanwhile would apply an
+    /// earlier payload's section, or lock an empty one, to the preloaded features.
+    private var savedGroupsAwaitRemote: Bool = false
+    private var banditsAwaitRemote: Bool = false
 
     /// Delivers what plugins have buffered, and waits for it to leave the device.
     ///
@@ -515,28 +616,37 @@ protocol GrowthBookProtocol: AnyObject {
          features: Features? = nil,
          savedGroups: JSON? = nil,
          cachingManager: CachingLayer,
-         ttlSeconds: Int) {
+         ttlSeconds: Int,
+         preloadedSavedGroupsUnreadable: Bool = false,
+         preloadedContextualBanditsUnreadable: Bool = false,
+         appSavedGroups: JSON? = nil) {
         self.contextManager = contextManager
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
-        self.savedGroupsValues = savedGroups
+        self.appSavedGroups = appSavedGroups
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
         super.init()
 
-        // Latch the bandits before featureVM is constructed — its init reads the cache and can
-        // already deliver a bandits callback. A payload supplied to the builder defines the
-        // session's bandits, so under stableSession later payloads must not replace them.
-        // Safe to set without withLock: the object has not yet escaped to other threads.
-        if contextManager.getGlobalConfig().stableSession,
-           contextManager.getEvaluationData().contextualBandits != nil {
-            banditsEstablished = true
+        // Saved groups and bandits lock with the features they arrived with: only when the
+        // features were preloaded. A payload whose features didn't load leaves all three to the
+        // first fetch, and a section that couldn't be decrypted is left to it too, rather than
+        // locking the session without it. Set before featureVM is constructed, as its init can
+        // already deliver callbacks. Safe to set without withLock: the object has not yet escaped
+        // to other threads.
+        if contextManager.getGlobalConfig().stableSession, features != nil {
+            savedGroupsEstablished = !preloadedSavedGroupsUnreadable
+            banditsEstablished = !preloadedContextualBanditsUnreadable
+            savedGroupsAwaitRemote = preloadedSavedGroupsUnreadable
+            banditsAwaitRemote = preloadedContextualBanditsUnreadable
         }
 
         self.featureVM = FeaturesViewModel(delegate: self, dataSource: FeaturesDataSource(dispatcher: networkDispatcher), cachingManager: cachingManager, ttlSeconds: ttlSeconds, preloadedFeatures: features)
 
         let evalData = contextManager.getEvaluationData()
         let globalConfig = contextManager.getGlobalConfig()
+        // Set on the preload path too: later refreshes and streamed payloads need it
+        featureVM.encryptionKey = globalConfig.encryptionKey ?? ""
 
         if let features = features {
             contextManager.updateEvalData { data in
@@ -548,7 +658,6 @@ protocol GrowthBookProtocol: AnyObject {
                 sessionEstablished = true
             }
         } else {
-            featureVM.encryptionKey = globalConfig.encryptionKey ?? ""
             refreshCache()
         }
 
@@ -629,8 +738,13 @@ protocol GrowthBookProtocol: AnyObject {
             features: features,
             savedGroups: savedGroups,
             cachingManager: cachingManager,
-            ttlSeconds: ttlSeconds
+            ttlSeconds: ttlSeconds,
+            appSavedGroups: savedGroups ?? context.savedGroups
         )
+    }
+
+    func performLocked(_ body: () -> Void) {
+        withLock(body)
     }
 
     private func withLock<T>(_ body: () throws -> T) rethrows -> T {
@@ -644,7 +758,7 @@ protocol GrowthBookProtocol: AnyObject {
         withLock {
             let globalConfig = contextManager.getGlobalConfig()
             if globalConfig.remoteEval {
-                refreshForRemoteEval()
+                fetchRemoteEval(force: false)
             } else {
                 featureVM.fetchFeatures(apiUrl: contextManager.getFeaturesURL())
             }
@@ -822,12 +936,77 @@ protocol GrowthBookProtocol: AnyObject {
         contextManager.getEvalContext()
     }
 
+    // Set once the missing-ids warning has been logged, so it isn't repeated on every evaluation
+    private var warnedMissingRemoteGroupIds = false
+
+    /// Logs once when the payload has remote saved groups but the user has no remote group ids,
+    /// since every rule using them will then fail. Logs no attribute values. Called under the lock.
+    private func warnIfRemoteGroupIdsMissing() {
+        guard !warnedMissingRemoteGroupIds else { return }
+        let data = contextManager.getEvaluationData()
+        // The cached flag first: a payload without remote groups is the common case
+        guard data.hasRemoteSavedGroups,
+              data.remoteGroupIds == nil,
+              data.attributes[Constants.remoteGroupIdsAttribute].array == nil else { return }
+        warnedMissingRemoteGroupIds = true
+        logger.warning("The payload has remote saved groups, but the user has no remote group ids. " +
+                       "Rules using them won't match. See setRemoteGroupIds.")
+    }
+
     func savedGroupsFetchFailed(error: SDKError, isRemote: Bool) {}
 
     func savedGroupsFetchedSuccessfully(savedGroups: JSON, isRemote: Bool) {
         withLock {
+            let stableSession = contextManager.getGlobalConfig().stableSession
+
+            // Replacing the groups mid-session would change who rules target, which stableSession
+            // exists to prevent. The network path has already cached them for the next session.
+            if stableSession && savedGroupsEstablished {
+                logger.debug("stableSession: saved groups not applied — session saved groups already established")
+                return
+            }
+            if !isRemote && savedGroupsAwaitRemote {
+                logger.debug("stableSession: cached saved groups not applied — waiting for a fetched payload")
+                return
+            }
+            savedGroupsAwaitRemote = false
+
             self.contextManager.updateEvalData { data in
                 data.savedGroups = savedGroups
+            }
+
+            // Lock only once the features have: groups read before any features (say, a cache
+            // holding groups but no readable features) must not outlive the features they belong to
+            if stableSession && sessionEstablished {
+                savedGroupsEstablished = true
+            }
+        }
+    }
+
+    func savedGroupsCleared(isRemote: Bool) {
+        withLock {
+            let stableSession = contextManager.getGlobalConfig().stableSession
+
+            // Same reasoning as replacing them: the cache is already cleared for the next session
+            if stableSession && savedGroupsEstablished {
+                logger.debug("stableSession: saved groups removed upstream — cleared from cache for next session, still applied now")
+                return
+            }
+            if !isRemote && savedGroupsAwaitRemote {
+                logger.debug("stableSession: cached saved groups not applied — waiting for a fetched payload")
+                return
+            }
+            savedGroupsAwaitRemote = false
+
+            // Fall back to the app's own groups rather than dropping them
+            if contextManager.getEvaluationData().savedGroups != appSavedGroups {
+                contextManager.updateEvalData { data in
+                    data.savedGroups = appSavedGroups
+                }
+            }
+
+            if stableSession && sessionEstablished {
+                savedGroupsEstablished = true
             }
         }
     }
@@ -848,6 +1027,11 @@ protocol GrowthBookProtocol: AnyObject {
                 }
                 return
             }
+            if !isRemote && banditsAwaitRemote {
+                logger.debug("stableSession: cached contextual bandits not applied — waiting for a fetched payload")
+                return
+            }
+            banditsAwaitRemote = false
 
             self.contextManager.updateEvalData { data in
                 data.contextualBandits = contextualBandits
@@ -869,27 +1053,51 @@ protocol GrowthBookProtocol: AnyObject {
                 logger.info("stableSession: contextual bandits removed upstream — cleared from cache for next session, still applied now")
                 return
             }
+            if !isRemote && banditsAwaitRemote {
+                logger.debug("stableSession: cached contextual bandits not applied — waiting for a fetched payload")
+                return
+            }
+            banditsAwaitRemote = false
 
-            guard contextManager.getEvaluationData().contextualBandits != nil else { return }
+            if contextManager.getEvaluationData().contextualBandits != nil {
+                logger.info("Contextual bandit definitions are gone from the payload — rules fall back to aggregate weights")
+                contextManager.updateEvalData { data in
+                    data.contextualBandits = nil
+                }
+            }
 
-            logger.info("Contextual bandit definitions are gone from the payload — rules fall back to aggregate weights")
-            contextManager.updateEvalData { data in
-                data.contextualBandits = nil
+            // A session whose payload has no bandits keeps having none
+            if stableSession && sessionEstablished {
+                banditsEstablished = true
             }
         }
     }
 
-    /// If remote eval is enabled, send needed data to backend to proceed remote evaluation
+    /// If remote eval is enabled, send needed data to backend to proceed remote evaluation.
+    /// Always fetches, even while the cached results are fresh: they were evaluated for the inputs
+    /// at the time, which the setters that call this have just changed.
+    ///
+    /// Under stableSession nothing is fetched once the session's features are established, since
+    /// the result could not be applied: the setters then don't change remote-eval results.
     @objc public func refreshForRemoteEval() {
+        fetchRemoteEval(force: true)
+    }
+
+    /// - Parameter force: fetch even while the cached results are fresh
+    private func fetchRemoteEval(force: Bool) {
         withLock {
             let globalConfig = contextManager.getGlobalConfig()
             let evalData = contextManager.getEvaluationData()
             if !globalConfig.remoteEval { return }
+            if force && globalConfig.stableSession && sessionEstablished {
+                logger.debug("stableSession: remote evaluation not refreshed — session features already established")
+                return
+            }
             let forcedFeaturesArray = convertForcedFeaturesToArray(evalData.forcedFeatureValues)
             let forcedFeaturesJson = JSON(forcedFeaturesArray ?? [])
 
-            let payload = RemoteEvalParams(attributes: evalData.attributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
-            featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload)
+            let payload = RemoteEvalParams(attributes: evalData.evaluationAttributes, forcedFeatures: forcedFeaturesJson, forcedVariations: evalData.forcedVariations)
+            featureVM.fetchFeatures(apiUrl: contextManager.getRemoteEvalUrl(), remoteEval: globalConfig.remoteEval, payload: payload, force: force)
         }
     }
 
@@ -901,6 +1109,7 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     private func _evalFeature(id: String) -> FeatureResult {
+        warnIfRemoteGroupIdsMissing()
         let context = contextManager.getEvalContext()
         let result = FeatureEvaluator(context: context, featureKey: id).evaluateFeature()
         contextManager.syncFromEvaluation(context)
@@ -948,6 +1157,7 @@ protocol GrowthBookProtocol: AnyObject {
     }
 
     private func _runExperiment(experiment: Experiment) -> ExperimentResult {
+        warnIfRemoteGroupIdsMissing()
         let context = contextManager.getEvalContext()
         let result = ExperimentEvaluator().evaluateExperiment(context: context, experiment: experiment)
         contextManager.syncFromEvaluation(context)
@@ -964,6 +1174,30 @@ protocol GrowthBookProtocol: AnyObject {
             }
             self.refreshForRemoteEval()
         }
+    }
+
+    /// Sets the remote saved groups the user is in. A remote saved group keeps its members outside
+    /// the payload, so the app resolves the user's groups (for example from its back end) and passes
+    /// their ids here. Conditions read them as the `__gb_remoteGroupIds` attribute, over any value
+    /// the attributes set for it. In remote-eval mode this triggers a fresh remote evaluation,
+    /// except under stableSession once the session is established (see `refreshForRemoteEval`).
+    ///
+    /// Pass nil while the groups are unresolved: rules that use remote groups then fail, including
+    /// "not in group". Don't pass an empty array for that — it means "in no group", so "not in
+    /// group" rules match.
+    /// - Parameter remoteGroupIds: [String]?
+    @objc public func setRemoteGroupIds(_ remoteGroupIds: [String]?) {
+        withLock {
+            self.contextManager.updateEvalData { data in
+                data.remoteGroupIds = remoteGroupIds
+            }
+            self.refreshForRemoteEval()
+        }
+    }
+
+    /// The ids of the remote saved groups the user is in, or nil while unresolved.
+    @objc public func getRemoteGroupIds() -> [String]? {
+        withLock { contextManager.getEvaluationData().remoteGroupIds }
     }
 
     /// The setAttributes method replaces the Map of user attributes that are used to assign variations
