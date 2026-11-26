@@ -184,7 +184,7 @@ class ExperimentEvaluator {
     }
 
     /// This is a helper method to create an ExperimentResult object.
-    private func getExperimentResult(gbContext: EvalContext, experiment: Experiment, variationIndex: Int = 0, hashUsed: Bool, featureId: String? = nil, bucket: Float? = nil, stickyBucketUsed: Bool? = nil) -> ExperimentResult {
+    private func getExperimentResult(gbContext: EvalContext, experiment: Experiment, variationIndex: Int = 0, hashUsed: Bool, featureId: String? = nil, bucket: Double? = nil, stickyBucketUsed: Bool? = nil) -> ExperimentResult {
         var inExperiment = true
         var variationIndex = variationIndex
         // If assigned variation is not valid, use the baseline and mark the user as not in the experiment
