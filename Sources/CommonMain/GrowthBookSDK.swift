@@ -176,6 +176,18 @@ protocol GrowthBookProtocol: AnyObject {
         return self
     }
 
+    /// Sets headers applied to the streaming (SSE) connection.
+    ///
+    /// Separate from `apiRequestHeaders` because the streaming host is often a different origin with
+    /// its own credentials. Headers the SDK manages itself — `Accept`, `Cache-Control`,
+    /// `Last-Event-Id` — always win over these.
+    /// - Parameter streamingHostRequestHeaders: headers to send with the SSE request
+    /// - Returns: GrowthBookBuilder
+    @objc public func setStreamingHostRequestHeaders(streamingHostRequestHeaders: [String: String]) -> GrowthBookBuilder {
+        growthBookBuilderModel.streamingHostRequestHeaders = streamingHostRequestHeaders
+        return self
+    }
+
     /// Sets the service instance responsible for handling sticky bucketing operations.
     /// - Parameter stickyBucketService: StickyBucketServiceProtocol
     /// - Returns: GrowthBookBuilder
@@ -457,7 +469,8 @@ protocol GrowthBookProtocol: AnyObject {
         let preloadedFeatures: Features? = hasPreloadedPayload ? initialFeatures : nil
         return GrowthBookSDK(contextManager: contextManager, refreshHandler: refreshHandler, logLevel: growthBookBuilderModel.logLevel, networkDispatcher: networkDispatcher, features: preloadedFeatures, cachingManager: cachingManager, ttlSeconds: ttlSeconds,
                              preloadedSavedGroupsUnreadable: savedGroupsUnreadable,
-                             preloadedContextualBanditsUnreadable: contextualBanditsUnreadable)
+                             preloadedContextualBanditsUnreadable: contextualBanditsUnreadable,
+                             streamingHostRequestHeaders: growthBookBuilderModel.streamingHostRequestHeaders ?? [:])
     }
 
     /// Extracts the `contextualBandits` section from a preloaded (offline-mode) payload, decrypting
@@ -519,6 +532,9 @@ protocol GrowthBookProtocol: AnyObject {
     var refreshHandler: CacheRefreshHandler?
     private var subscriptions: [ExperimentRunCallback] = []
     private var networkDispatcher: NetworkProtocol
+    /// Headers for the streaming connection, read on every connect so a later
+    /// `updateStreamingHostRequestHeaders(_:)` applies to the next one.
+    private var streamingHostRequestHeaders: [String: String]
     private var contextManager: ContextManager
     private var featureVM: FeaturesViewModel!
     private var forcedFeatures: JSON = JSON()
@@ -619,10 +635,12 @@ protocol GrowthBookProtocol: AnyObject {
          ttlSeconds: Int,
          preloadedSavedGroupsUnreadable: Bool = false,
          preloadedContextualBanditsUnreadable: Bool = false,
-         appSavedGroups: JSON? = nil) {
+         appSavedGroups: JSON? = nil,
+         streamingHostRequestHeaders: [String: String] = [:]) {
         self.contextManager = contextManager
         self.refreshHandler = refreshHandler
         self.networkDispatcher = networkDispatcher
+        self.streamingHostRequestHeaders = streamingHostRequestHeaders
         self.appSavedGroups = appSavedGroups
         self.cachingManager = cachingManager
         self.ttlSeconds = ttlSeconds
@@ -669,7 +687,7 @@ protocol GrowthBookProtocol: AnyObject {
 
         // if the SSE URL is available and background sync variable is set to true, then we have to connect to SSE Server
         if let sseURL = contextManager.getSSEUrl(), globalConfig.backgroundSync {
-            featureVM.connectBackgroundSync(sseUrl: sseURL)
+            featureVM.connectBackgroundSync(sseUrl: sseURL, headers: streamingHostRequestHeaders)
         }
 
         // Logger setup. if we have logHandler we have to re-initialise logger
@@ -1256,8 +1274,16 @@ protocol GrowthBookProtocol: AnyObject {
         }
     }
 
-    /// Updates streaming host request headers for SSE connections
+    /// Updates streaming host request headers for SSE connections.
+    ///
+    /// Applies to the live stream from its next reconnect — for example after the server closes it
+    /// on an expired token — as well as to any later connection. The open connection keeps the
+    /// headers it was made with.
     @objc public func updateStreamingHostRequestHeaders(_ headers: [String: String]) {
+        withLock {
+            streamingHostRequestHeaders = headers
+            featureVM.updateStreamingHeaders(headers)
+        }
         if let networkClient = networkDispatcher as? CoreNetworkClient {
             networkClient.streamingHostRequestHeaders = headers
         }

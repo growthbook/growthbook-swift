@@ -66,13 +66,15 @@ class FeaturesViewModel {
         expiresAt = Date().timeIntervalSince1970 + Double(ttlSeconds)
     }
     
-    func connectBackgroundSync(sseUrl: String) {
+    /// - Parameter headers: headers for the streaming host. The SDK's own `Accept`,
+    ///   `Cache-Control` and `Last-Event-Id` are applied after these, so they cannot be overridden.
+    func connectBackgroundSync(sseUrl: String, headers: [String: String] = [:]) {
         guard let url = URL(string: sseUrl) else { return }
         
         // Disconnect existing connection if any
         sseHandler?.disconnect()
         
-        let streamingUpdate = SSEHandler(url: url)
+        let streamingUpdate = SSEHandler(url: url, headers: headers)
         sseHandler = streamingUpdate
         
         streamingUpdate.addEventListener(event: "features") { [weak self] id, event, data in
@@ -96,6 +98,13 @@ class FeaturesViewModel {
         }
     }
     
+    /// Replaces the streaming host headers on the live connection, so the next reconnect sends
+    /// them — a rotated token reaches the stream without restarting the SDK. The open connection
+    /// keeps the headers it was made with.
+    func updateStreamingHeaders(_ headers: [String: String]) {
+        sseHandler?.headers = headers
+    }
+
     deinit {
         sseHandler?.disconnect()
     }
