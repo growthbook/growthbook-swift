@@ -33,41 +33,84 @@ extension Common {
         return hash
     }
     
+    /// FNV-1a over UTF-16 code units, XOR-ing each whole 16-bit unit as JS `charCodeAt` does.
+    static func fnv1a<T: FixedWidthInteger>(_ array: [UInt16], offsetBasis: T, prime: T) -> T {
+        var hash: T = offsetBasis
+
+        for elm in array {
+            hash = hash ^ T(elm)
+            hash = hash &* prime
+        }
+
+        return hash
+    }
+
     static func isEqual<T>(_ a: T, _ b: T) -> Bool where T : Equatable {
+        return a == b
+    }
+
+    /// Compares strings by UTF-16 code units, as JS `===` does. Swift's `==` uses canonical
+    /// equivalence, so "\u{E9}" and "e\u{301}" would otherwise be equal.
+    static func sameCodeUnits(_ a: String, _ b: String) -> Bool {
+        a.utf16.elementsEqual(b.utf16)
+    }
+
+    /// `JSON` equality with strings compared by code units
+    ///
+    /// Arrays and objects never match: JS compares them by reference, so an array or object item
+    /// in an `$in` list never equals the attribute value, even with the same contents.
+    static func jsonEquals(_ a: JSON, _ b: JSON) -> Bool {
+        if [a.type, b.type].contains(where: { $0 == .array || $0 == .dictionary }) {
+            return false
+        }
+        if let left = a.string, let right = b.string {
+            return sameCodeUnits(left, right)
+        }
         return a == b
     }
 
     static func isIn<T: Equatable>(actual: Any, expected: [T], insensitive: Bool = false) -> Bool {
         
         if insensitive, let expectedJSON = expected as? [JSON] {
-            func caseFold(_ value: JSON) -> String? {
-                return value.string?.lowercased()
+            // Case folding only applies to strings. Anything else — a number, a bool, null — is
+            // compared as-is, so the insensitive operators agree with their sensitive counterparts
+            // on every value that has no case to ignore. Comparing only the folded forms would make
+            // those values match nothing, which flips $nini to "not in the list" for a value that
+            // is plainly in it.
+            func matches(_ actualItem: JSON, _ expectedItem: JSON) -> Bool {
+                guard let a = actualItem.string?.lowercased(),
+                      let e = expectedItem.string?.lowercased() else {
+                    return jsonEquals(actualItem, expectedItem)
+                }
+                return sameCodeUnits(a, e)
             }
 
-            // actual is JSON array ["d", "a"]
-            if let actualArray = (actual as? JSON)?.arrayValue, !actualArray.isEmpty {
-                return actualArray.contains { actualItem in
-                    expectedJSON.contains { expectedItem in
-                        guard let a = caseFold(actualItem), let e = caseFold(expectedItem) else {
-                            return actualItem == expectedItem
-                        }
-                        return a == e
+            if let actualJSON = actual as? JSON {
+                // actual is a JSON array ["d", "a"] — any overlap counts
+                if let actualArray = actualJSON.array, !actualArray.isEmpty {
+                    return actualArray.contains { actualItem in
+                        expectedJSON.contains { matches(actualItem, $0) }
                     }
                 }
-            }
-            // actual is JSON string "a"
-            if let actualJSON = actual as? JSON, let actualStr = actualJSON.string?.lowercased() {
-                return expectedJSON.contains { caseFold($0) == actualStr }
+                // actual is a scalar: a string, but also a number, a bool or null
+                return expectedJSON.contains { matches(actualJSON, $0) }
             }
 
-            // actual is  String
-            if let actualStr = (actual as? String)?.lowercased() {
-                return expectedJSON.contains { caseFold($0) == actualStr }
+            // actual is a bare String
+            if let actualStr = actual as? String {
+                return expectedJSON.contains { matches(JSON(actualStr), $0) }
             }
 
             return false
         }
             
+        if let expectedJSON = expected as? [JSON], let actualJSON = actual as? JSON {
+            if let actualArray = actualJSON.array, !actualArray.isEmpty {
+                return actualArray.contains { item in expectedJSON.contains { jsonEquals(item, $0) } }
+            }
+            return expectedJSON.contains { jsonEquals(actualJSON, $0) }
+        }
+
         // Check if actual is an array
         if let actualArray = actual as? [T] {
             return actualArray.contains { expected.contains($0) }
