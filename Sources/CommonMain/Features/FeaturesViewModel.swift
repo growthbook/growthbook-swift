@@ -40,6 +40,12 @@ class FeaturesViewModel {
     /// Numbers remote-eval requests, so a reply for older inputs never replaces a newer one's.
     /// Read and written only inside `delegate.performLocked`.
     private var latestRemoteEvalRequest = 0
+    /// The newest remote-eval request whose reply has been applied or reported.
+    /// Read and written only inside `delegate.performLocked`.
+    private var settledRemoteEvalRequest = 0
+    /// Completions of superseded remote-eval requests, waiting for the newest one to settle.
+    /// Read and written only inside `delegate.performLocked`.
+    private var supersededRemoteEvalCompletions: [(SDKError?) -> Void] = []
     
     init(delegate: FeaturesFlowDelegate, dataSource: FeaturesDataSource, cachingManager: CachingLayer, ttlSeconds: Int, preloadedFeatures: Features? = nil) {
         self.delegate = delegate
@@ -172,20 +178,29 @@ class FeaturesViewModel {
     
     
     /// Fetch Features
+    ///
+    /// `completion` reports the outcome of *this* call. The delegate callback cannot serve that
+    /// purpose: every refresh source shares it — init, the SSE stream, a manual refresh — so a
+    /// caller waiting on the delegate can be resumed by someone else's fetch.
     /// - Parameter force: fetch even while the cached features are fresh. Remote-eval results
     ///   depend on the request's attributes and forced values, so a change to those must refetch.
-    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil, force: Bool = false) {
+    func fetchFeatures(apiUrl: String?, remoteEval: Bool = false, payload: RemoteEvalParams? = nil, force: Bool = false, completion: ((SDKError?) -> Void)? = nil) {
+        let finish: (SDKError?, Bool) -> Void = { [weak self] error, isRemote in
+            self?.delegate?.featuresUpdateIsComplete(error: error, isRemote: isRemote)
+            completion?(error)
+        }
+
         // Check for cache data. A forced fetch skips it: the in-memory state is already current,
         // and the reply replaces it.
         if !force {
             fetchCachedFeatures(logging: true)
         }
         guard let apiUrl else {
-            delegate?.featuresUpdateIsComplete(error: .invalidAPIURL, isRemote: false)
+            finish(.invalidAPIURL, false)
             return
         }
         guard force || isCacheExpired() else {
-            delegate?.featuresUpdateIsComplete(error: nil, isRemote: true)
+            finish(nil, true)
             return
         }
 
@@ -200,36 +215,64 @@ class FeaturesViewModel {
                 // Only the check runs under the lock, so evaluations on other threads don't wait
                 // for the reply to be decoded and cached. A superseded reply is dropped silently:
                 // reporting it would tell refreshHandler about a refresh that applied nothing.
+                //
+                // Its own caller still has to be resumed, though — an async `evaluate()` would
+                // otherwise wait forever. It is parked until the newest request settles and then
+                // gets that request's outcome, which is what it asked for: results for the current
+                // inputs. If the newest request has already settled, it resumes at once.
                 var isCurrent = false
-                self.performLocked { isCurrent = request == self.latestRemoteEvalRequest }
-                guard isCurrent else { return }
+                var resumeNow = false
+                self.performLocked {
+                    isCurrent = request == self.latestRemoteEvalRequest
+                    guard !isCurrent, let completion else { return }
+                    if self.settledRemoteEvalRequest == self.latestRemoteEvalRequest {
+                        resumeNow = true
+                    } else {
+                        self.supersededRemoteEvalCompletions.append(completion)
+                    }
+                }
+                guard isCurrent else {
+                    if resumeNow { completion?(nil) }
+                    return
+                }
+                let settle: (SDKError?) -> Void = { error in
+                    var parked: [(SDKError?) -> Void] = []
+                    self.performLocked {
+                        self.settledRemoteEvalRequest = request
+                        parked = self.supersededRemoteEvalCompletions
+                        self.supersededRemoteEvalCompletions = []
+                    }
+                    completion?(error)
+                    parked.forEach { $0(error) }
+                }
                 switch result {
                 case .success(let data):
-                    self.prepareFeaturesData(data: data)
+                    self.prepareFeaturesData(data: data, completion: settle)
                 case .failure(let error):
                     logger.error("Failed get features: \(error.localizedDescription)")
                     let error: SDKError = .failedToLoadData
                     self.delegate?.featuresFetchFailed(error: error, isRemote: true)
                     self.delegate?.featuresUpdateIsComplete(error: error, isRemote: true)
+                    settle(error)
                 }
             }
         } else {
             dataSource.fetchFeatures(apiUrl: apiUrl) { result in
                 switch result {
                 case .success(let data):
-                    self.prepareFeaturesData(data: data)
+                    self.prepareFeaturesData(data: data, completion: completion)
                 case .failure(let error):
                     if (error as NSError).code == 304 {
                         self.refreshExpiresAt()
                         let fetchCachedFeaturesError = self.fetchCachedFeatures(isRemote: true)
-                        self.delegate?.featuresUpdateIsComplete(error: fetchCachedFeaturesError, isRemote: true)
+                        finish(fetchCachedFeaturesError, true)
                         return
                     }
                     logger.info("Failed to get features from remote: \(error.localizedDescription)")
                     let sdkError: SDKError = .failedToFetchData(error)
                     self.delegate?.featuresFetchFailed(error: sdkError, isRemote: true)
                     self.fetchCachedFeatures(isRemote: true)
-                    self.delegate?.featuresUpdateIsComplete(error: sdkError, isRemote: true)
+                    finish(sdkError, true)
                 }
             }
         }
@@ -240,11 +283,12 @@ class FeaturesViewModel {
     }
 
     /// Cache API Response and push success event
-    func prepareFeaturesData(data: Data) {
+    func prepareFeaturesData(data: Data, completion: ((SDKError?) -> Void)? = nil) {
         // Call Success Delegate with mention of data available with remote
         var occurredError: SDKError? = nil
         defer {
             delegate?.featuresUpdateIsComplete(error: occurredError, isRemote: true)
+            completion?(occurredError)
         }
 
         let decoder = JSONDecoder()
