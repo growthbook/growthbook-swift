@@ -114,7 +114,10 @@ class GrowthBookSDKBuilderTests: XCTestCase {
     }
     
     func testSDKInitializationDataWithEncripted() throws {
-        
+        // The cache's timestamp is persisted, so a fresh cache left by another test under this
+        // client key would satisfy the cold start without fetching the encrypted payload.
+        CachingManager(apiKey: testClientKey).clearCache()
+
         let variations: [String: Int] = [:]
         let expectation = XCTestExpectation(description: "Features loaded")
         
