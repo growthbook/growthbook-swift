@@ -174,7 +174,7 @@ import Foundation
   ///
   /// This method creates:
   /// - `ClientOptions` from `globalConfig`
-  /// - `GlobalContext` from `evalData.features` and `evalData.savedGroups`
+  /// - `GlobalContext` from `evalData.features`, `evalData.savedGroups` and `evalData.contextualBandits`
   /// - `UserContext` from `evalData` (attributes, forced variations, etc.)
   /// - A fresh `StackContext` (reset state)
   ///
@@ -195,15 +195,17 @@ import Foundation
       pluginRegistry: globalConfig.pluginRegistry
     )
     
-    // GlobalContext is created from evalData.features and evalData.savedGroups
+    // GlobalContext is created from evalData.features, evalData.savedGroups and
+    // evalData.contextualBandits
     let globalContext = GlobalContext(
       features: evalData.features,
-      savedGroups: evalData.savedGroups
+      savedGroups: evalData.savedGroups,
+      contextualBandits: evalData.contextualBandits
     )
     
     // UserContext is created from evalData
     let userContext = UserContext(
-      attributes: evalData.attributes,
+      attributes: evalData.evaluationAttributes,
       stickyBucketAssignmentDocs: evalData.stickyBucketAssignmentDocs,
       forcedVariations: evalData.forcedVariations,
       forcedFeatureValues: evalData.forcedFeatureValues

@@ -184,7 +184,7 @@ class ExperimentEvaluator {
     }
 
     /// This is a helper method to create an ExperimentResult object.
-    private func getExperimentResult(gbContext: EvalContext, experiment: Experiment, variationIndex: Int = 0, hashUsed: Bool, featureId: String? = nil, bucket: Float? = nil, stickyBucketUsed: Bool? = nil) -> ExperimentResult {
+    private func getExperimentResult(gbContext: EvalContext, experiment: Experiment, variationIndex: Int = 0, hashUsed: Bool, featureId: String? = nil, bucket: Double? = nil, stickyBucketUsed: Bool? = nil) -> ExperimentResult {
         var inExperiment = true
         var variationIndex = variationIndex
         // If assigned variation is not valid, use the baseline and mark the user as not in the experiment
@@ -224,7 +224,15 @@ class ExperimentEvaluator {
         if let passthrough = meta?.passthrough {
             result.passthrough = passthrough
         }
-        
+
+        // Surface the contextual bandit selection for tracking, but only for a real exposure:
+        // a forced, filtered-out or QA-mode assignment did not use the bandit's weights.
+        if let contextualBandit = experiment.contextualBandit, hashUsed, inExperiment {
+            result.leafId = contextualBandit.leafId
+            result.variationWeights = contextualBandit.variationWeights
+            result.banditVersion = contextualBandit.banditVersion
+        }
+
         return result
     }
     
