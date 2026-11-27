@@ -5,7 +5,7 @@ import Foundation
 ///
 /// **Wire contract**
 /// - Endpoint:  POST `{ingestorHost}/track?client_key={clientKey}`
-/// - Default host: `https://us1.gb-ingest.com`
+/// - Default host: `https://us-east-1.gb-ingest.com`
 /// - Body: a plain JSON array of `IngestEnvelope` payloads
 /// - Headers: `Content-Type: application/json`, `User-Agent: growthbook-swift-sdk/{version}`
 ///
@@ -27,7 +27,7 @@ public final class GrowthBookTrackingPlugin: NSObject, GrowthBookPlugin {
         /// the far larger volume of usage events without losing its experiment data.
         public let enableFeatureUsageEvents: Bool
 
-        public static let defaultIngestorHost = "https://us1.gb-ingest.com"
+        public static let defaultIngestorHost = "https://us-east-1.gb-ingest.com"
         public static let defaultBatchSize    = 100
         public static let defaultBatchTimeout: TimeInterval = 10.0
         public static let defaultDedupeCacheSize = 1000

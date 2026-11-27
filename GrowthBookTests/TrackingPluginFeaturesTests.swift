@@ -486,7 +486,7 @@ final class TrackingPluginFeaturesTests: XCTestCase {
         let config = GrowthBookTrackingPlugin.Config()
         XCTAssertEqual(config.dedupeCacheSize, 1000)
         XCTAssertTrue(config.enableFeatureUsageEvents)
-        XCTAssertEqual(config.ingestorHost, "https://us1.gb-ingest.com")
+        XCTAssertEqual(config.ingestorHost, "https://us-east-1.gb-ingest.com")
     }
 
     /// `addPlugin` takes a Swift-only protocol, so Objective-C apps had no way to register the

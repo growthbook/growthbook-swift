@@ -587,7 +587,7 @@ Batches experiment exposures and feature evaluations and POSTs them to the Growt
 
 ```swift
 let plugin = GrowthBookTrackingPlugin(config: .init(
-    ingestorHost: "https://us1.gb-ingest.com",
+    ingestorHost: "https://us-east-1.gb-ingest.com",
     batchSize: 100,
     batchTimeout: 10,
     dedupeCacheSize: 1000,
@@ -597,7 +597,7 @@ let plugin = GrowthBookTrackingPlugin(config: .init(
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `ingestorHost` | `https://us1.gb-ingest.com` | Ingest endpoint |
+| `ingestorHost` | `https://us-east-1.gb-ingest.com` | Ingest endpoint |
 | `batchSize` | `100` | Send once this many events are buffered |
 | `batchTimeout` | `10` | Seconds between timed sends; also caps how long `flush`/`close` block |
 | `dedupeCacheSize` | `1000` | Recent events remembered when suppressing duplicates; `0` disables deduping |
